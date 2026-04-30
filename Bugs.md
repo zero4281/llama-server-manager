@@ -3,7 +3,7 @@
 ## Current Bug Reports
 
 ### 🔴 CRITICAL: Fallback logic in render_menu not being triggered, causing premature exit
-**Status:** 🟠 **OPEN**  
+**Status:** 🟠 **RESOLVED**  
 **Priority:** **P1** - Major feature broken; UI degrades to unusable state
 
 **Description:**  
@@ -131,7 +131,7 @@ When running `./llama-server-wrapper --install-llama`, after selecting a release
 ## Summary
 
 **Last Updated:** April 26, 2026  
-**Overall Status:** 1 open bug.
+**Overall Status:** 0 open bug.
 
-* **Open:** Fallback logic in render_menu not being triggered (P1)
+* **Resolved:** Fallback logic in render_menu not being triggered (P1)
 * **Resolved:** Arrow key crashes (P0), missing confirmation prompt (P1), title/footer bar disappearance, logger debug messages, redundant fallback sections, curses environment drops, menu border issues, confirmation prompt layout (P2), confirmation prompt missing after archive selection (P1).

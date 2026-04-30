@@ -491,8 +491,6 @@ def download_file(url: str, output_path: Path, ui_manager: Optional["UIManager"]
                     speed=speed,
                     estimated_time=eta_seconds if eta_str else None
                 )
-                
-                # No sleep - update on every chunk for maximum speed
 
         return output_path
 

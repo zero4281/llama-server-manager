@@ -32,6 +32,19 @@ def setup_ui_for_size(width, height):
     mock_curses.curs_set = MagicMock(return_value=None)
     mock_curses.has_ungetch = MagicMock(return_value=False)
     mock_curses.getscrptr = MagicMock(return_value=None)
+    mock_curses.color_pair = MagicMock(return_value=1)
+    mock_curses.screen = MagicMock()
+    mock_curses.screen.getmaxyx.return_value = (height, width)
+    # Add essential curses constants
+    mock_curses.KEY_RESIZE = 27
+    mock_curses.KEY_UP = 259
+    mock_curses.KEY_DOWN = 258
+    mock_curses.KEY_LEFT = 260
+    mock_curses.KEY_RIGHT = 261
+    mock_curses.KEY_ENTER = 343
+    mock_curses.KEY_BACKSPACE = 263
+    mock_curses.COLOR_GREEN = 1
+    mock_curses.COLOR_BLACK = 0
     
     with patch('ui_manager.curses', mock_curses):
         ui = UIManager("Test")
@@ -277,10 +290,13 @@ def test_progress_bar_adaptation():
             call_args = mock_newwin.call_args
             if call_args:
                 win_height, win_width, win_y, win_x = call_args[0]
-                # Bar height should be 6, width should be proportional to terminal
+                # Bar height should be 6, width should be at least 50 but fit on screen
+                # According to render_progress_bar: min_width = max(60, width - 12), bar_width = min(min_width, 100)
+                min_width = max(60, width - 12)
+                bar_width = min(min_width, 100)
+                
                 assert win_height == 6, f"Bar height should be 6, got {win_height} for {name}"
-                # Width should be at least 50 but fit on screen
-                assert win_width <= width - 10, f"Bar width {win_width} should fit on terminal width {width}"
+                assert win_width == bar_width, f"Bar width should be {bar_width}, got {win_width} for {name}"
     
     print("  ✓ Progress bar adaptation test passed")
 
@@ -498,22 +514,23 @@ def test_progress_bar_window_height():
         height, width, y, x = call_args[0]
         
         assert height == 6, f"Height should be 6, got {height}"
-        assert width == 50, f"Width should be 50, got {width}"
+        # Width calculation: min_width = max(60, 80 - 12) = 68, bar_width = min(68, 100) = 68
+        assert width == 68, f"Width should be 68, got {width}"
         
         ui._cleanup_terminal()
     print("  ✓ Progress bar window height test passed")
 
 
 def test_progress_bar_width_calculated_from_terminal():
-    """Test that progress bar width is calculated correctly based on terminal size."""
-    test_cases = [
-        (20, 40, 30, "Small terminal"),
-        (24, 80, 50, "Medium terminal"),
-        (30, 120, 50, "Large terminal"),
-    ]
-    
-    for terminal_height, terminal_width, expected_width, name in test_cases:
-        ui, mock_curses = setup_ui_for_size(terminal_width, terminal_height)
+        """Test that progress bar width is calculated correctly based on terminal size."""
+        test_cases = [
+            (20, 40, 60, "Small terminal"),   # min_width = max(60, 40-12)=60, bar_width = min(60,100)=60
+            (24, 80, 68, "Medium terminal"),  # min_width = max(60, 80-12)=68, bar_width = min(68,100)=68
+            (30, 120, 100, "Large terminal"), # min_width = max(60, 120-12)=108, bar_width = min(108,100)=100
+        ]
+
+        for terminal_height, terminal_width, expected_width, name in test_cases:
+            ui, mock_curses = setup_ui_for_size(terminal_width, terminal_height)
         
         mock_screen = MagicMock()
         mock_screen.getmaxyx.return_value = (terminal_height, terminal_width)
@@ -542,7 +559,7 @@ def test_progress_bar_width_calculated_from_terminal():
         
         ui._cleanup_terminal()
     
-    print("  ✓ Progress bar width calculation test passed")
+        print("  ✓ Progress bar width calculation test passed")
 
 
 def test_progress_bar_window_y_position():

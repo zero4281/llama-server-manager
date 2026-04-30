@@ -1290,12 +1290,55 @@ class UIManager:
             )
             return
 
-        height, width = self._screen.getmaxyx()
+        try:
+            height, width = self._screen.getmaxyx()
+            logger.debug(f"getmaxyx returned: height={height}, width={width}")
+        except (curses.error, OSError, EOFError, TypeError) as e:
+            logger.error(f"getmaxyx error: {e}")
+            # Fall back to console mode if we can't get terminal size
+            self._render_console_fallback(
+                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)",
+                "Press any key to continue..."
+            )
+            return
+        
+        # Handle edge cases where terminal size is 0 or invalid
+        if height is None or width is None or height <= 0 or width <= 0:
+            # Invalid terminal size, fall back to console
+            self._render_console_fallback(
+                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)",
+                "Press any key to continue..."
+            )
+            return
         
         # Auto-resize: window width adapts to terminal, minimum 60 chars
-        min_width = max(60, width - 12)
-        bar_width = min(min_width, 100)  # Cap at 100 chars
+        # Ensure width is a valid number
+        if width is not None and not isinstance(width, (int, float)):
+            logger.warning(f"width is not a number: {type(width)}, falling back to console")
+            self._render_console_fallback(
+                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)",
+                "Press any key to continue..."
+            )
+            return
+        
+        if width is None or height is None:
+            # Fall back to console if we can't determine terminal size
+            logger.warning(f"Terminal size is None, falling back to console")
+            self._render_console_fallback(
+                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)",
+                "Press any key to continue..."
+            )
+            return
+        
+        # Auto-resize: window width adapts to terminal
+        # Width is min(max(60, width - 12), 100) to ensure it fits on screen with minimum 60
+        max_width = int(width) - 12
+        bar_width = min(100, max(60, max_width))  # Cap at 100, minimum 60, or terminal width - 12
         bar_height = 6
+        
+        # Calculate Y position: bottom of screen, subtract bar_height and 2 for margin
+        y_offset = height - bar_height - 2
+        x_offset = 2
         
         try:
             # Calculate estimated time if not provided
@@ -1314,7 +1357,7 @@ class UIManager:
                 return f"{size:.1f} PB"
             
             # Title line with filename and estimated time
-            if estimated_time > 0:
+            if estimated_time is not None and estimated_time > 0:
                 # Format time: seconds -> "Xs", minutes -> "Xm Ys", hours -> "Xh Ym Zs"
                 if estimated_time < 60:
                     time_str = f"{estimated_time}s"
@@ -1329,7 +1372,8 @@ class UIManager:
                     time_str = f"{hours}h {mins}m {secs}s"
                 
                 title_text = f"Download: {Path(filename).name} (ETA: {time_str})"
-                if len(title_text) > bar_width - 4:
+                # Only truncate if bar_width is valid and title_text is too long
+                if bar_width is not None and bar_width > 4 and len(title_text) > bar_width - 4:
                     title_text = title_text[:bar_width - 8] + "..."
             else:
                 title_text = f"Download: {Path(filename).name}"
@@ -1340,9 +1384,6 @@ class UIManager:
                 bar_win = self._progress_bar_win
             else:
                 # Create new window at bottom of screen
-                y_offset = height - bar_height - 1
-                x_offset = 1
-                
                 bar_win = self.create_window(bar_height, bar_width, y_offset, x_offset)
                 if bar_win is None:
                     logger.error("Progress bar window creation failed")
@@ -1364,7 +1405,8 @@ class UIManager:
                 spinner_idx = int(time.time() * 3) % 4
                 bar_win.attron(self._color_pair)
                 status = f"Downloading {Path(filename).name}... ({spinner_chars[spinner_idx]})"
-                if len(status) > bar_width - 4:
+                # Only truncate if bar_width is valid
+                if bar_width is not None and bar_width > 4 and len(status) > bar_width - 4:
                     status = status[:bar_width - 8] + "..."
                 bar_win.addstr(2, 0, status)
                 bar_win.attroff(self._color_pair)
@@ -1375,35 +1417,40 @@ class UIManager:
                     progress_pct = min(current / total * 100, 100.0)
                     percent = percent if percent is not None else progress_pct
                     
-                    # Draw filled bar
-                    filled_width = int(bar_width - 1 * progress_pct / 100)
-                    filled_bar = "█" * filled_width
-                    remaining_bar = "░" * (bar_width - 1 - filled_width)
-                    
-                    # Status line: downloaded/total, percentage, speed, ETA
-                    speed_str = f"({format_size(speed):>6}/s)" if speed else ""
-                    eta_str = f" (ETA: {time_str})" if estimated_time > 0 else ""
-                    status = f"{format_size(current):>8}/{format_size(total):>8} {percent:>6.1f}% {speed_str}{eta_str}"
-                    
-                    # Truncate status if too long
-                    if len(status) > bar_width - 4:
-                        status = status[:bar_width - 8] + "..."
-                    
-                    bar_win.attron(self._color_pair)
-                    bar_win.addstr(2, 0, status)
-                    bar_win.attroff(self._color_pair)
-                    
-                    # Draw the bar
-                    bar_win.attron(self._color_pair)
-                    bar_win.addstr(3, 0, filled_bar + remaining_bar)
-                    bar_win.attroff(self._color_pair)
+                    # Draw filled bar - handle None bar_width
+                    if bar_width is not None:
+                        filled_width = int(bar_width - 1 * progress_pct / 100)
+                        filled_bar = "█" * filled_width
+                        remaining_bar = "░" * (bar_width - 1 - filled_width)
+                        
+                        # Status line: downloaded/total, percentage, speed, ETA
+                        speed_str = f"({format_size(speed):>6}/s)" if speed else ""
+                        eta_str = f" (ETA: {time_str})" if estimated_time > 0 else ""
+                        status = f"{format_size(current):>8}/{format_size(total):>8} {percent:>6.1f}% {speed_str}{eta_str}"
+                        
+                        # Truncate status if too long
+                        if bar_width is not None and bar_width > 4 and len(status) > bar_width - 4:
+                            status = status[:bar_width - 8] + "..."
+                        
+                        bar_win.attron(self._color_pair)
+                        bar_win.addstr(2, 0, status)
+                        bar_win.attroff(self._color_pair)
+                        
+                        # Draw the bar
+                        bar_win.attron(self._color_pair)
+                        bar_win.addstr(3, 0, filled_bar + remaining_bar)
+                        bar_win.attroff(self._color_pair)
+                    else:
+                        # bar_width is None, skip rendering
+                        pass
                 else:
                     # Unknown total - show spinner instead
                     spinner_chars = ["◐", "◓", "◑", "◒"]
                     spinner_idx = int(time.time() * 3) % 4
                     bar_win.attron(self._color_pair)
                     status = f"Downloading {Path(filename).name}... ({spinner_chars[spinner_idx]})"
-                    if len(status) > bar_width - 4:
+                    # Only truncate if bar_width is valid
+                    if bar_width is not None and bar_width > 4 and len(status) > bar_width - 4:
                         status = status[:bar_width - 8] + "..."
                     bar_win.addstr(2, 0, status)
                     bar_win.attroff(self._color_pair)
@@ -1431,6 +1478,11 @@ class UIManager:
                 self._cleanup_terminal()
             except:
                 pass
+            # Fall back to console mode
+            self._render_console_fallback(
+                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)",
+                "Press any key to continue..."
+            )
 
     def render_success(self, message: str) -> None:
         """Render success message.
