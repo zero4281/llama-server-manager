@@ -855,7 +855,7 @@ class LlamaUpdater:
             })
         
         # Use UIManager for tag selection
-        ui = UIManager("llama.cpp")
+        ui = ui_manager if ui_manager is not None else UIManager("llama.cpp")
         selected_tag_idx = ui.render_menu(tag_options, default=1, highlighted=1)
         
         if selected_tag_idx == -1:
