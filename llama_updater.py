@@ -436,7 +436,7 @@ def download_file(url: str, output_path: Path, ui_manager: Optional["UIManager"]
     """
     from ui_manager import UIManager
     
-    ui = ui_manager if ui_manager is not None else UIManager("Download")
+    ui = ui_manager if ui_manager is not None else UIManager("Download llama.cpp")
     
     try:
         response = requests.get(url, stream=True, timeout=60)
@@ -664,7 +664,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     """
     from ui_manager import UIManager
     
-    ui = ui_manager if ui_manager is not None else UIManager("llama.cpp")
+    ui = ui_manager if ui_manager is not None else UIManager("Install llama.cpp")
     
     ui.print_message(f"Installing llama.cpp release {release_tag}...")
 
@@ -809,7 +809,7 @@ class LlamaUpdater:
         from ui_manager import UIManager
         
         # Create UI manager for error display if not provided
-        ui = ui_manager if ui_manager is not None else UIManager("llama.cpp")
+        ui = ui_manager if ui_manager is not None else UIManager("Update llama.cpp")
         
         print("Fetching latest llama.cpp release...")
         try:
@@ -855,7 +855,7 @@ class LlamaUpdater:
             })
         
         # Use UIManager for tag selection
-        ui = ui_manager if ui_manager is not None else UIManager("llama.cpp")
+        ui = ui_manager if ui_manager is not None else UIManager("Select a Tag for llama.cpp")
         selected_tag_idx = ui.render_menu(tag_options, default=1, highlighted=1)
         
         if selected_tag_idx == -1:

@@ -631,7 +631,7 @@ class UIManager:
                 white_attr = self._get_white_attr()
                 if white_attr is not None:
                     win.attron(white_attr)
-                    win.addstr(0, x_offset, f"Select {self._title.lower()}".center(box_width))
+                    win.addstr(0, x_offset, f"{self._title}".center(box_width))
                     win.attroff(white_attr)
                     win.addstr(1, 1, "-" * (menu_width - 2))
                 for i, opt in enumerate(options):
