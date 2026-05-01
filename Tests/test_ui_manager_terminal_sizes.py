@@ -588,8 +588,8 @@ def test_progress_bar_window_y_position():
         call_args = mock_newwin.call_args
         height, width, y, x = call_args[0]
         
-        expected_y = 24 - 6 - 2  # terminal_height - bar_height - 2 = 16
-        expected_x = 2  # fixed x_offset
+        expected_y = 24 - 6 - 9  # terminal_height - bar_height - 9 = 9
+        expected_x = 6  # fixed x_offset
         
         assert height == 6, f"Height should be 6, got {height}"
         assert y == expected_y, f"Y position should be {expected_y}, got {y}"

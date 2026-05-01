@@ -1253,12 +1253,12 @@ class UIManager:
             return self._render_confirmation_fallback(message, default)
 
     def render_progress_bar(self, filename: str, current: int, total: int, 
-                          percent: Optional[float] = None,
                           speed: Optional[float] = None,
+                          percent: Optional[float] = None,
                           estimated_time: Optional[int] = None,
                           spinner: bool = False) -> None:
         """
-        Render a curses-based progress bar for downloads.
+        Render a curses-based progress bar for downloads using the same centered window style as render_menu() and render_confirmation().
         
         Args:
             filename: Name of file being downloaded
@@ -1270,18 +1270,8 @@ class UIManager:
             spinner: If True, show spinner animation for unknown total
         
         Supported Key Codes:
-            - Any key press (all valid curses key codes)
             - Console fallback: Enter (10, 13)
         """
-        start_time = time.time()
-        logger.debug(f"render_progress_bar: file={Path(filename).name}, current={current:,}, total={total:,}")
-        if percent is not None:
-            logger.debug(f"render_progress_bar: percent={percent:.1f}%")
-        if speed is not None:
-            logger.debug(f"render_progress_bar: speed={speed:.2f} B/s")
-        if estimated_time is not None:
-            logger.debug(f"render_progress_bar: estimated_time={estimated_time}s")
-        
         if not self._using_curses or not self._screen:
             # Use console fallback
             self._render_console_fallback(
@@ -1336,11 +1326,18 @@ class UIManager:
         bar_width = min(100, max(60, max_width))  # Cap at 100, minimum 60, or terminal width - 12
         bar_height = 6
         
-        # Calculate Y position: bottom of screen, subtract bar_height and 2 for margin
-        y_offset = height - bar_height - 2
-        x_offset = 2
+        # Calculate centered position
+        screen_height, screen_width = self._screen.getmaxyx()
+        y_center = max(2, (screen_height - bar_height) // 2)
+        x_center = max(2, (screen_width - bar_width) // 2)
         
         try:
+            # Calculate progress percentage if not provided
+            if percent is None and total > 0:
+                percent = min(current / total * 100, 100.0)
+            else:
+                percent = 0
+            
             # Calculate estimated time if not provided
             if estimated_time is None and speed is not None and total > current:
                 remaining = total - current
@@ -1378,85 +1375,102 @@ class UIManager:
             else:
                 title_text = f"Download: {Path(filename).name}"
             
-            # Create or update the progress bar window
-            if self._progress_bar_win is not None:
-                # Update existing window
-                bar_win = self._progress_bar_win
-            else:
-                # Create new window at bottom of screen
-                bar_win = self.create_window(bar_height, bar_width, y_offset, x_offset)
-                if bar_win is None:
-                    logger.error("Progress bar window creation failed")
-                    return
-                
-                # Safely enable keypad mode
-                if self._safe_keypad(bar_win, True):
-                    logger.debug("Keypad mode enabled for progress bar")
-                
-                # Store the window reference
-                self._progress_bar_win = bar_win
+            # Create the window using the same centered approach as render_menu and render_confirmation
+            white_attr = self._get_white_attr()
             
-            # Clear the existing content
-            bar_win.erase()
-            
-            if spinner:
-                # Indeterminate progress with spinner
-                spinner_chars = ["◐", "◓", "◑", "◒"]
-                spinner_idx = int(time.time() * 3) % 4
-                bar_win.attron(self._color_pair)
-                status = f"Downloading {Path(filename).name}... ({spinner_chars[spinner_idx]})"
-                # Only truncate if bar_width is valid
-                if bar_width is not None and bar_width > 4 and len(status) > bar_width - 4:
-                    status = status[:bar_width - 8] + "..."
-                bar_win.addstr(2, 0, status)
-                bar_win.attroff(self._color_pair)
-            else:
-                # Determinate progress bar
-                if total > 0:
-                    # Calculate progress percentage
-                    progress_pct = min(current / total * 100, 100.0)
-                    percent = percent if percent is not None else progress_pct
+            # Define redraw function
+            def redraw():
+                try:
+                    # Validate window before operations
+                    if not self._validate_window(bar_win):
+                        logger.warning("Window validation failed in redraw")
+                        try:
+                            self._cleanup_terminal()
+                        except:
+                            pass
+                        raise Exception("Window invalid")
                     
-                    # Draw filled bar - handle None bar_width
-                    if bar_width is not None:
-                        filled_width = int(bar_width - 1 * progress_pct / 100)
-                        filled_bar = "█" * filled_width
-                        remaining_bar = "░" * (bar_width - 1 - filled_width)
-                        
-                        # Status line: downloaded/total, percentage, speed, ETA
-                        speed_str = f"({format_size(speed):>6}/s)" if speed else ""
-                        eta_str = f" (ETA: {time_str})" if estimated_time > 0 else ""
-                        status = f"{format_size(current):>8}/{format_size(total):>8} {percent:>6.1f}% {speed_str}{eta_str}"
-                        
-                        # Truncate status if too long
+                    # Clear the window content (inside the border)
+                    bar_win.erase()
+                    
+                    # Redraw the border with box() to ensure it's properly drawn
+                    bar_win.box()
+                    
+                    # Calculate box width for centering
+                    box_width = bar_width - 6
+                    
+                    # Title row 0, centered with padding
+                    if white_attr is not None:
+                        bar_win.attron(white_attr)
+                        bar_win.addstr(0, 3, "Download".center(box_width))
+                        bar_win.attroff(white_attr)
+                        bar_win.addstr(1, 1, "-" * (bar_width - 2))
+                    
+                    # Progress information - row 2
+                    if spinner:
+                        # Indeterminate progress with spinner
+                        spinner_chars = ["◐", "◓", "◑", "◒"]
+                        spinner_idx = int(time.time() * 3) % 4
+                        status = f"Downloading {Path(filename).name}... ({spinner_chars[spinner_idx]})"
+                        # Only truncate if bar_width is valid
                         if bar_width is not None and bar_width > 4 and len(status) > bar_width - 4:
                             status = status[:bar_width - 8] + "..."
-                        
-                        bar_win.attron(self._color_pair)
-                        bar_win.addstr(2, 0, status)
-                        bar_win.attroff(self._color_pair)
-                        
-                        # Draw the bar
-                        bar_win.attron(self._color_pair)
-                        bar_win.addstr(3, 0, filled_bar + remaining_bar)
-                        bar_win.attroff(self._color_pair)
                     else:
-                        # bar_width is None, skip rendering
-                        pass
-                else:
-                    # Unknown total - show spinner instead
-                    spinner_chars = ["◐", "◓", "◑", "◒"]
-                    spinner_idx = int(time.time() * 3) % 4
+                        # Determinate progress bar
+                        if total > 0:
+                            # Draw filled bar
+                            if bar_width is not None:
+                                filled_width = int(bar_width - 1 * percent / 100)
+                                filled_bar = "█" * filled_width
+                                remaining_bar = "░" * (bar_width - 1 - filled_width)
+                                
+                                # Status line: downloaded/total, percentage, speed, ETA
+                                speed_str = f"({format_size(speed):>6}/s)" if speed else ""
+                                eta_str = f" (ETA: {time_str})" if estimated_time > 0 else ""
+                                status = f"{format_size(current):>8}/{format_size(total):>8} {percent:>6.1f}% {speed_str}{eta_str}"
+                                
+                                # Truncate status if too long
+                                if bar_width is not None and bar_width > 4 and len(status) > bar_width - 4:
+                                    status = status[:bar_width - 8] + "..."
+                        else:
+                            # Unknown total - show spinner
+                            spinner_chars = ["◐", "◓", "◑", "◒"]
+                            spinner_idx = int(time.time() * 3) % 4
+                            status = f"Downloading {Path(filename).name}... ({spinner_chars[spinner_idx]})"
+                            # Only truncate if bar_width is valid
+                            if bar_width is not None and bar_width > 4 and len(status) > bar_width - 4:
+                                status = status[:bar_width - 8] + "..."
+                    
+                    # Render with color
                     bar_win.attron(self._color_pair)
-                    status = f"Downloading {Path(filename).name}... ({spinner_chars[spinner_idx]})"
-                    # Only truncate if bar_width is valid
-                    if bar_width is not None and bar_width > 4 and len(status) > bar_width - 4:
-                        status = status[:bar_width - 8] + "..."
-                    bar_win.addstr(2, 0, status)
+                    bar_win.addstr(2, 3, status)
                     bar_win.attroff(self._color_pair)
+                    
+                    # Footer - row 4, centered with padding
+                    footer = "Use arrow keys to navigate, Enter to confirm, q/ESC to cancel"
+                    truncated_footer = footer[:box_width + 4] if len(footer) > box_width + 4 else footer
+                    centered_footer = truncated_footer.center(box_width)
+                    bar_win.addstr(4, 3, centered_footer, curses.A_REVERSE)
+                    
+                    bar_win.refresh()
+                except curses.error:
+                    pass
             
-            # Refresh the window to display the changes
-            bar_win.refresh()
+            # Create new window centered
+            bar_win = self.create_window(bar_height, bar_width, y_center, x_center)
+            if bar_win is None:
+                logger.error("Progress bar window creation failed")
+                return
+            
+            # Safely enable keypad mode
+            if self._safe_keypad(bar_win, True):
+                logger.debug("Keypad mode enabled for progress bar")
+            
+            # Store the window reference
+            self._progress_bar_win = bar_win
+            
+            # Initial redraw
+            redraw()
             
             logger.debug(f"Progress bar updated: {Path(filename).name} ({percent or 0:.1f}%)")
             

@@ -487,8 +487,8 @@ def download_file(url: str, output_path: Path, ui_manager: Optional["UIManager"]
                     filename=filename,
                     current=downloaded,
                     total=total,
-                    percent=progress_pct,
                     speed=speed,
+                    percent=progress_pct,
                     estimated_time=eta_seconds if eta_str else None
                 )
 
