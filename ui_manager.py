@@ -1322,14 +1322,15 @@ class UIManager:
         
         # Auto-resize: window width adapts to terminal
         # Width is min(max(60, width - 12), 100) to ensure it fits on screen with minimum 60
+        # Subtract 2 for padding, 2 for window border, and 8 for status line
         max_width = int(width) - 12
-        bar_width = min(100, max(60, max_width))  # Cap at 100, minimum 60, or terminal width - 12
-        bar_height = 6
+        win_width = min(100, max(60, max_width))  # Cap at 100, minimum 60, or terminal width - 12
+        win_height = 6
         
         # Calculate centered position
         screen_height, screen_width = self._screen.getmaxyx()
-        y_center = max(2, (screen_height - bar_height) // 2)
-        x_center = max(2, (screen_width - bar_width) // 2)
+        y_center = max(2, (screen_height - win_height) // 2)
+        x_center = max(2, (screen_width - win_width) // 2)
         
         try:
             # Calculate progress percentage if not provided
@@ -1370,9 +1371,9 @@ class UIManager:
                     time_str = f"{hours}h {mins}m {secs}s"
                 
                 title_text = f"Download: {Path(filename).name} (ETA: {time_str})"
-                # Only truncate if bar_width is valid and title_text is too long
-                if bar_width is not None and bar_width > 4 and len(title_text) > bar_width - 4:
-                    title_text = title_text[:bar_width - 8] + "..."
+                # Only truncate if win_width is valid and title_text is too long
+                if win_width is not None and win_width > 4 and len(title_text) > win_width - 4:
+                    title_text = title_text[:win_width - 8] + "..."
             else:
                 title_text = f"Download: {Path(filename).name}"
             
@@ -1398,14 +1399,14 @@ class UIManager:
                     bar_win.box()
                     
                     # Calculate box width for centering
-                    box_width = bar_width - 6
+                    box_width = win_width - 6
                     
                     # Title row 0, centered with padding
                     if white_attr is not None:
                         bar_win.attron(white_attr)
                         bar_win.addstr(0, 3, "Download".center(box_width))
                         bar_win.attroff(white_attr)
-                        bar_win.addstr(1, 1, "-" * (bar_width - 2))
+                        bar_win.addstr(1, 1, "-" * (win_width - 2))
                     
                     # Progress information - row 2
                     if spinner:
@@ -1413,17 +1414,17 @@ class UIManager:
                         spinner_chars = ["◐", "◓", "◑", "◒"]
                         spinner_idx = int(time.time() * 3) % 4
                         status = f"Downloading {Path(filename).name}... ({spinner_chars[spinner_idx]})"
-                        # Only truncate if bar_width is valid
-                        if bar_width is not None and bar_width > 4 and len(status) > bar_width - 4:
-                            status = status[:bar_width - 8] + "..."
+                        # Only truncate if win_width is valid
+                        if win_width is not None and win_width > 4 and len(status) > win_width - 4:
+                            status = status[:win_width - 8] + "..."
                     else:
                         # Determinate progress bar
                         if total > 0:
                             # Draw filled bar
-                            if bar_width is not None:
-                                filled_width = int(bar_width * percent / 100)
+                            if win_width is not None:
+                                filled_width = int(win_width * percent / 100)
                                 filled_bar = "█" * filled_width
-                                remaining_bar = "░" * (bar_width - filled_width)
+                                remaining_bar = "░" * (win_width - filled_width)
                                 logger.debug(f"render_progress_bar: filled_width={filled_width}, percent={percent}")
                                 
                                 # Status line: downloaded/total, percentage, speed, ETA
@@ -1432,16 +1433,16 @@ class UIManager:
                                 status = f"{format_size(current):>8}/{format_size(total):>8} {percent:>6.1f}% {speed_str}{eta_str}"
                                 
                                 # Truncate status if too long
-                                if bar_width is not None and bar_width > 4 and len(status) > bar_width - 4:
-                                    status = status[:bar_width - 8] + "..."
+                                if win_width is not None and win_width > 4 and len(status) > win_width - 4:
+                                    status = status[:win_width - 8] + "..."
                         else:
                             # Unknown total - show spinner
                             spinner_chars = ["◐", "◓", "◑", "◒"]
                             spinner_idx = int(time.time() * 3) % 4
                             status = f"Downloading {Path(filename).name}... ({spinner_chars[spinner_idx]})"
-                            # Only truncate if bar_width is valid
-                            if bar_width is not None and bar_width > 4 and len(status) > bar_width - 4:
-                                status = status[:bar_width - 8] + "..."
+                            # Only truncate if win_width is valid
+                            if win_width is not None and win_width > 4 and len(status) > win_width - 4:
+                                status = status[:win_width - 8] + "..."
                     
                     # Render with color
                     bar_win.attron(self._color_pair)
@@ -1460,7 +1461,7 @@ class UIManager:
                     pass
             
             # Create new window centered
-            bar_win = self.create_window(bar_height, bar_width, y_center, x_center)
+            bar_win = self.create_window(win_height, win_width, y_center, x_center)
             if bar_win is None:
                 logger.error("Progress bar window creation failed")
                 return
