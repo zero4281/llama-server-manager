@@ -6,6 +6,7 @@ the appropriate platform/architecture, downloading and extracting
 archives, and managing the llama-cpp installation directory.
 """
 
+import datetime
 import json
 import os
 import re
@@ -376,19 +377,20 @@ def get_checksum_assets(release: dict) -> List[dict]:
     return checksum_assets
 
 
-def download_checksum(archive_path: Path, checksum_asset: dict) -> Path:
+def download_checksum(archive_path: Path, checksum_asset: dict, ui_manager: Optional["UIManager"] = None) -> Path:
     """
     Download checksum file.
     
     Args:
         archive_path: Path to archive file
         checksum_asset: Checksum asset dictionary
+        ui_manager: UIManager instance for rendering progress bar
     
     Returns:
         Path to downloaded checksum file
     """
     checksum_path = archive_path.with_suffix('.sha256sum.txt')
-    download_file(checksum_asset['browser_download_url'], checksum_path)
+    download_file(checksum_asset['browser_download_url'], checksum_path, ui_manager=ui_manager)
     return checksum_path
 
 
@@ -417,13 +419,14 @@ def select_release(release: dict, available_platforms: List[dict],
     return None
 
 
-def download_file(url: str, output_path: Path) -> Path:
+def download_file(url: str, output_path: Path, ui_manager: Optional["UIManager"] = None) -> Path:
     """
-    Download file from URL to output path.
+    Download file from URL to output path with continuous progress bar.
 
     Args:
         url: Download URL
         output_path: Destination path
+        ui_manager: UIManager instance for rendering progress bar
 
     Returns:
         Path to downloaded file
@@ -431,22 +434,63 @@ def download_file(url: str, output_path: Path) -> Path:
     Raises:
         DownloadError: If download fails
     """
+    from ui_manager import UIManager
+    
+    ui = ui_manager if ui_manager is not None else UIManager("Download llama.cpp")
+    
     try:
         response = requests.get(url, stream=True, timeout=60)
         response.raise_for_status()
         
         total = int(response.headers.get('content-length', 0))
         downloaded = 0
-
+        start_time = time.time()
+        speed = 0
+        last_update = time.time()
+        update_interval = 0.1  # Update every 100ms
+        
         with open(output_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-                downloaded += len(chunk)
+            # Use iter_bytes() for more control over chunk processing
+            for data in response.iter_content(chunk_size=8192):
+                if not data:  # Skip empty chunks
+                    continue
+                
+                f.write(data)
+                downloaded += len(data)
+                
+                # Calculate speed (bytes per second)
+                elapsed = time.time() - start_time
+                if elapsed > 0:
+                    speed = downloaded / elapsed
+                
+                # Calculate estimated time remaining
+                if total > downloaded and speed > 0:
+                    remaining = total - downloaded
+                    eta_seconds = int(remaining / speed)
+                    eta_minutes = eta_seconds // 60
+                    eta_seconds = eta_seconds % 60
+                    eta_str = f"{eta_minutes}m {eta_seconds}s"
+                else:
+                    eta_str = ""
+                
+                # Get filename from path
+                filename = output_path.name
+                
+                # Calculate progress percentage
                 if total > 0:
-                    progress = downloaded / total * 100
-                    # Print simple progress
-                    if progress % 5 < 1:  # Print every 5%
-                        print(f"Downloaded: {downloaded}/{total} ({progress:.1f}%)")
+                    progress_pct = (downloaded / total) * 100
+                else:
+                    progress_pct = 0
+                
+                # Update progress bar continuously without waiting for input
+                ui.render_progress_bar(
+                    filename=filename,
+                    current=downloaded,
+                    total=total,
+                    speed=speed,
+                    percent=progress_pct,
+                    estimated_time=eta_seconds if eta_str else None
+                )
 
         return output_path
 
@@ -620,7 +664,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     """
     from ui_manager import UIManager
     
-    ui = ui_manager if ui_manager is not None else UIManager("llama.cpp")
+    ui = ui_manager if ui_manager is not None else UIManager("Install llama.cpp")
     
     ui.print_message(f"Installing llama.cpp release {release_tag}...")
 
@@ -703,7 +747,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     archive_path = Path(tempfile.gettempdir()) / f"llama-{release_tag.replace('v', '')}-{selected_asset['name']}"
     
     try:
-        download_file(selected_asset['browser_download_url'], archive_path)
+        download_file(selected_asset['browser_download_url'], archive_path, ui_manager=ui)
         ui.print_message(f"Downloaded to {archive_path}")
 
         # Check for checksum file
@@ -711,7 +755,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         if checksum_assets:
             ui.print_message("Checking checksum...")
             checksum_asset = checksum_assets[0]
-            checksum_path = download_checksum(archive_path, checksum_asset)
+            checksum_path = download_checksum(archive_path, checksum_asset, ui_manager=ui)
             
             try:
                 if not verify_checksum(archive_path, checksum_path):
@@ -765,7 +809,7 @@ class LlamaUpdater:
         from ui_manager import UIManager
         
         # Create UI manager for error display if not provided
-        ui = ui_manager if ui_manager is not None else UIManager("llama.cpp")
+        ui = ui_manager if ui_manager is not None else UIManager("Update llama.cpp")
         
         print("Fetching latest llama.cpp release...")
         try:
@@ -811,8 +855,8 @@ class LlamaUpdater:
             })
         
         # Use UIManager for tag selection
-        ui = UIManager("llama.cpp")
-        selected_tag_idx = ui.render_menu(tag_options, default=1)
+        ui = ui_manager if ui_manager is not None else UIManager("Select a Tag for llama.cpp")
+        selected_tag_idx = ui.render_menu(tag_options, default=1, highlighted=1)
         
         if selected_tag_idx == -1:
             print("Tag selection cancelled.")
