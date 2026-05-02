@@ -1418,29 +1418,20 @@ class UIManager:
                         if win_width is not None and win_width > 4 and len(status) > win_width - 4:
                             status = status[:win_width - 8] + "..."
                     else:
-                        # Determinate progress bar
-                        if total > 0:
-                            # Draw filled bar
-                            if win_width is not None:
-                                filled_width = int(win_width * percent / 100)
-                                filled_bar = "█" * filled_width
-                                remaining_bar = "░" * (win_width - filled_width)
-                                logger.debug(f"render_progress_bar: filled_width={filled_width}, percent={percent}")
-                                
-                                # Status line: downloaded/total, percentage, speed, ETA
-                                speed_str = f"({format_size(speed):>6}/s)" if speed else ""
-                                eta_str = f" (ETA: {time_str})" if estimated_time > 0 else ""
-                                status = f"{format_size(current):>8}/{format_size(total):>8} {percent:>6.1f}% {speed_str}{eta_str}"
-                                
-                                # Truncate status if too long
-                                if win_width is not None and win_width > 4 and len(status) > win_width - 4:
-                                    status = status[:win_width - 8] + "..."
-                        else:
-                            # Unknown total - show spinner
-                            spinner_chars = ["◐", "◓", "◑", "◒"]
-                            spinner_idx = int(time.time() * 3) % 4
-                            status = f"Downloading {Path(filename).name}... ({spinner_chars[spinner_idx]})"
-                            # Only truncate if win_width is valid
+                        # Draw filled bar
+                        if win_width is not None:
+                            bar_width = win_width - 6
+                            filled_width = int(bar_width * percent / 100)
+                            filled_bar = "█" * filled_width
+                            remaining_bar = "░" * (bar_width - filled_width)
+                            logger.debug(f"render_progress_bar: filled_width={filled_width}, percent={percent}")
+                            
+                            # Status line: downloaded/total, percentage, speed, ETA
+                            speed_str = f"({format_size(speed):>6}/s)" if speed else ""
+                            eta_str = f" (ETA: {time_str})" if estimated_time > 0 else ""
+                            status = f"{format_size(current):>8}/{format_size(total):>8} {percent:>6.1f}% {speed_str}{eta_str}"
+                            
+                            # Truncate status if too long
                             if win_width is not None and win_width > 4 and len(status) > win_width - 4:
                                 status = status[:win_width - 8] + "..."
                     
@@ -1454,14 +1445,18 @@ class UIManager:
                     footer = "Use arrow keys to navigate, Enter to confirm, q/ESC to cancel"
                     truncated_footer = footer[:box_width + 4] if len(footer) > box_width + 4 else footer
                     centered_footer = truncated_footer.center(box_width)
-                    bar_win.addstr(4, 3, centered_footer, curses.A_REVERSE)
+                    bar_win.addstr(5, 3, centered_footer, curses.A_REVERSE)
                     
                     bar_win.refresh()
                 except curses.error:
                     pass
             
             # Create new window centered
-            bar_win = self.create_window(win_height, win_width, y_center, x_center)
+            if self._progress_bar_win is not None:
+                bar_win = self._progress_bar_win
+            else:
+                bar_win = self.create_window(win_height, win_width, y_center, x_center)
+            
             if bar_win is None:
                 logger.error("Progress bar window creation failed")
                 return
