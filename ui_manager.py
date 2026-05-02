@@ -1335,8 +1335,9 @@ class UIManager:
             # Calculate progress percentage if not provided
             if percent is None and total > 0:
                 percent = min(current / total * 100, 100.0)
-            else:
+            elif percent is None and total <= 0:
                 percent = 0
+            # If percent is provided, use it as-is
             
             # Calculate estimated time if not provided
             if estimated_time is None and speed is not None and total > current:
@@ -1423,6 +1424,7 @@ class UIManager:
                                 filled_width = int(bar_width - 1 * percent / 100)
                                 filled_bar = "█" * filled_width
                                 remaining_bar = "░" * (bar_width - 1 - filled_width)
+                                logger.debug(f"render_progress_bar: filled_width={filled_width}, percent={percent}")
                                 
                                 # Status line: downloaded/total, percentage, speed, ETA
                                 speed_str = f"({format_size(speed):>6}/s)" if speed else ""
@@ -1444,6 +1446,7 @@ class UIManager:
                     # Render with color
                     bar_win.attron(self._color_pair)
                     bar_win.addstr(2, 3, status)
+                    #TODO: Add a line for the progress bar.  Something like this: bar_win.addstr(3, 3, filled_bar+remaining_bar)
                     bar_win.attroff(self._color_pair)
                     
                     # Footer - row 4, centered with padding
