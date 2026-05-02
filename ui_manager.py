@@ -1421,9 +1421,9 @@ class UIManager:
                         if total > 0:
                             # Draw filled bar
                             if bar_width is not None:
-                                filled_width = int(bar_width - 1 * percent / 100)
+                                filled_width = int(bar_width * percent / 100)
                                 filled_bar = "█" * filled_width
-                                remaining_bar = "░" * (bar_width - 1 - filled_width)
+                                remaining_bar = "░" * (bar_width - filled_width)
                                 logger.debug(f"render_progress_bar: filled_width={filled_width}, percent={percent}")
                                 
                                 # Status line: downloaded/total, percentage, speed, ETA
@@ -1446,7 +1446,7 @@ class UIManager:
                     # Render with color
                     bar_win.attron(self._color_pair)
                     bar_win.addstr(2, 3, status)
-                    #TODO: Add a line for the progress bar.  Something like this: bar_win.addstr(3, 3, filled_bar+remaining_bar)
+                    bar_win.addstr(3, 3, filled_bar + remaining_bar)
                     bar_win.attroff(self._color_pair)
                     
                     # Footer - row 4, centered with padding
