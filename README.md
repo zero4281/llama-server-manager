@@ -1,42 +1,192 @@
-# LLama Server Wrapper
+# LLama CPP Server Manager
+
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-blue)
+![Python](https://img.shields.io/badge/python-3.12.3%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-active-brightgreen)
+
+A lightweight wrapper around [llama.cpp](https://github.com/ggerganov/llama.cpp)'s `llama-server` that simplifies installation, configuration, and lifecycle management of a local LLM inference server. It supports OpenAI-compatible REST API endpoints, making it easy to drop into existing tooling and workflows.
+
+---
+
+## Table of Contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Install Llama CPP](#install-llama-cpp)
+- [Configuration](#configuration)
+- [Model Management](#model-management)
+- [Starting the Server](#starting-the-server)
+- [Stopping the Server](#stopping-the-server)
+- [API Usage](#api-usage)
+
+---
+
+## Requirements
+
+- Python 3.12.3+ with `pip` — [Download Python](https://www.python.org/downloads/) (pip is included with Python 3.4+)
+- macOS, Linux, or Windows (WSL)
+- A Hugging Face account (for downloading models)
+
+---
 
 ## Installation
-### On macOS/Linux
-`python3 -m venv .venv`
 
-### On Windows
-`python -m venv .venv`
+Create and activate a Python virtual environment before installing dependencies.
 
-### On macOS/Linux
-`source .venv/bin/activate`
+**Create the environment:**
 
-### On Windows
-`.venv\Scripts\activate`
+```bash
+# macOS / Linux / WSL
+python3 -m venv .venv
 
-### Install the Hugginface Hub CLI for model managment
-`pip install hf-cli`
+# Windows (native)
+python -m venv .venv
+```
 
-## Run the Code
-`./llama-server-wrapper`
+**Activate the environment:**
 
-## ProjectSkills
-### Example Input for /project-create-todos  
+```bash
+# macOS / Linux / WSL
+source .venv/bin/activate
 
-Running this command: \`./llama-server-wrapper --install-llama\` has the following issues.  
-  
-  \* Using the arrow keys on the first menu (Select llama.cpp) causes the program to exit.  
-  \* Using the Page Up and Page Down keys on the first menu (Select llama.cpp) don't select anything.  
-  \* Using the number keys on the first menu (Select llama.cpp) does work and the selection isn't highlighted.  
-  \* The second and third menus work as expected.  
-  \* The confirmation prompt doesn't display in a curses menu and the previous menu is still visible.  
-  \* Hitting enter on the confirmation prompt causes the program to exit without downloading llama.cpp and displays with two error messages:  
-\```  
-Release b8833 - llama-b8833-bin-ubuntu-x64.tar.gz  
-Proceed? [Y/n]:  
-Error: name 'logger' is not defined  
-Error restoring terminal state: module 'curses' has no attribute 'keypad'  
-\```  
-  
-Keyboard input needs to be simulated or the program will hang while waiting for user input.  Run two tests, one with numbers and one with arrow keys.  Update existing tests or add new tests in the `./Tests` folder.  
-  
-There is definitely an error in `./ui_manager.py` even if all the tests pass.  The tests are likely producing false positives and some of them might timeout.
+# Windows (native)
+.venv\Scripts\activate
+```
+
+**Install the Hugging Face CLI for model management:**
+
+```bash
+pip install hf-cli
+```
+
+---
+
+## Install Llama CPP
+
+Run the install command to download and set up `llama.cpp`:
+
+```bash
+./llama-server-wrapper --install-llama
+```
+
+This will walk you through an interactive menu to install llama.cpp. The script attempts to detect your OS and hardware automatically — review each option carefully to make sure the correct build is selected for your system.
+
+Once installation completes, a `llama-cpp/` folder will appear in your install directory and you're ready to run the server.
+
+---
+
+## Configuration
+
+On first run, the wrapper generates a `conf.json` with safe defaults. You can customize it to pass additional options directly to `llama-server`.
+
+**Example `conf.json`:**
+
+```json
+{
+  "options": {},
+  "llama-server": {
+    "options": {
+      "host": "0.0.0.0",
+      "port": "11235",
+      "models-max": "1",
+      "sleep-idle-seconds": 600
+    }
+  },
+  "logging": {
+    "enabled": true,
+    "level": "INFO",
+    "file": null
+  }
+}
+```
+
+**Key options:**
+
+| Option | Default | Description |
+|---|---|---|
+| `host` | `127.0.0.1` | Set to `0.0.0.0` to expose the server on your local network |
+| `port` | `8080` | Change if another process is already using port 8080 |
+| `models-max` | `1` | Maximum number of models loaded simultaneously — keep at `1` if VRAM is limited |
+| `sleep-idle-seconds` | `600` | Unloads the model after this many seconds of inactivity (similar to Ollama's behavior) |
+
+---
+
+## Model Management
+
+> **Note:** Built-in model management commands are coming soon to the wrapper.
+
+In the meantime, there are two ways to download models:
+
+**Option 1 — Hugging Face CLI:**
+
+```bash
+hf download {model-name}
+```
+
+**Option 2 — llama-cli (downloads directly into llama.cpp's format):**
+
+```bash
+llama-cli -hf {model-name}
+```
+
+Both methods work well. Use `llama-cli` if you want the model pulled and placed directly in a format ready for `llama-server`.
+
+---
+
+## Starting the Server
+
+```bash
+./llama-server-wrapper
+```
+
+This starts `llama-server` as a background process. Output is streamed to your terminal, but you can safely close the terminal window — the server will continue running.
+
+---
+
+## Stopping the Server
+
+```bash
+./llama-server-wrapper --stop-server
+```
+
+This cleanly stops the `llama-server` process.
+
+---
+
+## API Usage
+
+`llama-server` exposes an OpenAI-compatible REST API, so you can use it as a drop-in replacement with any OpenAI SDK or client.
+
+**Chat Completions:**
+
+```bash
+curl http://localhost:11235/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "your-model-name",
+    "messages": [
+      { "role": "user", "content": "Hello!" }
+    ]
+  }'
+```
+
+**Using the OpenAI Python SDK:**
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:11235/v1",
+    api_key="not-needed"  # llama-server does not require an API key
+)
+
+response = client.chat.completions.create(
+    model="your-model-name",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(response.choices[0].message.content)
+```
+
+> Update `base_url` to match the `host` and `port` values in your `conf.json`.

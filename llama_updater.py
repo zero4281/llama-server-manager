@@ -800,7 +800,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         
         # Post-install sanity check
         verify_installation()
-        
+
         ui.print_message("Installation complete!")
 
     except Exception as e:
