@@ -621,7 +621,7 @@ def verify_installation() -> None:
         return
     
     try:
-        result = subprocess.run(             
+        result = subprocess.run(
             [str(llama_server), "--version"],
             stdout=subprocess.PIPE,          
             stderr=subprocess.STDOUT,        
