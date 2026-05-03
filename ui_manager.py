@@ -1275,8 +1275,7 @@ class UIManager:
         if not self._using_curses or not self._screen:
             # Use console fallback
             self._render_console_fallback(
-                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)",
-                "Press any key to continue..."
+                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)"
             )
             return
 
@@ -1287,8 +1286,7 @@ class UIManager:
             logger.error(f"getmaxyx error: {e}")
             # Fall back to console mode if we can't get terminal size
             self._render_console_fallback(
-                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)",
-                "Press any key to continue..."
+                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)"
             )
             return
         
@@ -1296,8 +1294,7 @@ class UIManager:
         if height is None or width is None or height <= 0 or width <= 0:
             # Invalid terminal size, fall back to console
             self._render_console_fallback(
-                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)",
-                "Press any key to continue..."
+                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)"
             )
             return
         
@@ -1306,8 +1303,7 @@ class UIManager:
         if width is not None and not isinstance(width, (int, float)):
             logger.warning(f"width is not a number: {type(width)}, falling back to console")
             self._render_console_fallback(
-                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)",
-                "Press any key to continue..."
+                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)"
             )
             return
         
@@ -1315,8 +1311,7 @@ class UIManager:
             # Fall back to console if we can't determine terminal size
             logger.warning(f"Terminal size is None, falling back to console")
             self._render_console_fallback(
-                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)",
-                "Press any key to continue..."
+                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)"
             )
             return
         
@@ -1493,8 +1488,7 @@ class UIManager:
                 pass
             # Fall back to console mode
             self._render_console_fallback(
-                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)",
-                "Press any key to continue..."
+                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)"
             )
 
     def render_success(self, message: str) -> None:
@@ -1507,8 +1501,7 @@ class UIManager:
         logger.debug(f"render_success called: {message[:60]}...")
         if not self._using_curses:
             self._render_console_fallback(
-                f"\n{'='*60}\n{message.center(60)}\n{'='*60}",
-                "Press any key to continue..."
+                f"\n{'='*60}\n{message.center(60)}\n{'='*60}"
             )
             return
 
@@ -1546,7 +1539,6 @@ class UIManager:
             msg_win.addstr(2, 2, message)
             msg_win.attroff(self._color_pair)
             
-            msg_win.addstr(3, 2, "Press any key to continue...", curses.A_REVERSE)
             msg_win.refresh()
             
             # Wait for key
@@ -1597,8 +1589,7 @@ class UIManager:
         logger.debug(f"render_error called: {message[:60]}...")
         if not self._using_curses:
             self._render_console_fallback(
-                f"\n{'='*60}\nError: {message.center(60)}\n{'='*60}",
-                "Press any key to continue..."
+                f"\n{'='*60}\nError: {message.center(60)}\n{'='*60}"
             )
             return
 
@@ -1636,7 +1627,6 @@ class UIManager:
             msg_win.addstr(2, 2, message)
             msg_win.attroff(self._color_pair)
             
-            msg_win.addstr(3, 2, "Press any key to continue...", curses.A_REVERSE)
             msg_win.refresh()
             
             # Wait for key

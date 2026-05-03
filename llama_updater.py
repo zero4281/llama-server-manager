@@ -623,13 +623,18 @@ def verify_installation() -> None:
     try:
         result = subprocess.run(
             [str(llama_server), "--version"],
-            capture_output=True,
-            text=True,
-            timeout=10
+            stdout=subprocess.PIPE,          
+            stderr=subprocess.STDOUT,        
+            text=True,                       
+            timeout=10                       
         )
+        
         if result.returncode == 0:
-            version_output = result.stdout.strip()
-            print(f"\nllama-server version: {version_output}")
+            import re                                                          
+            match = re.search(r'version:\s*(.+)$', result.stdout, re.MULTILINE)
+            if match:
+                version_output = match.group(1).strip()
+                print(f"llama-server version: {version_output}\n")
         else:
             print(f"\nWarning: llama-server --version returned exit code {result.returncode}")
             print(f"Output: {result.stderr[:200]}")
@@ -696,7 +701,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             break
     
     # Render platform selection menu
-    selected_platform_idx = ui.render_menu(platform_options, default=default_platform_idx)
+    selected_platform_idx = ui.render_menu(platform_options, default=default_platform_idx, highlighted=default_platform_idx)
     
     if selected_platform_idx == -1:
         print("Platform selection cancelled.")
@@ -740,7 +745,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         print("Installation cancelled.")
         return
     
-    ui_logger.info(f"User confirmed installation of {release_tag} - {asset_name}")
+    ui_logger.debug(f"User confirmed installation of {release_tag} - {asset_name}")
 
     # Download
     ui.print_message(f"\nDownloading {selected_asset['name']}...")
@@ -780,10 +785,11 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
 
         # Clean up
         archive_path.unlink(missing_ok=True)
-        ui.print_message("\nInstallation complete!")
         
         # Post-install sanity check
         verify_installation()
+        
+        ui.print_message("Installation complete!")
 
     except Exception as e:
         # Clean up on error
@@ -811,13 +817,13 @@ class LlamaUpdater:
         # Create UI manager for error display if not provided
         ui = ui_manager if ui_manager is not None else UIManager("Update llama.cpp")
         
-        print("Fetching latest llama.cpp release...")
+        ui_logger.debug("Fetching latest llama.cpp release...")
         try:
             release = get_latest_release()
             release_tag = release["tag_name"]
             
-            print(f"Latest release: {release_tag} ({release['name']})")
-            print(f"Published: {release['published_at']}")
+            ui_logger.debug(f"Latest release: {release_tag} ({release['name']})")
+            ui_logger.debug(f"Published: {release['published_at']}")
         except RateLimitError as e:
             ui.render_error(
                 f"GitHub API rate limit exceeded.\n"
