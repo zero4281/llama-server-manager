@@ -2,7 +2,7 @@
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-blue)
 ![Python](https://img.shields.io/badge/python-3.12.3%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-GPL%20v3.0-green)
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
 
 A lightweight wrapper around [llama.cpp](https://github.com/ggerganov/llama.cpp)'s `llama-server` that simplifies installation, configuration, and lifecycle management of a local LLM inference server. It supports OpenAI-compatible REST API endpoints, making it easy to drop into existing tooling and workflows.
