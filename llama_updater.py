@@ -760,8 +760,8 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     ui_logger.debug(f"User confirmed installation of {release_tag} - {asset_name}")
 
     # Download
-    ui.print_message(f"\nDownloading {selected_asset['name']}...")
-    archive_path = Path(tempfile.gettempdir()) / f"llama-{release_tag.replace('v', '')}-{selected_asset['name']}"
+    ui.print_message(f"\nDownloading {asset_name}...")
+    archive_path = Path(tempfile.gettempdir()) / f"{asset_name}"
     
     try:
         download_file(selected_asset['browser_download_url'], archive_path, ui_manager=ui)
@@ -786,7 +786,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             print("No checksum file available for this release, skipping verification")
 
         # Extract
-        ui.print_message(f"\nExtracting to {LLAMA_CPP_DIR}...")
+        ui.print_message(f"\nExtracting to {LLAMA_CPP_DIR}")
         extract_archive(archive_path, LLAMA_CPP_DIR)
 
         # Ensure llama-server is executable
