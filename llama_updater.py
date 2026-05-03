@@ -371,8 +371,20 @@ def get_checksum_assets(release: dict) -> List[dict]:
     checksum_assets = []
     for asset in release.get('assets', []):
         name_lower = asset['name'].lower()
-        if name_lower.endswith('.sha256sum.txt') or name_lower.endswith('.sha256sum') or \
-           'sha256' in name_lower or 'checksum' in name_lower:
+        # Check for common checksum file patterns
+        # - Standard patterns: .sha256sum.txt, .sha256sum
+        # - Contains sha256 or checksum (case-insensitive)
+        # - Common patterns: sha256sums, checksums, sha256sums.txt, checksums.txt
+        if (name_lower.endswith('.sha256sum.txt') or 
+            name_lower.endswith('.sha256sum') or
+            'sha256' in name_lower or 
+            'checksum' in name_lower or
+            name_lower.endswith('sha256sums') or
+            name_lower.endswith('checksums') or
+            name_lower.endswith('sha256sums.txt') or
+            name_lower.endswith('checksums.txt') or
+            name_lower == 'sha256sums' or
+            name_lower == 'checksums'):
             checksum_assets.append(asset)
     return checksum_assets
 
