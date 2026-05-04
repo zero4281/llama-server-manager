@@ -12,8 +12,9 @@ fi
 # Check for virtual environment
 if [ ! -f "${SCRIPT_DIR}/.venv/bin/activate" ]; then
     echo "Virtual environment not found. Please create it first:"
-    echo "  python3 -m venv .venv"
-    echo "  source .venv/bin/activate"
+    echo "  cd $SCRIPT_DIR && \\"
+    echo "  python3 -m venv .venv && \\"
+    echo "  source .venv/bin/activate && \\"
     echo "  pip install -r requirements.txt"
     exit 1
 fi

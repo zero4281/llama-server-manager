@@ -10,6 +10,7 @@ This is the central CLI tool that orchestrates all operations:
 
 import argparse
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -59,10 +60,6 @@ class Main:
         parser.add_argument("--stop-server", action="store_true",
                           help="Gracefully stop a running llama-server")
 
-        # Run options
-        parser.add_argument("--log-file", type=str, metavar="PATH",
-                          help="Override llama-server log file path")
-
         # Pass-through arguments for llama-server
         parser.add_argument("llama_args", nargs="*",
                           help="Additional arguments passed to llama-server")
@@ -85,8 +82,6 @@ class Main:
         Args:
             args: Parsed arguments
         """
-        print("Performing self-update...")
-        
         try:
             import requests
             import zipfile
@@ -94,6 +89,7 @@ class Main:
             from ui_manager import UIManager
             
             ui = UIManager("Self-Update")
+            ui.print_message("Performing self-update...")
             
             # Source selection menu
             source_options = [
@@ -106,7 +102,7 @@ class Main:
             selected_source = ui.render_menu(source_options, default=default_source)
             
             if selected_source == -1:
-                print("Update cancelled.")
+                ui.render_error("Update cancelled.")
                 sys.exit(0)
             
             selected_zip_url = ""
@@ -145,7 +141,7 @@ class Main:
                 
                 prev_choice = ui.render_menu(prev_releases)
                 if prev_choice == -1:
-                    print("Update cancelled.")
+                    ui.render_error("Update cancelled.")
                     sys.exit(0)
                 
                 selected_release = releases[prev_choice]
@@ -157,53 +153,82 @@ class Main:
                 selected_zip_url = "https://github.com/zero4281/llama-server-wrapper/archive/refs/heads/main.zip"
                 selected_tag = "HEAD"
                 selected_name = "main branch HEAD"
+                selected_release = "HEAD"
             
             # Confirmation prompt
             confirm = ui.render_confirmation(
-                f"Update {selected_tag if selected_tag != 'HEAD' else selected_name}"
+                ui,
+                f"Update {selected_tag if selected_tag != 'HEAD' else selected_name}",
+                selected_name
             )
             
             if not confirm:
-                print("Update cancelled.")
+                ui.render_error("Update cancelled.")
                 sys.exit(0)
             
-            # Download and extract
-            with tempfile.TemporaryDirectory() as tmpdir:
-                extract_path = Path(tmpdir) / "llama-server-wrapper"
-                extract_path.mkdir()
+            # Download and extract directly to project root
+            project_root = Path.cwd()
+            
+            # Download the zip file
+            headers = {
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            }
+            zip_response = requests.get(selected_zip_url, headers=headers, timeout=60)
+            zip_response.raise_for_status()
+            zip_content = zip_response.content
+            
+            # Write zip content to a temporary file and extract
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as zip_file:
+                zip_file.write(zip_content)
+                zip_file_path = Path(zip_file.name)
+            
+            try:
+                # Extract to a temp directory
+                with tempfile.TemporaryDirectory() as extract_temp:
+                    # Extract to a subdirectory
+                    extract_subdir = Path(extract_temp) / "extract"
+                    extract_subdir.mkdir()
+                    
+                    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                        zip_ref.extractall(extract_subdir)
+                    
+                    # Find the top-level directory in the extracted files
+                    top_level_dir = None
+                    for item in extract_subdir.iterdir():
+                        if item.is_dir() and not item.name.startswith(('.', '_')):
+                            top_level_dir = item
+                            break
+                    
+                    if top_level_dir:
+                        # Move files from top-level directory to project root
+                        for file_path in top_level_dir.rglob("*"):
+                            if file_path.is_file():
+                                rel_path = file_path.relative_to(top_level_dir)
+                                target = project_root / rel_path
+                                target.parent.mkdir(parents=True, exist_ok=True)
+                                target.write_bytes(file_path.read_bytes())
+                                # Clean up the old file
+                                file_path.unlink()
+                                ui.print_message(f"Updated: {rel_path}")
+                        
+                        # Remove the top-level directory from extract_subdir
+                        shutil.rmtree(top_level_dir)
+                        ui.print_message(f"Removed: {top_level_dir.name}")
                 
-                # Download the zip file
-                headers = {
-                    "Accept": "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                }
-                zip_response = requests.get(selected_zip_url, headers=headers, timeout=60)
-                zip_response.raise_for_status()
-                zip_content = zip_response.content
-                
-                # Extract to temp directory
-                with zipfile.ZipFile(Path(zip_content), 'r') as zip_ref:
-                    zip_ref.extractall(extract_path)
-                
-                # Copy updated files
-                project_root = Path.cwd()
-                for file_path in extract_path.rglob("*"):
-                    if file_path.is_file():
-                        rel_path = file_path.relative_to(extract_path)
-                        target = project_root / rel_path
-                        target.parent.mkdir(parents=True, exist_ok=True)
-                        # Only overwrite if different
-                        if not target.exists() or file_path.stat().st_mtime != target.stat().st_mtime:
-                            target.write_bytes(file_path.read_bytes())
-                            print(f"Updated: {rel_path}")
-                
-                print("\nSelf-update complete!")
+                ui.render_success("Self-update complete!")
+            finally:
+                # Clean up temporary zip file
+                if zip_file_path.exists():
+                    zip_file_path.unlink()
             
             # Restart with same arguments
-            print(f"Restarting with original arguments: {args}")
+            ui.print_message(f"Restarting with original arguments: {args}")
             
             # Re-parse args to preserve llama_args
-            new_args = [sys.argv[0]] + list(args)
+            new_args = [sys.argv[0]]
+            for key, value in vars(args).items():
+                new_args.append(f"--{key}" if not key.startswith("llama_") else f"{key}={value}" if value else f"--{key}")
             
             # Clear any cached modules to force reimport
             modules_to_clear = [
@@ -223,11 +248,11 @@ class Main:
                          text=True)
             
             # If we get here, something went wrong, exit with error
-            print("Restart failed, exiting.")
+            ui.render_error("Restart failed, exiting.")
             sys.exit(2)
             
         except Exception as e:
-            print(f"Self-update failed: {e}")
+            ui.render_error(f"Self-update failed: {e}")
             sys.exit(2)
 
     def run(self) -> None:

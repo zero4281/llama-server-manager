@@ -16,7 +16,6 @@ from typing import Optional
 
 # Paths
 PID_FILE = Path.cwd() / "llama-server.pid"
-DEFAULT_LOG_FILE = Path.cwd() / "llama-server.log"
 
 
 class Runner:
@@ -33,7 +32,6 @@ class Runner:
         self.args = args
         self.config = config
         self.pid_file = PID_FILE
-        self.log_file = DEFAULT_LOG_FILE
         self.llama_server_path = Path.cwd() / "llama-cpp" / "llama-server"
         self.force_killed = False
 
@@ -45,11 +43,8 @@ class Runner:
         # Merge args and config options
         merged_args = self._merge_args(config_args)
         
-        # Determine log file path
-        log_path = self._resolve_log_file()
-        
         # Build command
-        command = self._build_command(log_path, merged_args)
+        command = self._build_command(merged_args)
         
         self._run_background(command, merged_args)
 
@@ -86,36 +81,11 @@ class Runner:
         llama_args = getattr(self.args, 'llama_args', [])
         return config_args + llama_args
 
-    def _resolve_log_file(self) -> Path:
-        """
-        Resolve the log file path based on priority.
-
-        Priority order:
-        1. --log-file CLI argument
-        2. llama-server.options.log-file in config.json
-        3. Default: llama-server.log
-
-        Returns:
-            Path to the log file
-        """
-        # 1. CLI argument
-        if hasattr(self.args, 'log_file') and self.args.log_file:
-            return Path(self.args.log_file)
-        
-        # 2. Config file
-        config_log = self.config.get("llama-server", {}).get("options", {}).get("log-file")
-        if config_log:
-            return Path(config_log)
-        
-        # 3. Default
-        return DEFAULT_LOG_FILE
-
-    def _build_command(self, log_path: Path, merged_args: list) -> list:
+    def _build_command(self, merged_args: list) -> list:
         """
         Build the command to run llama-server.
 
         Args:
-            log_path: Path to the log file
             merged_args: Merged arguments from config and CLI
 
         Returns:
@@ -147,8 +117,6 @@ class Runner:
 
             print(f"llama-server started with PID {pid}")
             print(f"PID file: {self.pid_file}")
-            print(f"Log file: {self.log_file}")
-            print("Press Ctrl+C to stop the server.")
 
         except Exception as e:
             self._cleanup()

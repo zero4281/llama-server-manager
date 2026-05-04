@@ -15,6 +15,7 @@ A lightweight wrapper around [llama.cpp](https://github.com/ggerganov/llama.cpp)
 - [Installation](#installation)
 - [Install Llama CPP](#install-llama-cpp)
 - [Configuration](#configuration)
+- [Usage](#usage)
 - [Model Management](#model-management)
 - [Starting the Server](#starting-the-server)
 - [Stopping the Server](#stopping-the-server)
@@ -109,6 +110,53 @@ On first run, the wrapper generates a `conf.json` with safe defaults. You can cu
 | `port` | `8080` | Change if another process is already using port 8080 |
 | `models-max` | `1` | Maximum number of models loaded simultaneously — keep at `1` if VRAM is limited |
 | `sleep-idle-seconds` | `600` | Unloads the model after this many seconds of inactivity (similar to Ollama's behavior) |
+
+---
+
+## Usage
+
+### Command Reference
+
+| Command | Description |
+|---|---|
+| `./llama-server-wrapper` | Start the server |
+| `./llama-server-wrapper [llama-server args]` | Start the server and pass arguments directly to llama-server |
+| `./llama-server-wrapper --install-llama` | Download and install the latest llama.cpp release |
+| `./llama-server-wrapper --update-llama` | Update an existing llama.cpp installation to the latest release |
+| `./llama-server-wrapper --self-update` | Pull the latest wrapper code from GitHub and restart |
+| `./llama-server-wrapper --stop-server` | Gracefully stop a running llama-server |
+
+### Command Details
+
+**`[llama-server args]`** — Any additional arguments are passed through directly to `llama-server`, one at a time. Refer to the [llama.cpp server documentation](https://github.com/ggerganov/llama.cpp/blob/master/tools/server/README.md) for the full list of supported arguments.
+
+```bash
+./llama-server-wrapper --some-llama-arg value
+```
+
+**`--install-llama`** — Run this once after cloning the repo to download and install llama.cpp. The installer will attempt to detect your OS and hardware, but review each prompt carefully to confirm the correct build for your system.
+
+```bash
+./llama-server-wrapper --install-llama
+```
+
+**`--update-llama`** — Updates your existing llama.cpp installation to the latest release without needing to reinstall the wrapper or reconfigure anything.
+
+```bash
+./llama-server-wrapper --update-llama
+```
+
+**`--self-update`** — Pulls the latest version of the wrapper itself from GitHub and restarts. No prerequisites required.
+
+```bash
+./llama-server-wrapper --self-update
+```
+
+**`--stop-server`** — Gracefully stops a running `llama-server` process.
+
+```bash
+./llama-server-wrapper --stop-server
+```
 
 ---
 
