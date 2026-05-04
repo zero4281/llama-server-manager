@@ -60,10 +60,6 @@ class Main:
         parser.add_argument("--stop-server", action="store_true",
                           help="Gracefully stop a running llama-server")
 
-        # Run options
-        parser.add_argument("--log-file", type=str, metavar="PATH",
-                          help="Override llama-server log file path")
-
         # Pass-through arguments for llama-server
         parser.add_argument("llama_args", nargs="*",
                           help="Additional arguments passed to llama-server")
