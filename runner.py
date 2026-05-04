@@ -16,7 +16,6 @@ from typing import Optional
 
 # Paths
 PID_FILE = Path.cwd() / "llama-server.pid"
-DEFAULT_LOG_FILE = Path.cwd() / "llama-server.log"
 
 
 class Runner:
@@ -118,8 +117,6 @@ class Runner:
 
             print(f"llama-server started with PID {pid}")
             print(f"PID file: {self.pid_file}")
-            print(f"Log file: {DEFAULT_LOG_FILE}")
-            print("Press Ctrl+C to stop the server.")
 
         except Exception as e:
             self._cleanup()
