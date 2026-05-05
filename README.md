@@ -238,3 +238,9 @@ print(response.choices[0].message.content)
 ```
 
 > Update `base_url` to match the `host` and `port` values in your `conf.json`.
+
+---
+
+**Read My Article About This Journey**
+
+[I Built a Local AI Coding Assistant on Consumer Hardware…and It Works. I think.](https://joshrising.com/i-built-a-local-ai-coding-assistant-on-consumer-hardware-and-it-works-i-think/)
