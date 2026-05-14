@@ -1,4 +1,4 @@
-# LLama CPP Server Manager
+# Llama CPP Server Manager
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-blue)
 ![Python](https://img.shields.io/badge/python-3.12.3%2B-blue)
