@@ -55,6 +55,12 @@ source .venv/bin/activate
 .venv\Scripts\activate
 ```
 
+**Install the project dependencies:**
+
+```bash
+pip install -r requirements.txt
+```
+
 **Install the Hugging Face CLI for model management:**
 
 ```bash
