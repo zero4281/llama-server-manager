@@ -29,7 +29,7 @@
 | **llama_updater.py** | GitHub API, platform detection, download/extraction | ⚠️ Partial - uses print() instead of UIManager |
 | **runner.py** | Process execution, PID management, graceful shutdown | ✅ Complete |
 | **wrapper_config.py** | Config loading, auto-generation, logging | ⚠️ Partial - auto-generation not verified |
-| **llama-server-wrapper** | Entry point, venv check, argument forwarding | ✅ Complete |
+| **llama-server-manager** | Entry point, venv check, argument forwarding | ✅ Complete |
 | **config.json** | Auto-generation, structure | ⚠️ Not verified - auto-generation not tested |
 | **requirements.txt** | Dependencies | ✅ Complete |
 | **ui_manager.py** | ncurses CLI UI module (menus, prompts, progress bars) | ⚠️ Exists but NOT integrated |

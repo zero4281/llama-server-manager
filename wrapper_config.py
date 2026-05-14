@@ -1,5 +1,5 @@
 """
-logging.py — Configurable logging utility for llama-server-wrapper.
+logging.py — Configurable logging utility for llama-server-manager.
 
 This module provides logging functionality that respects the configuration
 from config.json, supporting file output, stdout, and log level filtering.
