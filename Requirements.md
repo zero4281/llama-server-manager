@@ -1,8 +1,8 @@
-# Llama Server Wrapper — Software Requirements Document
+# Llama Server Manager — Software Requirements Document
 
 **Version:** 1.5  
 **Date:** April 2026  
-**Repository:** https://github.com/zero4281/llama-server-wrapper
+**Repository:** https://github.com/zero4281/llama-server-manager
 
 ---
 
@@ -11,7 +11,7 @@
 1. [Overview](#1-overview)
 2. [Project Structure](#2-project-structure)
 3. [Configuration File](#3-configuration-file-configjson)
-4. [Start Script](#4-start-script-llama-server-wrapper)
+4. [Start Script](#4-start-script-llama-server-manager)
 5. [Main Entry Point](#5-main-entry-point-mainpy)
 6. [llama.cpp Update/Download Module](#6-llamacpp-updatedownload-module-llama_updaterpy)
 7. [Run Script](#7-run-script-runnerpy)
@@ -24,13 +24,13 @@
 
 ## 1. Overview
 
-This document defines the requirements for the Llama Server Wrapper project — a set of Python and Bash scripts that automate the download, installation, updating, and execution of `llama-server` from the llama.cpp project. It covers six components: the Bash start script, the Python entry point (`main.py`), the llama.cpp update/download module, the run script, the shared configuration file, and the CLI user interface module (`ui_manager.py`).
+This document defines the requirements for the Llama Server Manager project — a set of Python and Bash scripts that automate the download, installation, updating, and execution of `llama-server` from the llama.cpp project. It covers six components: the Bash start script, the Python entry point (`main.py`), the llama.cpp update/download module, the run script, the shared configuration file, and the CLI user interface module (`ui_manager.py`).
 
 All interactive menus, prompts, progress bars, and confirmation dialogs are rendered using the `curses` module (Python standard library) with a black background and green text.
 
 | Property | Value |
 |---|---|
-| Repository | https://github.com/zero4281/llama-server-wrapper |
+| Repository | https://github.com/zero4281/llama-server-manager |
 | Primary Language | Python 3.12+ |
 | Secondary Language | Bash (start script only) |
 | Minimum Python Version | 3.12 |
@@ -42,8 +42,8 @@ All interactive menus, prompts, progress bars, and confirmation dialogs are rend
 ## 2. Project Structure
 
 ```
-llama-server-wrapper/
-├── llama-server-wrapper   # Bash start script
+llama-server-manager/
+├── llama-server-manager   # Bash start script
 ├── main.py                # Entry point
 ├── llama_updater.py       # llama.cpp download/update module
 ├── runner.py              # Run script
@@ -72,7 +72,7 @@ Top-level `options` keys control the wrapper itself. The `llama-server.options` 
 ```json
 {
   "options": {
-    "logfile": "./llama-server-wrapper.log"
+    "logfile": "./llama-server-manager.log"
   },
   "llama-server": {
     "options": {
@@ -99,7 +99,7 @@ Controls verbosity and destination of the wrapper's own log output (separate fro
 
 ---
 
-## 4. Start Script (llama-server-wrapper)
+## 4. Start Script (llama-server-manager)
 
 ### 4.1 Language & purpose
 
@@ -174,10 +174,10 @@ Choice [1]:
 ```
 
 - Pressing Enter without input selects the default (option 1, latest release).
-- Selecting **option 2** fetches the list of available releases from the GitHub Releases API (same endpoints as Section 6.2, with `owner = zero4281`, `repo = llama-server-wrapper`) and presents a numbered list for the user to choose from.
+- Selecting **option 2** fetches the list of available releases from the GitHub Releases API (same endpoints as Section 6.2, with `owner = zero4281`, `repo = llama-server-manager`) and presents a numbered list for the user to choose from.
 - Selecting **option 3** downloads the current `main` branch HEAD as a ZIP archive from:
   ```
-  https://github.com/zero4281/llama-server-wrapper/archive/refs/heads/main.zip
+  https://github.com/zero4281/llama-server-manager/archive/refs/heads/main.zip
   ```
 
 #### 5.3.2 Confirmation prompt
@@ -186,7 +186,7 @@ After the user selects a source, `UIManager` must render a bordered curses windo
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  Selected: v1.2.0 (llama-server-wrapper-v1.2.0.zip) │
+│  Selected: v1.2.0 (llama-server-manager-v1.2.0.zip) │
 │  Proceed with update?                               │
 │                                                     │
 │            ▶ [ Yes ]          [ No  ]               │
@@ -225,7 +225,7 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 ```
 ┌────────────────────────────────────────────────┐
 │ llama-cpp not found. Please install it first:  │
-│   llama-server-wrapper --install-llama         │
+│   llama-server-manager --install-llama         │
 └────────────────────────────────────────────────┘
 ```
    - If it **exists**, load `config.json`, merge pass-through args, and invoke `Runner`.

@@ -1,5 +1,5 @@
 """
-main.py — Main entry point for llama-server-wrapper.
+main.py — Main entry point for llama-server-manager.
 
 This is the central CLI tool that orchestrates all operations:
 - Self-update
@@ -46,8 +46,8 @@ class Main:
             print("Warning: Running on native Windows. Not all functionality may work as intended.\nFor full support, please run inside Windows Subsystem for Linux (WSL).", file=sys.stderr)
         
         parser = argparse.ArgumentParser(
-            prog="llama-server-wrapper",
-            description="Wrapper for llama.cpp server operations"
+            prog="llama-server-manager",
+            description="Manager for llama.cpp server operations"
         )
 
         # Special operations
@@ -111,7 +111,7 @@ class Main:
             
             if selected_source == 0:
                 # Latest release
-                url = "https://api.github.com/repos/zero4281/llama-server-wrapper/releases/latest"
+                url = "https://api.github.com/repos/zero4281/llama-server-manager/releases/latest"
                 headers = {
                     "Accept": "application/vnd.github+json",
                     "X-GitHub-Api-Version": "2022-11-28",
@@ -124,7 +124,7 @@ class Main:
                 selected_zip_url = release.get("zipball_url") or ""
             elif selected_source == 1:
                 # Fetch previous releases
-                url = "https://api.github.com/repos/zero4281/llama-server-wrapper/releases"
+                url = "https://api.github.com/repos/zero4281/llama-server-manager/releases"
                 headers = {
                     "Accept": "application/vnd.github+json",
                     "X-GitHub-Api-Version": "2022-11-28",
@@ -150,7 +150,7 @@ class Main:
                 selected_zip_url = selected_release.get("zipball_url") or ""
             else:
                 # Repository HEAD
-                selected_zip_url = "https://github.com/zero4281/llama-server-wrapper/archive/refs/heads/main.zip"
+                selected_zip_url = "https://github.com/zero4281/llama-server-manager/archive/refs/heads/main.zip"
                 selected_tag = "HEAD"
                 selected_name = "main branch HEAD"
                 selected_release = "HEAD"
@@ -326,7 +326,7 @@ class Main:
         llama_cpp_path = Path.cwd() / "llama-cpp" / "llama-server"
         if not llama_cpp_path.exists():
             print("Error: llama-cpp is not installed. Please run with --install-llama first.")
-            print("\nUsage: ./llama-server-wrapper --install-llama")
+            print("\nUsage: ./llama-server-manager --install-llama")
             sys.exit(1)
         
         runner = Runner(self.args, self.config)

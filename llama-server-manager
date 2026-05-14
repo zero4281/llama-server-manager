@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# llama-server-wrapper — entry point shim
+# llama-server-manager — entry point shim
 
 # Get directory where this script is located
 SCRIPT_DIR="${0%/*}"

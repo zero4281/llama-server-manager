@@ -55,6 +55,12 @@ source .venv/bin/activate
 .venv\Scripts\activate
 ```
 
+**Install the project dependencies:**
+
+```bash
+pip install -r requirements.txt
+```
+
 **Install the Hugging Face CLI for model management:**
 
 ```bash
@@ -68,7 +74,7 @@ pip install hf-cli
 Run the install command to download and set up `llama.cpp`:
 
 ```bash
-./llama-server-wrapper --install-llama
+./llama-server-manager --install-llama
 ```
 
 This will walk you through an interactive menu to install llama.cpp. The script attempts to detect your OS and hardware automatically — review each option carefully to make sure the correct build is selected for your system.
@@ -119,43 +125,43 @@ On first run, the wrapper generates a `conf.json` with safe defaults. You can cu
 
 | Command | Description |
 |---|---|
-| `./llama-server-wrapper` | Start the server |
-| `./llama-server-wrapper [llama-server args]` | Start the server and pass arguments directly to llama-server |
-| `./llama-server-wrapper --install-llama` | Download and install the latest llama.cpp release |
-| `./llama-server-wrapper --update-llama` | Update an existing llama.cpp installation to the latest release |
-| `./llama-server-wrapper --self-update` | Pull the latest wrapper code from GitHub and restart |
-| `./llama-server-wrapper --stop-server` | Gracefully stop a running llama-server |
+| `./llama-server-manager` | Start the server |
+| `./llama-server-manager [llama-server args]` | Start the server and pass arguments directly to llama-server |
+| `./llama-server-manager --install-llama` | Download and install the latest llama.cpp release |
+| `./llama-server-manager --update-llama` | Update an existing llama.cpp installation to the latest release |
+| `./llama-server-manager --self-update` | Pull the latest manager code from GitHub and restart |
+| `./llama-server-manager --stop-server` | Gracefully stop a running llama-server |
 
 ### Command Details
 
 **`[llama-server args]`** — Any additional arguments are passed through directly to `llama-server`, one at a time. Refer to the [llama.cpp server documentation](https://github.com/ggerganov/llama.cpp/blob/master/tools/server/README.md) for the full list of supported arguments.
 
 ```bash
-./llama-server-wrapper --some-llama-arg value
+./llama-server-manager --some-llama-arg value
 ```
 
 **`--install-llama`** — Run this once after cloning the repo to download and install llama.cpp. The installer will attempt to detect your OS and hardware, but review each prompt carefully to confirm the correct build for your system.
 
 ```bash
-./llama-server-wrapper --install-llama
+./llama-server-manager --install-llama
 ```
 
-**`--update-llama`** — Updates your existing llama.cpp installation to the latest release without needing to reinstall the wrapper or reconfigure anything.
+**`--update-llama`** — Updates your existing llama.cpp installation to the latest release without needing to reinstall the manager or reconfigure anything.
 
 ```bash
-./llama-server-wrapper --update-llama
+./llama-server-manager --update-llama
 ```
 
-**`--self-update`** — Pulls the latest version of the wrapper itself from GitHub and restarts. No prerequisites required.
+**`--self-update`** — Pulls the latest version of the manager itself from GitHub and restarts. No prerequisites required.
 
 ```bash
-./llama-server-wrapper --self-update
+./llama-server-manager --self-update
 ```
 
 **`--stop-server`** — Gracefully stops a running `llama-server` process.
 
 ```bash
-./llama-server-wrapper --stop-server
+./llama-server-manager --stop-server
 ```
 
 ---
@@ -185,7 +191,7 @@ Both methods work well. Use `llama-cli` if you want the model pulled and placed 
 ## Starting the Server
 
 ```bash
-./llama-server-wrapper
+./llama-server-manager
 ```
 
 This starts `llama-server` as a background process. Output is streamed to your terminal, but you can safely close the terminal window — the server will continue running.
@@ -195,7 +201,7 @@ This starts `llama-server` as a background process. Output is streamed to your t
 ## Stopping the Server
 
 ```bash
-./llama-server-wrapper --stop-server
+./llama-server-manager --stop-server
 ```
 
 This cleanly stops the `llama-server` process.

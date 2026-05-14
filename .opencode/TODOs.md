@@ -95,4 +95,4 @@ The following 5 tests in Tests/test_ui_manager_comprehensive.py are failing. Eac
 
 ---
 
-**Base directory for this skill:** file:///home/zero/Code/llama-server-wrapper/.opencode/skills/project-prompts/project-create-todos
+**Base directory for this skill:** file:///home/zero/Code/llama-server-manager/.opencode/skills/project-prompts/project-create-todos

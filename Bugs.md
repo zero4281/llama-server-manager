@@ -7,10 +7,10 @@
 **Priority:** **P1** - Major feature broken; self-update completely non-functional
 
 **Description:**  
-When running `./llama-server-wrapper --self-update`, the self-update process fails with a type error: "argument should be a str or an os.PathLike object where __fspath__ returns a str, not 'bytes'". The error occurs during the zip file extraction phase when `zipfile.ZipFile()` is called with bytes instead of a file path string.
+When running `./llama-server-manager --self-update`, the self-update process fails with a type error: "argument should be a str or an os.PathLike object where __fspath__ returns a str, not 'bytes'". The error occurs during the zip file extraction phase when `zipfile.ZipFile()` is called with bytes instead of a file path string.
 
 **Reproduction Steps:**
-1. Run: `./llama-server-wrapper --self-update <<< $"\n\n"`
+1. Run: `./llama-server-manager --self-update <<< $"\n\n"`
 2. Navigate through the source selection menu (default: Latest release)
 3. Select the option to proceed
 4. Confirm the update
