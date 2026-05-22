@@ -1,3 +1,10 @@
+---
+test_command: "python3 -m pytest Tests/ -v"
+test_directories:
+  - "./Tests/"
+mock_verification_script: "Tests/check_mocking_pattern.py"
+---
+
 # UIManager Testing Strategy
 
 ## Overview
