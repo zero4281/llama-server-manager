@@ -97,6 +97,41 @@ Controls verbosity and destination of the wrapper's own log output (separate fro
 
 > **Note:** The llama-server output log is controlled separately via the `log-file` key in `config.json`'s `llama-server.options` section, or overridden at runtime via the `--log-file` CLI flag (see Section 7).
 
+### 3.3 `install` — last installation selections
+
+Stores the selections made during the most recent `--install-llama` or `--update-llama` run so they can be pre-filled as defaults the next time the install menus are shown (see §6.3.1–§6.3.4).
+
+| Key        | Type         | Description                                                                                                                                      |
+| ---------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `release`  | string\|null | The release tag last installed (e.g. `"b9637"`), or `null` if no install has been performed                                                      |
+| `platform` | string\|null | The platform token as it appears in the archive filename (e.g. `"ubuntu"`, `"macos"`, `"win"`)                                                   |
+| `arch`     | string\|null | The architecture token (e.g. `"x64"`, `"arm64"`)                                                                                                 |
+| `backend`  | string\|null | The raw backend token string as it appears in the archive filename (e.g. `"cuda-13.3"`, `"vulkan"`), or `null` for builds with no backend tokens |
+
+Example `config.json` after a successful install:
+
+```json
+{
+  "options": {},
+  "llama-server": {
+    "options": {}
+  },
+  "logging": {
+    "enabled": true,
+    "level": "INFO",
+    "file": null
+  },
+  "install": {
+    "release": "b9637",
+    "platform": "ubuntu",
+    "arch": "x64",
+    "backend": "vulkan"
+  }
+}
+```
+
+If the `install` key is absent or any of its sub-keys are `null`, the corresponding menu in the install workflow falls back to the auto-detected value (§6.4) or presents no default if detection also fails. Saved selections take lower priority than auto-detection: auto-detected values always pre-empt the saved ones.
+
 ---
 
 ## 4. Start Script (llama-server-manager)
@@ -300,38 +335,52 @@ If the user selects option `0`, prompt for the tag string:
 Enter release tag: 
 ```
 
-#### 6.3.2 Asset selection prompt
+Once a release tag is resolved, the user selects an asset through a sequence of three narrowing menus (§6.3.2–§6.3.4) followed by a confirmation prompt (§6.3.5). Each menu filters the candidate asset list based on the choices made in the previous steps. All menus are rendered via `UIManager` inside bordered curses windows. At every step, the auto-detected recommended value (where available) is pre-selected as the default and rendered in reverse video consistent with §8.2. If auto-detection fails for a given field, no default is pre-selected for that menu and the user must choose explicitly. All option lists are derived by parsing asset filenames according to §6.3.6; archives that do not match the expected pattern are omitted.
 
-After a release tag is resolved, fetch its asset list from the GitHub API and present all available release archives (`.zip` and `.tar.gz`) as a numbered list via `UIManager`. Auto-detect the current platform and architecture using Python's `platform` module and highlight the recommended asset. The recommended option is also the default if the user presses Enter without a selection.
+#### 6.3.2 Platform selection
 
-Each list entry must be rendered as a structured, human-readable row parsed from the archive filename according to §6.3.4 — **not** as the raw filename. The columns must be left-aligned and space-padded so all rows form a clean, readable table. Example:
+Parse the full asset list for the selected release and present the distinct platform values as a numbered menu. Example:
 
 ```
-Select an archive to install:
-
-  #   Platform    Backend / SDK       Arch     Format
-  ─   ────────    ─────────────       ────     ──────
-  1)  macOS       (none)              arm64    .tar.gz   ← recommended
-  2)  Ubuntu      Vulkan              x64      .tar.gz
-  3)  Ubuntu      OpenVINO 2026.0     x64      .tar.gz
-  4)  Windows     CUDA 13.3           x64      .zip
-  ...
-
+Select a platform:
+  1) macOS         ← recommended
+  2) Ubuntu
+  3) Windows
 Choice [1]:
 ```
 
-The `← recommended` marker is appended only to the auto-detected best match and must be rendered in reverse video consistent with §8.2. If auto-detection fails (platform or architecture cannot be determined), no entry is marked as recommended and no default is pre-selected; the user must choose explicitly.
+#### 6.3.3 Architecture selection
 
-#### 6.3.3 Confirmation prompt
+Filter the asset list to the chosen platform and present the distinct architecture values as a numbered menu. Example:
 
-After the user selects a release tag and asset, `UIManager` must render a bordered curses window displaying both selections and prompt for confirmation before downloading anything. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with Section 8.4.
+```
+Select an architecture:
+  1) arm64         ← recommended
+  2) x64
+Choice [1]:
+```
 
-The selected asset must be identified using the same parsed, human-readable format from §6.3.2 rather than the raw filename. Example layout:
+#### 6.3.4 Backend / SDK selection
+
+Filter the asset list to the chosen platform and architecture and present the distinct backend / SDK values as a numbered menu. Backends with no additional tokens are listed as `(none)`. Example:
+
+```
+Select a backend / SDK:
+  1) (none)
+  2) CUDA 13.3     ← recommended
+  3) OpenVINO 2026.0
+  4) Vulkan
+Choice [2]:
+```
+
+#### 6.3.5 Confirmation prompt
+
+After all four selections are made, `UIManager` must render a bordered curses window summarising the full selection and prompt for confirmation before downloading anything. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with §8.4. Example layout:
 
 ```
 ┌────────────────────────────────────────────────────┐
 │ Release:  b9637                                    │
-│ Platform: Ubuntu   Backend: Vulkan   Arch: x64     │
+│ Platform: Ubuntu   Arch: x64   Backend: Vulkan     │
 │ Archive:  llama-b9637-bin-ubuntu-vulkan-x64.tar.gz │
 │                                                    │
 │ Proceed with installation?                         │
@@ -342,7 +391,9 @@ The selected asset must be identified using the same parsed, human-readable form
 
 Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits with status code `0` without modifying any files.
 
-#### 6.3.4 Archive filename parsing
+Upon a confirmed successful installation, `LlamaUpdater` must write the four selections — release, platform, arch, and backend — to the `install` section of `config.json` (see §3.3). The write must occur after the archive has been extracted successfully and before the post-install sanity check (§6.5). If the write fails, log the error and continue; a config save failure does not make the installation itself a failure.
+
+#### 6.3.6 Archive filename parsing
 
 Release archive names follow the pattern:
 
@@ -350,29 +401,29 @@ Release archive names follow the pattern:
 llama-[release]-bin-[platform]-[backend-and-version-tokens]-[arch].[ext]
 ```
 
-`LlamaUpdater` must parse each filename into structured fields before display. The parsing rules are:
+`LlamaUpdater` must parse each filename into structured fields to populate the sequential menus in §6.3.2–§6.3.4. The parsing rules are:
 
 1. **Strip the prefix and extension.** Remove the leading `llama-` and trailing `.zip` or `.tar.gz`. The remainder is a hyphen-delimited token list.
-2. **Extract the release tag.** The first token after `llama-` up to `-bin-` is the release (e.g. `b9637`).
-3. **Extract the architecture.** The last token in the list is always the architecture (`x64`, `arm64`, etc.).
-4. **Extract the platform.** The first token after `bin` is always the platform (`macos`, `ubuntu`, `win`, etc.).
-5. **Extract the backend / SDK tokens.** All remaining tokens between the platform and the architecture are the backend and optional version (e.g. `vulkan`, `cuda` + `13.3`, `openvino` + `2026.0`, `avx2`). Join them with a space and title-case the backend name for display (e.g. `cuda 13.3` → `CUDA 13.3`, `openvino 2026.0` → `OpenVINO 2026.0`, `vulkan` → `Vulkan`). If there are no tokens between the platform and architecture, display `(none)` in the Backend / SDK column.
+2. **Extract the release tag.** The tokens before `-bin-` form the release (e.g. `b9637`).
+3. **Extract the platform.** The first token after `bin` is always the platform (`macos`, `ubuntu`, `win`, etc.).
+4. **Extract the architecture.** The last token in the list is always the architecture (`x64`, `arm64`, etc.).
+5. **Extract the backend / SDK tokens.** All remaining tokens between the platform and the architecture are the backend and optional version (e.g. `vulkan`, `cuda` + `13.3`, `openvino` + `2026.0`, `avx2`). Join them with a space and title-case the backend name for display (e.g. `cuda 13.3` → `CUDA 13.3`, `openvino 2026.0` → `OpenVINO 2026.0`, `vulkan` → `Vulkan`). If there are no tokens between the platform and architecture, the backend is `(none)`.
 
 Examples:
 
-| Raw filename                                        | Platform | Backend / SDK   | Arch  | Format  |
-| --------------------------------------------------- | -------- | --------------- | ----- | ------- |
-| `llama-b9637-bin-macos-arm64.tar.gz`                | macOS    | (none)          | arm64 | .tar.gz |
-| `llama-b9637-bin-ubuntu-vulkan-x64.tar.gz`          | Ubuntu   | Vulkan          | x64   | .tar.gz |
-| `llama-b9637-bin-ubuntu-openvino-2026.0-x64.tar.gz` | Ubuntu   | OpenVINO 2026.0 | x64   | .tar.gz |
-| `llama-b9637-bin-win-cuda-13.3-x64.zip`             | Windows  | CUDA 13.3       | x64   | .zip    |
+| Raw filename                                        | Platform | Arch  | Backend / SDK   |
+| --------------------------------------------------- | -------- | ----- | --------------- |
+| `llama-b9637-bin-macos-arm64.tar.gz`                | macOS    | arm64 | (none)          |
+| `llama-b9637-bin-ubuntu-vulkan-x64.tar.gz`          | Ubuntu   | x64   | Vulkan          |
+| `llama-b9637-bin-ubuntu-openvino-2026.0-x64.tar.gz` | Ubuntu   | x64   | OpenVINO 2026.0 |
+| `llama-b9637-bin-win-cuda-13.3-x64.zip`             | Windows  | x64   | CUDA 13.3       |
 
-If a filename does not match the expected pattern (missing `bin` separator, unrecognisable structure, etc.), display the raw filename as a fallback rather than skipping the asset.
+If a filename does not match the expected pattern (missing `bin` separator, unrecognisable structure, etc.), omit it from all menus rather than displaying a malformed entry.
 
 ### 6.4 Platform & architecture detection
 
 - Auto-detect the current platform (Linux, Windows, macOS) and architecture (`x86_64`, `arm64`, etc.) using Python's `platform` module.
-- Use the detected platform/architecture to determine and highlight the recommended asset in the selection list (see Section 6.3.2).
+- Use the detected values to pre-select the recommended option in the platform (§6.3.2), architecture (§6.3.3), and backend (§6.3.4) menus.
 - If detection fails, display all assets without a highlighted recommendation and require the user to select explicitly.
 
 ### 6.5 Download & extraction
@@ -528,7 +579,7 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 | Version | Date       | Author   | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ------- | ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.6     | June 2026  | zero4281 | Replaced raw-filename asset list in §6.3.2 with a structured, parsed table (Platform / Backend / Arch / Format columns). Added §6.3.4 defining the archive filename parsing rules and canonical display names for known backends (CUDA, OpenVINO, Vulkan). Updated §6.3.3 confirmation prompt to show parsed fields alongside the raw filename.                                                                                                                                                                                                    |
+| 1.6     | June 2026  | zero4281 | Replaced raw-filename asset list with a structured sequential selection workflow: platform (§6.3.2), architecture (§6.3.3), backend / SDK (§6.3.4), confirmation (§6.3.5). Added §6.3.6 defining the archive filename parsing rules and canonical display names for known backends (CUDA, OpenVINO, Vulkan). Added §3.3 `install` key to `config.json` to persist the last-used selections; §6.3.5 now writes these after a successful extraction. Updated §6.4 cross-references accordingly.                                                      |
 | 1.5     | April 2026 | zero4281 | Clarified that the entire interactive workflow must remain within the curses environment after UIManager initialisation; no stdout/stderr output is permitted post-init. Updated confirmation prompts in §5.3.2 and §6.3.3 to show curses bordered window layout. Updated §5.4 llama-cpp-not-found error, §5.3.3 update failure error, §6.5 success/warning messages, and §6.6 API error messages to use UIManager instead of direct print calls. Strengthened §8.4 and §8.6 to require UIManager to remain active for the full workflow duration. |
 | 1.4     | April 2026 | zero4281 | Added ncurses CLI UI module (`ui_manager.py`, Section 8); all menus, prompts, and progress bars rendered with black background and green text; Windows now requires WSL with runtime detection warning; updated cross-platform and dependency requirements accordingly                                                                                                                                                                                                                                                                             |
 | 1.3     | April 2026 | zero4281 | Removed `--foreground` command-line option                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
