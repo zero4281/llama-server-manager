@@ -1,25 +1,25 @@
-# Update Assessment
-
-## Summary of Alignment
-The codebase is largely aligned with the version 1.6 requirements. Key modules (Entry Point, Updater, Runner, UI Manager) are implemented and follow the specified ncurses-based UI style. However, there is a gap in the persistence of installation selections in the configuration file.
+# Summary of Required Alignment
+The codebase requires alignment with the project plan by addressing missing features (WSL detection, indeterminate spinners, and confirmation layouts), refactoring logging to comply with curses-only output, and consolidating redundant entry points.
 
 ## Implemented but Non-Required: Features to Remove
-- No significant non-required features identified for removal based on the current Plan.md.
+- **Redundant Entry Point**: Consolidate `main.py` and `llama_wrapper/main.py`. The plan suggests `main.py` as the entry point.
+- **Direct Console Output**: The following lines violate the "curses-only" requirement and should be replaced with `ui.print_message()` or similar:
+  - `runner.py:118-119`: `print(f"llama-server started with PID {pid}")`
+  - `llama_updater.py:605`: `print("Checksum verification passed!")` (and others in `verify_checksum`)
+  - `llama_updater.py:822`: `verify_installation()` currently uses `print()` instead of `UIManager`.
 
 ## Compliance Table
-
-| Requirement | Status | Notes |
+| Requirement | Status | Gap / Action |
 | --- | --- | --- |
-| Core CLI functionality | ✅ Implemented | `main.py` handles primary operations. |
-| Self-update mechanism | ✅ Implemented | Supports latest, previous, and HEAD sources. |
-| Install/Update llama.cpp | 🟡 Partial | `LlamaUpdater` performs installation but fails to persist selections to `config.json`. |
-| Stop-server functionality | ✅ Implemented | Handled in `runner.py` with PID management. |
-| Configuration Management | 🟡 Partial | `wrapper_config.py` handles basic config, but `install` section persistence is missing. |
-| ncurses-based UI | ✅ Implemented | `ui_manager.py` handles all interactive elements. |
-| WSL Detection | ✅ Implemented | Warning issued on native Windows. |
-| Cross-Platform Support | ✅ Implemented | Supported on Linux, macOS, and WSL. |
+| §5.1.1 WSL Detection Warning | Incomplete | Verify/add stderr warning in `llama_wrapper/main.py` before curses init. |
+| §8.5 Indeterminate Spinner | Incomplete | Implement spinner animation in `ui_manager.py` when `total` is unknown. |
+| §5.3.2 Confirmation Layout | Incomplete | Verify "Selected: [Version]" and "Proceed?" with Yes/No buttons. |
+| §9.3 Error Handling & Logging | Incomplete | Migrate `print()` statements in `llama_updater.py` and `runner.py` to `UIManager`. |
+| §3.3 Config Persistence | Incomplete | Ensure `config.json` handles `install` section persistence. |
 
 ## Next Steps
-- Implement logic in `llama_updater.py` to write selection results to the `install` section of `config.json` after a successful installation.
-- Verify `config.json` auto-generation includes the required sections.
-- Ensure `LlamaUpdater` correctly reads from the `install` section to pre-fill options in the UI.
+1. Consolidate entry points to `main.py`.
+2. Refactor `llama_updater.py` and `runner.py` to use `UIManager` instead of `print()`.
+3. Implement spinner logic in `ui_manager.py`.
+4. Update `llama_wrapper/main.py` for WSL detection warning.
+5. Update `config.json` generation logic for persistence.

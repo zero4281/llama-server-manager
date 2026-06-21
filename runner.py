@@ -21,7 +21,7 @@ PID_FILE = Path.cwd() / "llama-server.pid"
 class Runner:
     """Manages the execution of llama-server process."""
 
-    def __init__(self, args, config: dict):
+    def __init__(self, args, config: dict, ui_manager: Optional["UIManager"] = None):
         """
         Initialize Runner.
 
@@ -33,7 +33,7 @@ class Runner:
         self.config = config
         self.pid_file = PID_FILE
         self.llama_server_path = Path.cwd() / "llama-cpp" / "llama-server"
-        self.force_killed = False
+        self.ui_manager = ui_manager
 
     def run(self) -> None:
         """Main run method - launches llama-server."""
@@ -115,8 +115,12 @@ class Runner:
             with open(self.pid_file, "w") as f:
                 f.write(str(pid))
 
-            print(f"llama-server started with PID {pid}")
-            print(f"PID file: {self.pid_file}")
+            if self.ui_manager is not None:
+                self.ui_manager.print_message(f"llama-server started with PID {pid}")
+                self.ui_manager.print_message(f"PID file: {self.pid_file}")
+            else:
+                print(f"llama-server started with PID {pid}")
+                print(f"PID file: {self.pid_file}")
 
         except Exception as e:
             self._cleanup()
@@ -131,7 +135,7 @@ class Runner:
                 pass
 
 
-def stop_server() -> int:
+def stop_server(ui_manager: Optional["UIManager"] = None) -> int:
     """
     Stop a running llama-server process.
 
@@ -143,7 +147,7 @@ def stop_server() -> int:
         with open(PID_FILE, "r") as f:
             pid = int(f.read().strip())
     except (FileNotFoundError, ValueError):
-        print("No running llama-server found (no PID file).")
+        ui_manager.print_message("No running llama-server found (no PID file).")
         return 1
 
     force_killed = False
@@ -163,12 +167,12 @@ def stop_server() -> int:
             time.sleep(1)
     except OSError as e:
         if e.errno == signal.SIGKILL:
-            print("Process died while waiting...")
+            ui_manager.print_message("Process died while waiting...")
             return 0
         raise
 
     # Process didn't exit after 60 seconds, force kill
-    print("Process did not exit cleanly, forcing termination...")
+    ui_manager.print_message("Process did not exit cleanly, forcing termination...")
     
     if sys.platform == 'win32':
         import ctypes
@@ -185,9 +189,9 @@ def stop_server() -> int:
         PID_FILE.unlink()
 
     if force_killed:
-        print("llama-server force-terminated")
+        ui_manager.print_message("llama-server force-terminated")
         return 1
     else:
-        print("llama-server stopped")
+        ui_manager.print_message("llama-server stopped")
         return 0
 

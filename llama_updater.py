@@ -558,7 +558,7 @@ def extract_archive(archive_path: Path, dest_dir: Path) -> None:
         raise ExtractionError(f"Extraction failed: {e}")
 
 
-def verify_checksum(archive_path: Path, checksum_path: Path) -> bool:
+def verify_checksum(archive_path: Path, checksum_path: Path, ui_manager: Optional["UIManager"] = None) -> bool:
     """
     Verify archive against checksum file.
     
@@ -589,15 +589,15 @@ def verify_checksum(archive_path: Path, checksum_path: Path) -> bool:
         # Parse expected hash (format: "hash  filename" or just "hash")
         expected_hash = checksum_data.split()[0]
         
-        print(f"Checking SHA-256 checksum...")
-        print(f"  Expected: {expected_hash}")
-        print(f"  Actual:   {actual_hash_str}")
+        ui_manager.print_message(f"Checking SHA-256 checksum...")
+        ui_manager.print_message(f"  Expected: {expected_hash}")
+        ui_manager.print_message(f"  Actual:   {actual_hash_str}")
         
         if actual_hash_str == expected_hash:
-            print("Checksum verification passed!")
+            ui_manager.print_message("Checksum verification passed!")
             return True
         else:
-            print("Checksum verification FAILED!")
+            ui_manager.print_message("Checksum verification FAILED!")
             raise LlamaUpdaterError(
                 f"Checksum mismatch! Archive may be corrupted or tampered. "
                 f"Please try again or contact support."
@@ -621,7 +621,7 @@ def ensure_executable(path: Path) -> None:
             pass  # Ignore permission errors
 
 
-def verify_installation() -> None:
+def verify_installation(ui_manager: Optional["UIManager"] = None) -> None:
     """
     Run post-install sanity check (llama-server --version).
     
@@ -631,7 +631,7 @@ def verify_installation() -> None:
     llama_server = LLAMA_CPP_DIR / "llama-server"
     
     if not llama_server.exists():
-        print("Warning: Could not find llama-server executable for verification")
+        ui_manager.print_message("Warning: Could not find llama-server executable for verification")
         return
     
     try:
@@ -648,14 +648,16 @@ def verify_installation() -> None:
             match = re.search(r'version:\s*(.+)$', result.stdout, re.MULTILINE)
             if match:
                 version_output = match.group(1).strip()
-                print(f"llama-server version: {version_output}\n")
+                ui_manager.print_message(f"llama-server version: {version_output}")
+
+
         else:
-            print(f"\nWarning: llama-server --version returned exit code {result.returncode}")
-            print(f"Output: {result.stderr[:200]}")
+            ui_manager.print_message(f"\nWarning: llama-server --version returned exit code {result.returncode}")
+            ui_manager.print_message(f"Output: {result.stderr[:200]}")
     except subprocess.TimeoutExpired:
-        print("\nWarning: llama-server --version timed out")
+        ui_manager.print_message("\nWarning: llama-server --version timed out")
     except Exception as e:
-        print(f"\nWarning: Could not verify llama-server version: {e}")
+        ui_manager.print_message(f"\nWarning: Could not verify llama-server version: {e}")
 
 
 def delete_existing_installation() -> None:
@@ -728,7 +730,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     selected_platform_idx = ui.render_menu(platform_options, default=default_platform_idx, highlighted=default_platform_idx)
     
     if selected_platform_idx == -1:
-        print("Platform selection cancelled.")
+        ui.print_message("Platform selection cancelled.")
         return
     
     selected_platform_info = available_platforms[selected_platform_idx]
@@ -756,7 +758,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     selected_zip_idx = ui.render_menu(zip_options, default=default_zip_idx, highlighted=default_zip_idx)
     
     if selected_zip_idx == -1:
-        print("Zip file selection cancelled.")
+        ui.print_message("Zip file selection cancelled.")
         return
     
     selected_asset = selected_platform_info['assets'][selected_zip_idx]
@@ -774,7 +776,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     confirmed = ui.render_confirmation(f"Proceed with installation?", release_info)
     
     if not confirmed:
-        print("Installation cancelled.")
+        ui.print_message("Installation cancelled.")
         return
     
     ui_logger.debug(f"User confirmed installation of {release_tag} - {asset_name}")
@@ -795,7 +797,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             checksum_path = download_checksum(archive_path, checksum_asset, ui_manager=ui)
             
             try:
-                if not verify_checksum(archive_path, checksum_path):
+                if not             verify_checksum(archive_path, checksum_path, ui_manager=ui):
                     # Verification failed - clean up
                     archive_path.unlink(missing_ok=True)
                     checksum_path.unlink(missing_ok=True)
@@ -803,7 +805,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             finally:
                 checksum_path.unlink(missing_ok=True)
         else:
-            print("No checksum file available for this release, skipping verification")
+            ui.print_message("No checksum file available for this release, skipping verification")
         
         # Extract
         ui.print_message(f"\nExtracting to {LLAMA_CPP_DIR}")
@@ -819,7 +821,8 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         archive_path.unlink(missing_ok=True)
         
         # Post-install sanity check
-        verify_installation()
+        verify_installation(ui_manager)
+
         
         # Persist installation selections to config.json
         config = load_config()
@@ -909,17 +912,17 @@ class LlamaUpdater:
         selected_tag_idx = ui.render_menu(tag_options, default=1, highlighted=1)
         
         if selected_tag_idx == -1:
-            print("Tag selection cancelled.")
+            ui.print_message("Tag selection cancelled.")
             return
         elif selected_tag_idx == 0:
             # Manual entry
             manual_tag = ui.get_input("Enter release tag: ")
             if not manual_tag:
-                print("Tag entry cancelled.")
+                ui.print_message("Tag entry cancelled.")
                 return
             release = get_release_by_tag(manual_tag)
             if release is None:
-                print(f"Release not found for tag: {manual_tag}")
+                ui.print_message(f"Release not found for tag: {manual_tag}")
                 return
             release_tag = release["tag_name"]
         else:
@@ -930,7 +933,7 @@ class LlamaUpdater:
         if release is not None and release_tag:
             install_release(release, release_tag, ui)
         else:
-            print("Installation cancelled or failed to select a valid release.")
+            ui.print_message("Installation cancelled or failed to select a valid release.")
 
     def update(self) -> None:
         """
@@ -938,7 +941,7 @@ class LlamaUpdater:
 
         This is similar to install() but implies updating existing installation.
         """
-        print("Updating llama.cpp to latest release...")
+        ui.print_message("Updating llama.cpp to latest release...")
         self.install()
 
 

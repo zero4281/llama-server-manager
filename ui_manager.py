@@ -1404,10 +1404,10 @@ class UIManager:
                         bar_win.addstr(1, 1, "-" * (win_width - 2))
                     
                     # Progress information - row 2
-                    if spinner:
+                    if spinner or total == 0:
                         # Indeterminate progress with spinner
-                        spinner_chars = ["◐", "◓", "◑", "◒"]
-                        spinner_idx = int(time.time() * 3) % 4
+                        spinner_chars = ["|", "/", "-", "\\"]
+                        spinner_idx = int(time.time() * 10) % 4
                         status = f"Downloading {Path(filename).name}... ({spinner_chars[spinner_idx]})"
                         # Only truncate if win_width is valid
                         if win_width is not None and win_width > 4 and len(status) > win_width - 4:
