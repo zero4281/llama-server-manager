@@ -910,34 +910,4 @@ class LlamaUpdater:
         self.install()
 
 
-def main():
-    """CLI entry point for llama_updater."""
-    import argparse
 
-    parser = argparse.ArgumentParser(description="Download and install llama.cpp releases")
-    parser.add_argument("--install", action="store_true", help="Install latest release")
-    parser.add_argument("--update", action="store_true", help="Update to latest release")
-    parser.add_argument("--tag", type=str, help="Specific release tag to install")
-
-    args = parser.parse_args()
-
-    if args.tag:
-        # Install specific tag
-        release = get_release_by_tag(args.tag)
-        install_release(release, args.tag)
-    elif args.install or args.update:
-        updater = LlamaUpdater()
-        if args.update:
-            updater.update()
-        else:
-            updater.install()
-    else:
-        # Default: show available releases
-        releases = list_releases()
-        print(f"Found {len(releases)} releases:")
-        for i, r in enumerate(releases[:10], 1):  # Show first 10
-            print(f"  {i}. {r['tag_name']} - {r['name']}")
-
-
-if __name__ == "__main__":
-    main()
