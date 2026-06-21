@@ -789,6 +789,10 @@ class UIManager:
                             pass
                         return -1
                 
+                if key is None:
+                    logger.debug("Menu timeout occurred, returning -1")
+                    return -1
+                
                 # Log the raw key value with additional details for debugging
                 if key is not None:
                     if isinstance(key, int):
@@ -967,45 +971,6 @@ class UIManager:
             logger.error(f"Menu input loop error: {e}")
             # Clear screen and fall back to console
             logger.warning(f"Falling back to console mode due to error: {e}")
-            try:
-                self._cleanup_terminal()
-            except:
-                pass
-            for i, opt in enumerate(options):
-                marker = " (default)" if default is not None and i == default else ""
-                print(f"  {i}. {opt}{marker}")
-            try:
-                # Use non-blocking read for fallback
-                import os
-                choice_str = ""
-                try:
-                    data = os.read(0, 1)
-                    if data:
-                        choice_str = data.decode('utf-8').strip()
-                except (OSError, EOFError):
-                    try:
-                        data = sys.stdin.read(1)
-                        if data:
-                            choice_str = data.strip()
-                    except (OSError, EOFError):
-                        pass
-                idx = int(choice_str)
-                return idx if 0 <= idx < len(options) else -1
-            except Exception as input_error:
-                logger.error(f"Console fallback error: {input_error}")
-                return -1
-            try:
-                self._cleanup_terminal()
-            except:
-                pass
-            return -1
-        except (curses.error, OSError, EOFError, TypeError) as e:
-            logger.error(f"Unexpected error during menu rendering: {e}")
-            try:
-                self._cleanup_terminal()
-            except:
-                pass
-            return -1
 
     def _render_console_fallback(self, message: str, prompt: str = "", prompt_suffix: str = "") -> Optional[str]:
         """
@@ -1045,14 +1010,10 @@ class UIManager:
                 response = ""
             
             return response
-        except Exception:
-            print(f"{message}")
-            if prompt:
-                response = input(prompt).strip().lower()
-            else:
-                response = input().strip().lower()
-            return response
-    
+        except Exception as e:
+            logger.error(f"Error in _render_console_fallback: {e}")
+            return ""
+
     def _render_confirmation_fallback(self, message: str, default: bool = True) -> bool:
         """
         Fallback for confirmation prompts.
@@ -1194,9 +1155,8 @@ class UIManager:
                 # Check for timeout
                 elapsed = time.time() - start_time
                 if timeout is not None and elapsed >= timeout:
-                    logger.debug(f"Confirmation: timeout after {elapsed:.2f}s, assuming default yes")
+                    logger.debug(f"Confirmation: timeout after {elapsed:.2f}s, assuming default {default}")
                     return True
-                
                 try:
                     key = prompt_win.getch()
                 except (curses.error, OSError, EOFError) as e:

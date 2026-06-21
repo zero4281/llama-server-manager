@@ -597,7 +597,8 @@ def verify_checksum(archive_path: Path, checksum_path: Path, ui_manager: Optiona
             ui_manager.print_message("Checksum verification passed!")
             return True
         else:
-            ui_manager.print_message("Checksum verification FAILED!")
+            ui_manager.render_error("Checksum verification FAILED!")
+            
             raise LlamaUpdaterError(
                 f"Checksum mismatch! Archive may be corrupted or tampered. "
                 f"Please try again or contact support."
@@ -797,7 +798,9 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             checksum_path = download_checksum(archive_path, checksum_asset, ui_manager=ui)
             
             try:
-                if not             verify_checksum(archive_path, checksum_path, ui_manager=ui):
+                if verify_checksum(archive_path, checksum_path, ui_manager=ui):
+                    pass
+                else:
                     # Verification failed - clean up
                     archive_path.unlink(missing_ok=True)
                     checksum_path.unlink(missing_ok=True)

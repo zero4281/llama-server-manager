@@ -24,8 +24,7 @@ from llama_updater import LlamaUpdater
 from runner import stop_server, Runner
 from ui_manager import UIManager
 
-# Add current directory to path for imports
-sys.path.insert(0, str(Path.cwd()))
+
 
 # Check if script is running from the project root
 project_root = Path(__file__).parent.absolute()

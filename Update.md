@@ -1,20 +1,21 @@
-# Update Summary
-The project requires alignment to ensure all interactive output is rendered through the `UIManager` (curses), streamlining redundant argument parsing in `runner.py`, and replacing brittle path manipulation with standard root execution.
+# Summary
+- Validate checksum logic and status reporting in llama_updater.py.
+- Verify cross-platform signal handling (WSL/Linux/macOS).
+- Simplify console fallbacks in ui_manager.py to ensure strict compliance with Section 5.1.1.
 
-## Implemented but Non-Required: Features to Remove
-- **File:** `runner.py` | **Range:** `_merge_args` method | **Rationale:** Redundant with `main.py` argument parsing.
-- **File:** `main.py` | **Range:** Section headers (e.g., `[Self-Update Mode]`) | **Rationale:** Should be handled within `UIManager` flow to eliminate `print()` calls.
+# Implemented but Non-Required: Features to Remove
+- Redundant Console Fallbacks: `ui_manager.py` (Lines 970-1008, 1048-1055). Reason: Violation of strict No stdout/stderr rule once in curses mode (Section 5.1.1).
+- Manual File Movement in Self-Update: `main.py` (Lines 190-220). Reason: Risk of orphaned artifacts; needs safer handling.
+- Redundant `sys.path` Manipulation: `main.py` (Lines 27-28). Reason: Redundant as bash script handles environment activation.
 
-## Compliance Table
-| Requirement | Status | File(s) | Notes |
-| --- | --- | --- | --- |
-| UI Compliance | Pending | `main.py` | Replace `print()` calls at lines 274, 279, 298, 317, 322. |
-| WSL Detection | Compliant | `main.py` | WSL warning at line 256 is permitted. |
-| Argument Handling | Partial | `runner.py`, `main.py` | Streamline `_merge_args` logic. |
-| Path Handling | Pending | `main.py` | Replace `sys.path.insert` with root execution. |
+# Compliance Table
+| Requirement | Status |
+| --- | --- |
+| Checksum Verification (Plan 3.3) | Pending |
+| Graceful Shutdown (Plan 3.3) | Pending |
+| WSL Detection Warning (Requirement 5.1.1) | Partially implemented (Verify text) |
 
-## Next Steps
-1. Move `UIManager` initialization earlier in `main.py`.
-2. Replace `print()` calls in `main.py` with `ui.print_message()`.
-3. Refactor `runner.py` to remove redundant `_merge_args` method.
-4. Update project execution to ensure the project is executed from the root directory.
+# Next Steps
+1. Verify signal handling in runner.py for cross-platform stability.
+2. Validate checksum logic in llama_updater.py.
+3. Refactor ui_manager.py to remove redundant console fallbacks.
