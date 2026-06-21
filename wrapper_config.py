@@ -76,11 +76,17 @@ class ConfigLogger:
 DEFAULT_CONFIG = {
     "options": {},
     "llama-server": {"options": {}},
+    "install": {
+        "release": None,
+        "platform": None,
+        "arch": None,
+        "backend": None
+    },
     "logging": {
         "enabled": True,
         "level": "INFO",
         "file": None
-    }
+    },
 }
 
 
@@ -97,19 +103,23 @@ def load_config(config_path: Optional[Path] = None) -> dict:
     if config_path is None:
         config_path = Path.cwd() / "config.json"
 
-    try:
-        with open(config_path, "r") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        # Auto-generate default config
-        default = DEFAULT_CONFIG.copy()
-        default["logging"] = DEFAULT_CONFIG["logging"].copy()
-        
-        # Write default config
-        with open(config_path, "w") as f:
-            json.dump(default, f, indent=2)
-        
-        return default
+        try:
+            with open(config_path, "r") as f:
+                config = json.load(f)
+                # Ensure 'install' section exists
+                if "install" not in config:
+                    config["install"] = DEFAULT_CONFIG["install"]
+                return config
+        except (FileNotFoundError, json.JSONDecodeError):
+            # Auto-generate default config
+            default = DEFAULT_CONFIG.copy()
+            default["logging"] = DEFAULT_CONFIG["logging"].copy()
+            
+            # Write default config
+            with open(config_path, "w") as f:
+                json.dump(default, f, indent=2)
+            
+            return default
 
 
 def get_logger(config: dict, log_level: str = "INFO") -> ConfigLogger:

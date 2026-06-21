@@ -6,6 +6,8 @@ the appropriate platform/architecture, downloading and extracting
 archives, and managing the llama-cpp installation directory.
 """
 
+from wrapper_config import load_config
+
 import datetime
 import json
 import os
@@ -681,13 +683,15 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     """
     from ui_manager import UIManager
     
-    ui = ui_manager if ui_manager is not None else UIManager("Install llama.cpp")
+    # Load configuration to check for previous installation selections
+    config = load_config()
+    install_info = config.get("install", {})
     
     ui.print_message(f"Installing llama.cpp release {release_tag}...")
-
+    
     # Delete existing installation first
     delete_existing_installation()
-
+    
     # Detect platform
     detected_platform, detected_arch = detect_platform()
     
@@ -707,10 +711,18 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     
     # Find the matching platform info for auto-highlight
     default_platform_idx = None
-    for i, platform_info in enumerate(available_platforms, 1):
-        if platform_info['platform'].lower() == detected_platform.lower() and platform_info['arch'].lower() == detected_arch.lower():
-            default_platform_idx = i - 1  # Zero-based index
-            break
+    if install_info.get("platform") and install_info.get("arch"):
+        for i, platform_info in enumerate(available_platforms, 1):
+            if (platform_info['platform'].lower() == install_info['platform'].lower() and 
+                platform_info['arch'].lower() == install_info['arch'].lower()):
+                default_platform_idx = i - 1
+                break
+    else:
+        # Fallback to auto-detection
+        for i, platform_info in enumerate(available_platforms, 1):
+            if platform_info['platform'].lower() == detected_platform.lower() and platform_info['arch'].lower() == detected_arch.lower():
+                default_platform_idx = i - 1
+                break
     
     # Render platform selection menu
     selected_platform_idx = ui.render_menu(platform_options, default=default_platform_idx, highlighted=default_platform_idx)
@@ -732,8 +744,16 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         }
         zip_options.append(zip_entry)
     
+    # Find default zip/backend option
+    default_zip_idx = None
+    if install_info.get("backend"):
+        for i, asset in enumerate(selected_platform_info['assets'], 1):
+            if install_info["backend"].lower() in asset['name'].lower():
+                default_zip_idx = i - 1
+                break
+
     # Render zip file selection menu
-    selected_zip_idx = ui.render_menu(zip_options, default=0)
+    selected_zip_idx = ui.render_menu(zip_options, default=default_zip_idx, highlighted=default_zip_idx)
     
     if selected_zip_idx == -1:
         print("Zip file selection cancelled.")
@@ -758,7 +778,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         return
     
     ui_logger.debug(f"User confirmed installation of {release_tag} - {asset_name}")
-
+    
     # Download
     ui.print_message(f"\nDownloading {asset_name}...")
     archive_path = Path(tempfile.gettempdir()) / f"{asset_name}"
@@ -766,7 +786,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     try:
         download_file(selected_asset['browser_download_url'], archive_path, ui_manager=ui)
         ui.print_message(f"Downloaded to {archive_path}")
-
+        
         # Check for checksum file
         checksum_assets = get_checksum_assets(release)
         if checksum_assets:
@@ -784,29 +804,41 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
                 checksum_path.unlink(missing_ok=True)
         else:
             print("No checksum file available for this release, skipping verification")
-
+        
         # Extract
         ui.print_message(f"\nExtracting to {LLAMA_CPP_DIR}")
         extract_archive(archive_path, LLAMA_CPP_DIR)
-
+        
         # Ensure llama-server is executable
         llama_server = LLAMA_CPP_DIR / "llama-server"
         if llama_server.exists():
             ensure_executable(llama_server)
             ui.print_message(f"Made {llama_server} executable")
-
+        
         # Clean up
         archive_path.unlink(missing_ok=True)
         
         # Post-install sanity check
         verify_installation()
-
+        
+        # Persist installation selections to config.json
+        config = load_config()
+        config["install"] = {
+            "release": release_tag,
+            "platform": selected_platform_info['platform'],
+            "arch": selected_platform_info['arch'],
+            "backend": selected_platform_info['variant']
+        }
+        with open(Path.cwd() / "config.json", "w") as f:
+            json.dump(config, f, indent=2)
+        
         ui.print_message("Installation complete!")
-
+        
     except Exception as e:
         # Clean up on error
         archive_path.unlink(missing_ok=True)
         raise e
+
 
 
 class LlamaUpdater:

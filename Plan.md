@@ -26,12 +26,13 @@
 
 ## Section 2: Core Engineering Decisions & Consistency
 - **Path Handling:** Strictly uses `pathlib.Path` for all filesystem operations.
-- **UI Framework:** Exclusively uses standard library `curses` for a consistent, no-dependency terminal UI.
+- **UI Framework:** Exclusively uses standard library `curses` for a consistent, no-dependency terminal UI (black background, green text).
 - **Process Management:** Uses `subprocess` for `llama-server` execution with PID tracking in `llama-server.pid`.
 - **Logging:** Unified logging via `wrapper_config.py` with support for both wrapper and server logs.
 - **Naming Convention:** Adheres to `llama-server-manager` naming for the main script and `llama_updater.py` etc. for modules.
 
 ## Section 3: Testing & Verification Status
+
 ### 3.1 Unit Tests
 - `Tests/test_ui_manager_comprehensive.py` ✅ Passed
 - `Tests/test_wsl_detection.py` ✅ Passed
@@ -47,24 +48,23 @@
 - Checksum verification for downloads: 🟡 Pending
 - Graceful shutdown (SIGTERM) verification: 🟡 Pending
 
-## Section 4: Architectural Specifications
-### 4.1 Exit Codes
+## Section 4: Exit Codes
 - `0`: Success (standard completion)
 - `1`: General error (e.g., file not found, user input error)
 - `2`: Fatal error (e.g., self-update failure, download failure)
 
-### 4.2 Security
+## Section 5: Security
 - No secret keys or hardcoded credentials.
 - No local storage of sensitive user data.
 - Checksum verification for all binary downloads to prevent tampering.
 
-### 4.3 Dependencies
+## Section 6: Dependencies
 - `requests`: For GitHub API and file downloads.
 - `pathlib`: For cross-platform pathing.
 - `subprocess`: For process management.
 - `curses`: For Terminal UI.
 
-### 4.4 Non-Functional Requirements
+## Section 7: Non-Functional Requirements
 - **Responsiveness:** Progress bars for all long-running tasks (downloads, extractions).
 - **Persistence:** `config.json` persists last-used selections.
 - **Reliability:** Clean-up of temporary files and archive deletion on failure.
