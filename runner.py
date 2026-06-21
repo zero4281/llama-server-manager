@@ -35,68 +35,63 @@ class Runner:
         self.llama_server_path = Path.cwd() / "llama-cpp" / "llama-server"
         self.ui_manager = ui_manager
 
+
+    def _load_config_options(self) -> list:
+        """
+        Load configuration options from the llama-server section of the config.
+
+        Returns:
+            A list of command-line arguments for llama-server.
+        """
+        config_args = []
+        options = self.config.get("llama-server", {}).get("options", {})
+
+        for key, value in options.items():
+            if value is None:
+                if not key.startswith("-"):
+                    config_args.append(f"--{key}")
+                else:
+                    config_args.append(key)
+            elif isinstance(value, bool):
+                if value:
+                    if not key.startswith("-"):
+                        config_args.append(f"--{key}")
+                    else:
+                        config_args.append(key)
+            else:
+                if not key.startswith("-"):
+                    config_args.append(f"--{key}")
+                config_args.append(str(value))
+
+        return config_args
     def run(self) -> None:
         """Main run method - launches llama-server."""
         # Load configuration options
         config_args = self._load_config_options()
         
         # Merge args and config options
-        merged_args = self._merge_args(config_args)
+        llama_args = getattr(self.args, 'llama_args', [])
+        merged_args = config_args + llama_args
         
         # Build command
         command = self._build_command(merged_args)
         
         self._run_background(command, merged_args)
 
-    def _load_config_options(self) -> list:
+    def _build_command(self, args: list) -> list:
         """
-        Load options from config.json\'s llama-server.options section.
-
-        Returns:
-            List of command-line arguments
-        """
-        options = self.config.get("llama-server", {}).get("options", {})
-        args = []
-        for key, value in options.items():
-            if value is not None and value != "":
-                args.extend([f"--{key}", f"{value}"])
-            else:
-                args.append(f"--{key}")
-        return args
-
-    def _merge_args(self, config_args: list) -> list:
-        """
-        Merge configuration args with CLI args.
-
-        CLI args take precedence over config args. This is a simple
-        concatenation since argparse already handles duplicate handling.
+        Build the command line arguments for llama-server.
 
         Args:
-            config_args: Arguments from config.json
+            args: Merged command-line arguments.
 
         Returns:
-            Merged list of arguments
+            List of command-line arguments including the path to the executable.
         """
-        # Get pass-through args from main
-        llama_args = getattr(self.args, 'llama_args', [])
-        return config_args + llama_args
+        return [str(self.llama_server_path)] + args
 
-    def _build_command(self, merged_args: list) -> list:
-        """
-        Build the command to run llama-server.
 
-        Args:
-            merged_args: Merged arguments from config and CLI
 
-        Returns:
-            List of command arguments
-        """
-        cmd = [str(self.llama_server_path)]
-        
-        # Add merged args
-        cmd.extend(merged_args)
-        
-        return cmd
 
     def _run_background(self, command: list, merged_args: list) -> None:
         """

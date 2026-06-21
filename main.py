@@ -27,6 +27,12 @@ from ui_manager import UIManager
 # Add current directory to path for imports
 sys.path.insert(0, str(Path.cwd()))
 
+# Check if script is running from the project root
+project_root = Path(__file__).parent.absolute()
+if Path.cwd().resolve() != project_root:
+    print(f"Warning: Script is not running from the project root ({project_root}). "
+          "Please navigate to the project root before running the script.", file=sys.stderr)
+
 class Main:
     """Main wrapper application."""
 
@@ -34,6 +40,7 @@ class Main:
         self.args = None
         self.config = None
         self.logger = None
+        self.ui = UIManager("Llama Server Manager")
 
     def parse_args(self, args: list = None) -> argparse.Namespace:
         """
@@ -85,8 +92,7 @@ class Main:
             args: Parsed arguments
         """
         try:
-            ui = UIManager("Self-Update")
-            ui.print_message("Performing self-update...")
+            self.ui.print_message("Performing self-update...")
 
             # Source selection menu
             source_options = [
@@ -96,10 +102,10 @@ class Main:
             ]
 
             default_source = 0
-            selected_source = ui.render_menu(source_options, default=default_source)
+            selected_source = self.ui.render_menu(source_options, default=default_source)
 
             if selected_source == -1:
-                ui.render_error("Update cancelled.")
+                self.ui.render_error("Update cancelled.")
                 sys.exit(0)
 
             selected_zip_url = ""
@@ -136,9 +142,9 @@ class Main:
                     for rel in releases
                 ]
 
-                prev_choice = ui.render_menu(prev_releases)
+                prev_choice = self.ui.render_menu(prev_releases)
                 if prev_choice == -1:
-                    ui.render_error("Update cancelled.")
+                    self.ui.render_error("Update cancelled.")
                     sys.exit(0)
 
                 selected_release = releases[prev_choice]
@@ -153,14 +159,14 @@ class Main:
                 selected_release = "HEAD"
 
             # Confirmation prompt
-            confirm = ui.render_confirmation(
-                ui,
+            confirm = self.ui.render_confirmation(
+                self.ui,
                 f"Update {selected_tag if selected_tag != 'HEAD' else selected_name}",
                 selected_name
             )
 
             if not confirm:
-                ui.render_error("Update cancelled.")
+                self.ui.render_error("Update cancelled.")
                 sys.exit(0)
 
             # Download and extract directly to project root
@@ -207,20 +213,20 @@ class Main:
                                 target.write_bytes(file_path.read_bytes())
                                 # Clean up the old file
                                 file_path.unlink()
-                                ui.print_message(f"Updated: {rel_path}")
+                                self.ui.print_message(f"Updated: {rel_path}")
 
                         # Remove the top-level directory from extract_subdir
                         shutil.rmtree(top_level_dir)
-                        ui.print_message(f"Removed: {top_level_dir.name}")
+                        self.ui.print_message(f"Removed: {top_level_dir.name}")
 
-                    ui.render_success("Self-update complete!")
+                    self.ui.render_success("Self-update complete!")
             finally:
                 # Clean up temporary zip file
                 if zip_file_path.exists():
                     zip_file_path.unlink()
 
             # Restart with same arguments
-            ui.print_message(f"Restarting with original arguments: {args}")
+            self.ui.print_message(f"Restarting with original arguments: {args}")
 
             # Re-parse args to preserve llama_args
             new_args = [sys.argv[0]]
@@ -243,11 +249,11 @@ class Main:
                               text=True)
 
             # If we get here, something went wrong, exit with error
-            ui.render_error("Restart failed, exiting.")
+            self.ui.render_error("Restart failed, exiting.")
             sys.exit(2)
 
         except Exception as e:
-            ui.render_error(f"Self-update failed: {e}")
+            self.ui.render_error(f"Self-update failed: {e}")
             sys.exit(2)
 
     def run(self) -> None:
@@ -269,14 +275,15 @@ class Main:
         else:
             self.logger = None
 
+
         # Handle special operations
         if self.args.self_update:
-            print("\n[Self-Update Mode]\n")
+            self.ui.print_message("\n[Self-Update Mode]\n")
             self.perform_self_update(self.args)
             return
 
         if self.args.install_llama:
-            print("\n[Install llama.cpp]\n")
+            self.ui.print_message("\n[Install llama.cpp]\n")
             try:
                 LlamaUpdater().install()
             except SystemExit:
@@ -295,7 +302,7 @@ class Main:
             return
 
         if self.args.update_llama:
-            print("\n[Update llama.cpp]\n")
+            self.ui.print_message("\n[Update llama.cpp]\n")
             try:
                 LlamaUpdater().update()
             except SystemExit:
@@ -314,18 +321,18 @@ class Main:
             return
 
         if self.args.stop_server:
-            print("\n[Stop Server Mode]\n")
+            self.ui.print_message("\n[Stop Server Mode]\n")
             exit_code = stop_server()
             sys.exit(exit_code)
 
         # Default: Run llama-server
-        print("\n[Run llama-server]\n")
+        self.ui.print_message("\n[Run llama-server]\n")
 
         # Check if llama-cpp is installed
         llama_cpp_path = Path.cwd() / "llama-cpp" / "llama-server"
         if not llama_cpp_path.exists():
-            print("Error: llama-cpp is not installed. Please run with --install-llama first.")
-            print("\nUsage: ./llama-server-manager --install-llama")
+            self.ui.print_message("Error: llama-cpp is not installed. Please run with --install-llama first.")
+            self.ui.print_message("\nUsage: ./llama-server-manager --install-llama")
             sys.exit(1)
 
         runner = Runner(self.args, self.config)
