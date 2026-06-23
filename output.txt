@@ -1,0 +1,12 @@
+
+[Install llama.cpp]
+
+[2J[H  1. Enter a tag manually
+  2. b9770 (default)
+  3. b9769
+  4. b9768
+  5. b9767
+  6. b9770
+  7. b9769
+Choice [1]: Installing llama.cpp release b9771...
+Error: cannot access local variable 'platform' where it is not associated with a value

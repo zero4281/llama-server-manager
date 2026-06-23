@@ -126,7 +126,31 @@ def test_small_terminal():
 
 
 def test_medium_terminal():
-    """Test UIManager on 80x24 terminal."""
+    """Test UIManager on 80x24 terminal with fallback mode."""
+    # Test fallback mode where curses initialization fails
+    ui = UIManager("Test")
+    
+    # Simulate fallback mode by setting _using_curses to False
+    ui._using_curses = False
+    ui._screen = None
+    
+    options = [{'label': 'Option'} for _ in range(10)]
+    
+    # In fallback mode with empty input, should return default (0)
+    with patch('sys.stdin.isatty', return_value=False):
+        with patch('os.read', return_value=b''):
+            with patch('sys.stdin.readline', return_value='') as mock_readline:
+                result = ui.render_menu(options, default=0, highlighted=0)
+                
+                # In fallback mode with empty input, should return default
+                assert result == 0, f"Should return default 0 with empty input, got {result}"
+
+    ui._cleanup_terminal()
+    print("  ✓ Medium terminal fallback test passed")
+
+
+def test_medium_terminal_curses_mode():
+    """Test UIManager on 80x24 terminal in curses mode."""
     mock_curses = MagicMock(spec=curses)
     mock_curses.initscr.return_value = MagicMock()
     mock_curses.start_color = MagicMock()
@@ -140,7 +164,7 @@ def test_medium_terminal():
     with patch('ui_manager.curses', mock_curses):
         ui = UIManager("Test")
         ui._using_curses = True
-
+    
     mock_screen = MagicMock()
     mock_screen.getmaxyx.return_value = (24, 80)
     mock_screen.nodelay.return_value = True
@@ -148,7 +172,7 @@ def test_medium_terminal():
 
     with patch.object(ui, '_screen', mock_screen), \
          patch.object(ui, 'refresh'), \
-            patch('ui_manager.curses.newwin', return_value=MagicMock()) as mock_newwin:
+         patch('ui_manager.curses.newwin', return_value=MagicMock()) as mock_newwin:
         
         mock_win = mock_newwin.return_value
         mock_win.getyx.return_value = (0, 0)
@@ -165,10 +189,10 @@ def test_medium_terminal():
             mock_getch.side_effect = [ord('3'), 10]
             result = ui.render_menu(options, default=0, highlighted=0)
             
-            assert result == 3, f"Should select option 3, got {result}"
+            assert result == 2, f"Should select option 3 (index 2), got {result}"
 
     ui._cleanup_terminal()
-    print("  ✓ Medium terminal test passed")
+    print("  ✓ Medium terminal curses mode test passed")
 
 
 def test_large_terminal():

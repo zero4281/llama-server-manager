@@ -248,42 +248,53 @@ def parse_asset_name(name: str) -> Dict[str, str]:
     # Old format: platform-arch[-variant] (e.g., llama-server-linux-arm64)
     # New format: llama-{tag}-bin-{platform}-{arch} (e.g., llama-b8763-bin-ubuntu-x64)
     
+    # Convert platform names to standard names
+    platform_map = {
+        "macos": "macOS",
+        "win": "Windows",
+        "ubuntu": "Linux",
+        "openEuler": "Linux",
+        "debian": "Linux",
+        "centos": "Linux",
+        "rocky": "Linux",
+        "alpine": "Linux",
+        "archlinux": "Linux",
+        "fedora": "Linux",
+        "redhat": "Linux",
+        "rhel": "Linux",
+        "amazon": "Linux",
+        "oracle": "Linux",
+        "suse": "Linux",
+        "opensuse": "Linux",
+        "gentoo": "Linux",
+        "manjaro": "Linux",
+        "elementary": "Linux",
+        "pop": "Linux",
+        "zorin": "Linux",
+        "linuxmint": "Linux",
+        "deepin": "Linux",
+        "kali": "Linux",
+        "parrot": "Linux",
+    }
+    
     # Try new format first: llama-{tag}-bin-{platform}-{arch}[-variant]
     # Tag can contain hyphens, so we need a more flexible pattern
-    # Also handle optional variant suffix like -vulkan, -cuda, etc.
     # Platform can contain hyphens (e.g., rocky-linux), arch is always x64 or arm64
-    new_pattern = r"^llama-[a-zA-Z0-9_-]+-bin-([a-zA-Z0-9-]+)-(x64|arm64)(?:-(\w+))?$"
+    # Variant is optional.
+    new_pattern = r"^llama-([a-zA-Z0-9_-]+)-bin-([a-zA-Z0-9_-]+)-(x64|arm64)(?:-([a-zA-Z0-9_-]+(?:-[a-zA-Z0-9_-]+)*))?$"
     match = re.match(new_pattern, base_name)
+    
     if match:
-        platform = match.group(1).lower()
-        arch = match.group(2).lower()
-        variant = match.group(3)  # Capture variant if present (e.g., vulkan, cuda)
-        # Convert platform names to standard names
-        platform_map = {
-            "ubuntu": "Linux",
-            "openEuler": "Linux",
-            "debian": "Linux",
-            "centos": "Linux",
-            "rocky": "Linux",
-            "alpine": "Linux",
-            "archlinux": "Linux",
-            "fedora": "Linux",
-            "redhat": "Linux",
-            "rhel": "Linux",
-            "amazon": "Linux",
-            "oracle": "Linux",
-            "suse": "Linux",
-            "opensuse": "Linux",
-            "gentoo": "Linux",
-            "manjaro": "Linux",
-            "elementary": "Linux",
-            "pop": "Linux",
-            "zorin": "Linux",
-            "linuxmint": "Linux",
-            "deepin": "Linux",
-            "kali": "Linux",
-            "parrot": "Linux",
-        }
+        tag = match.group(1)
+        platform = match.group(2).lower()
+        arch = match.group(3).lower()
+        variant = match.group(4)
+        if variant:
+            variant = variant.lower()
+            # Extract only the first hyphenated component (e.g., "sycl" from "sycl-fp16")
+            if '-' in variant:
+                variant = variant.split('-')[0]
+        
         # Handle compound names like rocky-linux
         if platform in platform_map:
             platform_name = platform_map[platform]
@@ -291,16 +302,34 @@ def parse_asset_name(name: str) -> Dict[str, str]:
             platform_name = platform_map[platform.split('-')[0]]
         else:
             platform_name = platform
+        
         # Capitalize first letter for consistency with test expectations
         platform_name = platform_name.capitalize()
         return {
             "platform": platform_name,
             "arch": arch,
-            "variant": variant if variant else None
+            "variant": variant
         }
+    
+    # No match for new format, try old format: project-platform-arch
+    pattern = r"^(\w+)-(\w+)-(\w+)-(\w+)"
+    match = re.match(pattern, base_name)
+    if match:
+        platform = platform_map.get(match.group(3).lower(), match.group(3))
+        arch = match.group(4).lower()
+        platform = platform.capitalize()
+        return {
+            "platform": platform,
+            "arch": arch,
+            "variant": None
+        }
+    
+    return {"platform": None, "arch": None, "variant": None}
+
     
     # Try old format: project-platform-arch
     # e.g., llama-server-linux-arm64
+
     pattern = r"^(\w+)-(\w+)-(\w+)-(\w+)"
     match = re.match(pattern, base_name)
     if match:
@@ -315,13 +344,6 @@ def parse_asset_name(name: str) -> Dict[str, str]:
         arch = match.group(4).lower()
         # Capitalize first letter
         platform = platform.capitalize()
-        return {
-            "platform": platform,
-            "arch": arch,
-            "variant": None
-        }
-        platform = platform_map.get(match.group(2).lower(), match.group(2))
-        arch = match.group(3) if match.group(3) else None
         return {
             "platform": platform,
             "arch": arch,
@@ -690,7 +712,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     config = load_config()
     install_info = config.get("install", {})
     
-    ui.print_message(f"Installing llama.cpp release {release_tag}...")
+    ui_manager.print_message(f"Installing llama.cpp release {release_tag}...")
     
     # Delete existing installation first
     delete_existing_installation()
@@ -728,17 +750,32 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
                 break
     
     # Render platform selection menu
-    selected_platform_idx = ui.render_menu(platform_options, default=default_platform_idx, highlighted=default_platform_idx)
+    selected_platform_idx = ui_manager.render_menu(platform_options, default=default_platform_idx, highlighted=default_platform_idx)
     
     if selected_platform_idx == -1:
-        ui.print_message("Platform selection cancelled.")
+        ui_manager.print_message("Platform selection cancelled.")
         return
     
     selected_platform_info = available_platforms[selected_platform_idx]
     
     # Prepare zip file options for menu
     zip_options = []
-    for i, asset in enumerate(selected_platform_info['assets'], 1):
+    
+    # Sort assets to prioritize vulkan, then cuda, then sycl, then others
+    # We do this by creating a priority map for variants
+    priority_map = {
+        "vulkan": 0,
+        "cuda": 1,
+        "sycl": 2,
+    }
+    
+    # Sort assets based on their variant priority
+    sorted_assets = sorted(
+        selected_platform_info['assets'],
+         key=lambda x: priority_map.get((parse_asset_name(x['name'])['variant'] or '').lower(), 99)
+    )
+    
+    for i, asset in enumerate(sorted_assets, 1):
         is_default = (i == 1)
         marker = " (default)" if is_default else ""
         zip_entry = {
@@ -750,50 +787,58 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     # Find default zip/backend option
     default_zip_idx = None
     if install_info.get("backend"):
-        for i, asset in enumerate(selected_platform_info['assets'], 1):
+        for i, asset in enumerate(sorted_assets, 1):
             if install_info["backend"].lower() in asset['name'].lower():
                 default_zip_idx = i - 1
                 break
-
+    else:
+        # Default to vulkan if available
+        for i, asset in enumerate(sorted_assets, 1):
+            parsed = parse_asset_name(asset['name'])
+            if parsed['variant'] and parsed['variant'].lower() == 'vulkan':
+                default_zip_idx = i - 1
+                break
+                
     # Render zip file selection menu
-    selected_zip_idx = ui.render_menu(zip_options, default=default_zip_idx, highlighted=default_zip_idx)
+    selected_zip_idx = ui_manager.render_menu(zip_options, default=default_zip_idx, highlighted=default_zip_idx)
+
     
     if selected_zip_idx == -1:
-        ui.print_message("Zip file selection cancelled.")
+        ui_manager.print_message("Zip file selection cancelled.")
         return
     
     selected_asset = selected_platform_info['assets'][selected_zip_idx]
     asset_name = selected_asset['name']
     
     # Show selected release info through UIManager
-    ui.print_message(f"\nSelected: {release_tag} ({asset_name})")
+    ui_manager.print_message(f"\nSelected: {release_tag} ({asset_name})")
     
     # Check UI mode before render_confirmation
-    if not ui._using_curses or not ui._screen:
+    if not ui_manager._using_curses or not ui_manager._screen:
         ui_logger.warning("UI manager not using curses, falling back to console for confirmation")
     
     # Confirmation prompt
     release_info = f"{release_tag} ({asset_name})"
-    confirmed = ui.render_confirmation(f"Proceed with installation?", release_info)
+    confirmed = ui_manager.render_confirmation(f"Proceed with installation?", release_info)
     
     if not confirmed:
-        ui.print_message("Installation cancelled.")
+        ui_manager.print_message("Installation cancelled.")
         return
     
     ui_logger.debug(f"User confirmed installation of {release_tag} - {asset_name}")
     
     # Download
-    ui.print_message(f"\nDownloading {asset_name}...")
+    ui_manager.print_message(f"\nDownloading {asset_name}...")
     archive_path = Path(tempfile.gettempdir()) / f"{asset_name}"
     
     try:
-        download_file(selected_asset['browser_download_url'], archive_path, ui_manager=ui)
-        ui.print_message(f"Downloaded to {archive_path}")
+        download_file(selected_asset['browser_download_url'], archive_path, ui_manager=ui_manager)
+        ui_manager.print_message(f"Downloaded to {archive_path}")
         
         # Check for checksum file
         checksum_assets = get_checksum_assets(release)
         if checksum_assets:
-            ui.print_message("Checking checksum...")
+            ui_manager.print_message("Checking checksum...")
             checksum_asset = checksum_assets[0]
             checksum_path = download_checksum(archive_path, checksum_asset, ui_manager=ui)
             
@@ -808,17 +853,17 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             finally:
                 checksum_path.unlink(missing_ok=True)
         else:
-            ui.print_message("No checksum file available for this release, skipping verification")
+            ui_manager.print_message("No checksum file available for this release, skipping verification")
         
         # Extract
-        ui.print_message(f"\nExtracting to {LLAMA_CPP_DIR}")
+        ui_manager.print_message(f"\nExtracting to {LLAMA_CPP_DIR}")
         extract_archive(archive_path, LLAMA_CPP_DIR)
         
         # Ensure llama-server is executable
         llama_server = LLAMA_CPP_DIR / "llama-server"
         if llama_server.exists():
             ensure_executable(llama_server)
-            ui.print_message(f"Made {llama_server} executable")
+            ui_manager.print_message(f"Made {llama_server} executable")
         
         # Clean up
         archive_path.unlink(missing_ok=True)
@@ -838,7 +883,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         with open(Path.cwd() / "config.json", "w") as f:
             json.dump(config, f, indent=2)
         
-        ui.print_message("Installation complete!")
+        ui_manager.print_message("Installation complete!")
         
     except Exception as e:
         # Clean up on error
