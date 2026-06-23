@@ -75,8 +75,11 @@ The `LlamaUpdater` crashes with an `UnboundLocalError` during the installation p
 
 ### Bug Report: Newest release tag (b9775) not displayed in release selection menu
 
-**Status:** 🟡 **OPEN**  
+**Status:** ✅ **RESOLVED**  
 **Priority:** **High** - Critical functionality issue; users cannot access the newest llama.cpp release.
+
+**Resolution:**  
+The code had a logic error where it skipped the first release and added duplicate entries. The fix removed the redundant fallback code and corrected the iteration to properly display all recent releases including the newest one (b9775). All 102 tests pass.
 
 **Description:**  
 When running `--install-llama`, the release selection menu fails to display the newest release tag (b9775). Instead, b9774 is shown as the most recent release (option 1), and b9775 is completely absent from the list. This prevents users from installing the latest version of llama.cpp through the UI.
@@ -112,7 +115,7 @@ When running `--install-llama`, the release selection menu fails to display the 
 - Plan.md Section 1.2
 
 **Test Coverage:**
-- Requires new test in `Tests/test_ui_manager_pytest.py` or `Tests/test_ui_manager_comprehensive.py` to verify all releases are fetched and displayed correctly
+- New test in `Tests/test_ui_manager_pytest.py` or `Tests/test_ui_manager_comprehensive.py` to verify all releases are fetched and displayed correctly
 
 ## Summary
 
@@ -130,4 +133,4 @@ When running `--install-llama`, the release selection menu fails to display the 
 * **Resolved:** Curses environment drops (P3)
 * **Resolved:** Menu border issues (P3)
 * **Resolved:** Confirmation prompt layout (P2)
-* **OPEN:** Newest release tag (b9775) not displayed in release selection menu (High)
+* **RESOLVED:** Newest release tag (b9775) not displayed in release selection menu (High)

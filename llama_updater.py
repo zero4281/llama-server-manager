@@ -943,16 +943,10 @@ class LlamaUpdater:
         tag_options = [
             {'label': 'Enter a tag manually', 'description': ''}
         ]
-        for i, r in enumerate(recent_releases[1:], 2):
+        for i, r in enumerate(recent_releases, 2):
             tag_options.append({
                 'label': r['tag_name'],
                 'description': 'latest' if r['tag_name'] == release_tag else ''
-            })
-        # Add remaining 2 recent releases to make 5 total
-        for r in recent_releases[1:3]:
-            tag_options.append({
-                'label': r['tag_name'],
-                'description': ''
             })
         
         # Use UIManager for tag selection
