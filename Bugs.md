@@ -73,6 +73,47 @@ The `LlamaUpdater` crashes with an `UnboundLocalError` during the installation p
 - `main.py`
 - `ui_manager.py`
 
+### Bug Report: Newest release tag (b9775) not displayed in release selection menu
+
+**Status:** 🟡 **OPEN**  
+**Priority:** **High** - Critical functionality issue; users cannot access the newest llama.cpp release.
+
+**Description:**  
+When running `--install-llama`, the release selection menu fails to display the newest release tag (b9775). Instead, b9774 is shown as the most recent release (option 1), and b9775 is completely absent from the list. This prevents users from installing the latest version of llama.cpp through the UI.
+
+**Reproduction Steps:**
+1. Run: `UI_MANAGER_DEBUG=1 PYTHONWARNINGS=ignore python3 main.py --install-llama`
+2. Observe the release selection menu
+3. Verify that b9775 does not appear in the list
+4. Check that b9774 is incorrectly shown as the latest release
+
+**Expected Behavior:**  
+- b9775 should be the first release option (option 1, marked "latest")
+- All available releases should be listed in descending order by date
+- The newest release should always be available for selection
+
+**Actual Behavior:**  
+- b9774 is displayed as the latest release (option 1)
+- b9775 is completely missing from the menu
+- The list appears to be truncated or incorrectly ordered
+
+**Impact:**
+- Users cannot install the newest llama.cpp release through the UI
+- Forces users to manually enter the tag (option 0) or bypass the UI
+- May lead to installation of outdated or incompatible versions
+- Reduces trust in the automated installation workflow
+
+**Affected Components:**
+- `llama_updater.py`: Release fetching and listing logic
+- `ui_manager.py`: Release selection menu rendering
+
+**Dependencies:**
+- Requirements.md Sections 6.2, 6.3.1, 8.3
+- Plan.md Section 1.2
+
+**Test Coverage:**
+- Requires new test in `Tests/test_ui_manager_pytest.py` or `Tests/test_ui_manager_comprehensive.py` to verify all releases are fetched and displayed correctly
+
 ## Summary
 
 **Last Updated:** June 23, 2026  
@@ -89,3 +130,4 @@ The `LlamaUpdater` crashes with an `UnboundLocalError` during the installation p
 * **Resolved:** Curses environment drops (P3)
 * **Resolved:** Menu border issues (P3)
 * **Resolved:** Confirmation prompt layout (P2)
+* **OPEN:** Newest release tag (b9775) not displayed in release selection menu (High)
