@@ -71,43 +71,8 @@ import os
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-logger = logging.getLogger(__name__)
-
-# Logging configuration
-UI_MANAGER_DEBUG = os.environ.get("UI_MANAGER_DEBUG", "0").lower() in ("1", "true")
-UI_MANAGER_LOG_LEVEL = logging.DEBUG if UI_MANAGER_DEBUG else logging.INFO
-
-
-def _configure_logging():
-    """Configure logging for UIManager."""
-    if not logger.handlers:
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%H:%M:%S'
-        )
-        handler = logging.StreamHandler()
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        logger.setLevel(UI_MANAGER_LOG_LEVEL)
-
-
-# Configure logging at module load time
-_configure_logging()
-
-
-def enable_debug_mode():
-    """Enable debug logging for UIManager."""
-    global UI_MANAGER_DEBUG, UI_MANAGER_LOG_LEVEL
-    UI_MANAGER_DEBUG = True
-    UI_MANAGER_LOG_LEVEL = logging.DEBUG
-    logger.setLevel(logging.DEBUG)
-    # Re-add handler with debug level
-    if logger.handlers:
-        handler = logger.handlers[0]
-        handler.setLevel(logging.DEBUG)
-    else:
-        _configure_logging()
-
+from wrapper_config import ConfigLogger, load_config
+logger = ConfigLogger(load_config())# Logging configuration
 
 class UIManagerError(Exception):
     """Base exception for UIManager errors."""

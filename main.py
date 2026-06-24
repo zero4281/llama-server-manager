@@ -16,7 +16,6 @@ import platform
 import requests
 import zipfile
 import tempfile
-import subprocess
 from pathlib import Path
 
 from wrapper_config import load_config, get_logger
@@ -185,75 +184,58 @@ class Main:
                 zip_file.write(zip_content)
                 zip_file_path = Path(zip_file.name)
 
-            try:
-                # Extract to a temp directory
-                with tempfile.TemporaryDirectory() as extract_temp:
-                    # Extract to a subdirectory
-                    extract_subdir = Path(extract_temp) / "extract"
-                    extract_subdir.mkdir()
-
-                    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
-                        zip_ref.extractall(extract_subdir)
-
-                    # Find the top-level directory in the extracted files
-                    top_level_dir = None
-                    for item in extract_subdir.iterdir():
-                        if item.is_dir() and not item.name.startswith(('.', '_')):
-                            top_level_dir = item
-                            break
-
-                    if top_level_dir:
-                        # Move files from top-level directory to project root
-                        for file_path in top_level_dir.rglob("*"):
-                            if file_path.is_file():
-                                rel_path = file_path.relative_to(top_level_dir)
-                                target = project_root / rel_path
-                                target.parent.mkdir(parents=True, exist_ok=True)
-                                target.write_bytes(file_path.read_bytes())
-                                # Clean up the old file
-                                file_path.unlink()
-                                self.ui.print_message(f"Updated: {rel_path}")
-
-                        # Remove the top-level directory from extract_subdir
-                        shutil.rmtree(top_level_dir)
-                        self.ui.print_message(f"Removed: {top_level_dir.name}")
-
+        
+            with tempfile.TemporaryDirectory() as extract_temp:
+                # Extract to a subdirectory
+                extract_subdir = Path(extract_temp) / "extract"
+                extract_subdir.mkdir()
+                
+                with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                    zip_ref.extractall(extract_subdir)
+                
+                # Find the top-level directory in the extracted files
+                top_level_dir = None
+                for item in extract_subdir.iterdir():
+                    if item.is_dir() and not item.name.startswith(('.', '_')):
+                        top_level_dir = item
+                        break
+                
+                if top_level_dir:
+                    # Move files from top-level directory to project root
+                    for file_path in top_level_dir.rglob("*"):
+                        if file_path.is_file():
+                            rel_path = file_path.relative_to(top_level_dir)
+                            target = project_root / rel_path
+                            target.parent.mkdir(parents=True, exist_ok=True)
+                            target.write_bytes(file_path.read_bytes())
+                            # Clean up the old file
+                            file_path.unlink()
+                            self.ui.print_message(f"Updated: {rel_path}")
+                    
+                    # Remove the top-level directory from extract_subdir
+                    shutil.rmtree(top_level_dir)
+                    self.ui.print_message(f"Removed: {top_level_dir.name}")
+                    
                     self.ui.render_success("Self-update complete!")
-            finally:
-                # Clean up temporary zip file
-                if zip_file_path.exists():
-                    zip_file_path.unlink()
-
-            # Restart with same arguments
-            self.ui.print_message(f"Restarting with original arguments: {args}")
-
-            # Re-parse args to preserve llama_args
-            new_args = [sys.argv[0]]
-            for key, value in vars(args).items():
-                new_args.append(f"--{key}" if not key.startswith("llama_") else f"{key}={value}" if value else f"--{key}")
-
-            # Clear any cached modules to force reimport
-            modules_to_clear = [
-                'main', 'runner', 'llama_updater', 'logging'
-            ]
-            for module in modules_to_clear:
-                if module in sys.modules:
-                    del sys.modules[module]
-
-            # Execute and replace current process
-            import subprocess
-            subprocess.run([sys.executable] + new_args,
-                              stdout=subprocess.PIPE, 
-                              stderr=subprocess.PIPE, 
-                              text=True)
-
-            # If we get here, something went wrong, exit with error
-            self.ui.render_error("Restart failed, exiting.")
-            sys.exit(2)
-
         except Exception as e:
             self.ui.render_error(f"Self-update failed: {e}")
             sys.exit(2)
+        finally:
+            # Clean up temporary zip file
+            if zip_file_path.exists():
+                zip_file_path.unlink()
+            
+            # Restart with same arguments
+            self.ui.print_message(f"Restarting with original arguments: {args}")
+            
+            # Re-parse args to preserve llama_args
+            new_args = [sys.argv[0]]
+            for arg in sys.argv[1:]:
+                if arg != "--self-update":
+                    new_args.append(arg)
+            
+            # Execute and replace current process
+            os.execvp(sys.executable, new_args)
 
     def run(self) -> None:
         """Main execution flow."""

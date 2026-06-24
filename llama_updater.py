@@ -18,7 +18,7 @@ import sys
 import tarfile
 import tempfile
 import time
-import zipfile
+import hashlib
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -580,54 +580,6 @@ def extract_archive(archive_path: Path, dest_dir: Path) -> None:
         raise ExtractionError(f"Extraction failed: {e}")
 
 
-def verify_checksum(archive_path: Path, checksum_path: Path, ui_manager: Optional["UIManager"] = None) -> bool:
-    """
-    Verify archive against checksum file.
-    
-    Args:
-        archive_path: Path to archive file
-        checksum_path: Path to checksum file
-    
-    Returns:
-        True if verification passes
-    
-    Raises:
-        LlamaUpdaterError: If verification fails
-    """
-    import hashlib
-    
-    try:
-        # Calculate actual hash of archive
-        actual_hash = hashlib.sha256()
-        with open(archive_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(65536), b''):
-                actual_hash.update(chunk)
-        actual_hash_str = actual_hash.hexdigest()
-        
-        # Read expected hash from checksum file
-        with open(checksum_path, 'r') as f:
-            checksum_data = f.read().strip()
-        
-        # Parse expected hash (format: "hash  filename" or just "hash")
-        expected_hash = checksum_data.split()[0]
-        
-        ui_manager.print_message(f"Checking SHA-256 checksum...")
-        ui_manager.print_message(f"  Expected: {expected_hash}")
-        ui_manager.print_message(f"  Actual:   {actual_hash_str}")
-        
-        if actual_hash_str == expected_hash:
-            ui_manager.print_message("Checksum verification passed!")
-            return True
-        else:
-            ui_manager.render_error("Checksum verification FAILED!")
-            
-            raise LlamaUpdaterError(
-                f"Checksum mismatch! Archive may be corrupted or tampered. "
-                f"Please try again or contact support."
-            )
-    
-    except Exception as e:
-        raise LlamaUpdaterError(f"Checksum verification failed: {e}")
 
 
 def ensure_executable(path: Path) -> None:
@@ -714,8 +666,10 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     
     ui_manager.print_message(f"Installing llama.cpp release {release_tag}...")
     
-    # Delete existing installation first
-    delete_existing_installation()
+    # Prepare for atomic update by identifying the new directory
+    temp_dir = LLAMA_CPP_DIR.parent / f"llama-cpp_new_{int(time.time())}"
+    # (Logic will be handled in the extraction/move phase)
+
     
     # Detect platform
     detected_platform, detected_arch = detect_platform()
@@ -843,9 +797,25 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             checksum_path = download_checksum(archive_path, checksum_asset, ui_manager=ui)
             
             try:
-                if verify_checksum(archive_path, checksum_path, ui_manager=ui):
-                    pass
-                else:
+                # Calculate actual hash of archive
+                actual_hash = hashlib.sha256()
+                with open(archive_path, 'rb') as f:
+                    for chunk in iter(lambda: f.read(65536), b''):
+                        actual_hash.update(chunk)
+                actual_hash_str = actual_hash.hexdigest()
+                
+                # Read expected hash from checksum file
+                with open(checksum_path, 'r') as f:
+                    checksum_data = f.read().strip()
+                
+                # Parse expected hash (format: "hash  filename" or just "hash")
+                expected_hash = checksum_data.split()[0]
+                
+                ui_manager.print_message(f"Checking SHA-256 checksum...")
+                ui_manager.print_message(f"  Expected: {expected_hash}")
+                ui_manager.print_message(f"  Actual:   {actual_hash_str}")
+                
+                if actual_hash_str != expected_hash:
                     # Verification failed - clean up
                     archive_path.unlink(missing_ok=True)
                     checksum_path.unlink(missing_ok=True)
@@ -855,21 +825,50 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         else:
             ui_manager.print_message("No checksum file available for this release, skipping verification")
         
-        # Extract
-        ui_manager.print_message(f"\nExtracting to {LLAMA_CPP_DIR}")
-        extract_archive(archive_path, LLAMA_CPP_DIR)
+        # Extract to a temporary folder for atomic update
+        temp_new_dir = LLAMA_CPP_DIR.parent / "llama-cpp_new"
         
-        # Ensure llama-server is executable
-        llama_server = LLAMA_CPP_DIR / "llama-server"
-        if llama_server.exists():
-            ensure_executable(llama_server)
-            ui_manager.print_message(f"Made {llama_server} executable")
-        
-        # Clean up
-        archive_path.unlink(missing_ok=True)
-        
-        # Post-install sanity check
-        verify_installation(ui_manager)
+        try:
+            # Extract to temporary folder
+            ui_manager.print_message(f"\nExtracting to temporary folder...")
+            if temp_new_dir.exists():
+                shutil.rmtree(temp_new_dir)
+            temp_new_dir.mkdir(parents=True, exist_ok=True)
+            
+            extract_archive(archive_path, temp_new_dir)
+            
+            # Atomic Swap
+            ui_manager.print_message(f"\nSwapping new installation into {LLAMA_CPP_DIR}...")
+            
+            old_dir = None
+            if LLAMA_CPP_DIR.exists():
+                old_dir = LLAMA_CPP_DIR.parent / "llama-cpp_old"
+                if old_dir.exists():
+                    shutil.rmtree(old_dir)
+                shutil.move(str(LLAMA_CPP_DIR), str(old_dir))
+            
+            shutil.move(str(temp_new_dir), str(LLAMA_CPP_DIR))
+            
+            # Ensure llama-server is executable in the new folder
+            llama_server = LLAMA_CPP_DIR / "llama-server"
+            if llama_server.exists():
+                ensure_executable(llama_server)
+                ui_manager.print_message(f"Made {llama_server} executable")
+            
+            # Post-install sanity check
+            verify_installation(ui_manager)
+            
+            # Cleanup old directory
+            if old_dir and old_dir.exists():
+                shutil.rmtree(old_dir)
+            
+        except Exception as e:
+            if temp_new_dir.exists():
+                shutil.rmtree(temp_new_dir)
+            raise e
+        finally:
+            archive_path.unlink(missing_ok=True)
+
 
         
         # Persist installation selections to config.json

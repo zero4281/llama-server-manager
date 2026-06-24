@@ -12,6 +12,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Optional
+from wrapper_config import load_config
 
 
 # Paths
@@ -21,16 +22,16 @@ PID_FILE = Path.cwd() / "llama-server.pid"
 class Runner:
     """Manages the execution of llama-server process."""
 
-    def __init__(self, args, config: dict, ui_manager: Optional["UIManager"] = None):
+    def __init__(self, args, config: Optional[dict] = None, ui_manager: Optional["UIManager"] = None):
         """
         Initialize Runner.
 
         Args:
             args: Parsed command-line arguments
-            config: Configuration from config.json
+            config: Configuration from config.json (loads from wrapper_config.py if None)
         """
         self.args = args
-        self.config = config
+        self.config = config if config is not None else load_config()
         self.pid_file = PID_FILE
         self.llama_server_path = Path.cwd() / "llama-cpp" / "llama-server"
         self.ui_manager = ui_manager
