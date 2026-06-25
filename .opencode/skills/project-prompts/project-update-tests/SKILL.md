@@ -38,27 +38,28 @@ Include the following context in every task:
 
 ---
 
-## Phase 2 — Fix
+## Phase 2 — Fix and Validate
 
 Once all three analysis tasks are complete and their summaries are returned, use todowrite to create one task per finding. Assign each task to @general one at a time.
 
-**Constraint:** You must create and execute these tasks one at a time. Wait for the agent to confirm the fix before moving to the next finding.
+**Constraint:** You must create, execute, and verify these tasks one at a time. Do not move to the next finding until the current fix is verified by running the test suite.
 
 Each task must include:
 - The specific test file and block to add or modify (from the analysis summary).
 - The constraint: only modify files inside the project's designated test directories.
 - Enough context from the summary so @general can act without re-reading everything.
+- **Validation Instruction:** After applying the fix, read `./Testing Strategy.md` to extract the primary test suite command. Run that exact command. If the relevant test fails, debug and update the test code until it passes before returning the final summary.
 
-**WAIT:** Do not begin Phase 3 until all fix tasks are marked complete.
+**WAIT:** Do not begin Phase 3 until all fix tasks are marked complete and verified passing.
 
 ---
 
 ## Phase 3 — Verify
 
 Use todowrite to create the following task and assign it to an @general agent: 
-> Read `./Testing Strategy.md` to extract the primary test suite command. Run that exact command and return a summary of the results.
+> Read `./Testing Strategy.md` to extract the primary test suite command. Run that exact command and return a summary of the results to ensure no regressions were introduced across the entire suite.
 
-Once the task is complete, for each failing test, use todowrite to create a new fix task. Assign each task to an @general agent one at a time. Have the agent perform the necessary analysis and test code updates. Send the agent a prompt with an appropriate amount of detail.
+Once the task is complete, for each remaining failing test, use todowrite to create a new fix task. Assign each task to an @general agent one at a time. Have the agent perform the necessary analysis and test code updates. Send the agent a prompt with an appropriate amount of detail.
 
 Repeat until all tests pass.
 

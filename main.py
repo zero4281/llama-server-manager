@@ -12,24 +12,15 @@ import argparse
 import os
 import shutil
 import sys
-import platform
-import requests
-import zipfile
-import tempfile
 from pathlib import Path
+
+# Add current directory to path for imports
+sys.path.insert(0, str(Path.cwd()))
 
 from wrapper_config import load_config, get_logger
 from llama_updater import LlamaUpdater
 from runner import stop_server, Runner
-from ui_manager import UIManager
 
-
-
-# Check if script is running from the project root
-project_root = Path(__file__).parent.absolute()
-if Path.cwd().resolve() != project_root:
-    print(f"Warning: Script is not running from the project root ({project_root}). "
-          "Please navigate to the project root before running the script.", file=sys.stderr)
 
 class Main:
     """Main wrapper application."""
@@ -38,7 +29,6 @@ class Main:
         self.args = None
         self.config = None
         self.logger = None
-        self.ui = UIManager("Llama Server Manager")
 
     def parse_args(self, args: list = None) -> argparse.Namespace:
         """
@@ -51,7 +41,10 @@ class Main:
             Parsed arguments namespace
         """
         # WSL detection (per Requirements.md Section 5.1.1)
-         
+        import platform
+        if platform.system() == 'Windows':
+            print("Warning: Running on native Windows. Not all functionality may work as intended.\nFor full support, please run inside Windows Subsystem for Linux (WSL).", file=sys.stderr)
+        
         parser = argparse.ArgumentParser(
             prog="llama-server-manager",
             description="Manager for llama.cpp server operations"
@@ -59,17 +52,17 @@ class Main:
 
         # Special operations
         parser.add_argument("--self-update", action="store_true",
-            help="Pull latest code from GitHub and restart")
+                          help="Pull latest code from GitHub and restart")
         parser.add_argument("--install-llama", action="store_true",
-            help="Download and install latest llama.cpp release")
+                          help="Download and install latest llama.cpp release")
         parser.add_argument("--update-llama", action="store_true",
-            help="Update existing llama.cpp to latest release")
+                          help="Update existing llama.cpp to latest release")
         parser.add_argument("--stop-server", action="store_true",
-            help="Gracefully stop a running llama-server")
+                          help="Gracefully stop a running llama-server")
 
         # Pass-through arguments for llama-server
         parser.add_argument("llama_args", nargs="*",
-            help="Additional arguments passed to llama-server")
+                          help="Additional arguments passed to llama-server")
 
         return parser.parse_args(args)
 
@@ -90,26 +83,32 @@ class Main:
             args: Parsed arguments
         """
         try:
-            self.ui.print_message("Performing self-update...")
-
+            import requests
+            import zipfile
+            import tempfile
+            from ui_manager import UIManager
+            
+            ui = UIManager("Self-Update")
+            ui.print_message("Performing self-update...")
+            
             # Source selection menu
             source_options = [
                 {"label": "Latest release (recommended)", "description": "Most recent official release"},
                 {"label": "Previous release", "description": "Select from available releases"},
                 {"label": "Repository HEAD", "description": "Main branch latest commit"},
             ]
-
+            
             default_source = 0
-            selected_source = self.ui.render_menu(source_options, default=default_source)
-
+            selected_source = ui.render_menu(source_options, default=default_source)
+            
             if selected_source == -1:
-                self.ui.render_error("Update cancelled.")
+                ui.render_error("Update cancelled.")
                 sys.exit(0)
-
+            
             selected_zip_url = ""
             selected_tag = ""
             selected_name = ""
-
+            
             if selected_source == 0:
                 # Latest release
                 url = "https://api.github.com/repos/zero4281/llama-server-manager/releases/latest"
@@ -133,18 +132,18 @@ class Main:
                 response = requests.get(url, headers=headers, timeout=30)
                 response.raise_for_status()
                 releases = response.json()
-
+                
                 # Show previous releases menu
                 prev_releases = [
                     {"label": rel["tag_name"], "description": f"{rel['name']} ({rel['published_at']})"}
                     for rel in releases
                 ]
-
-                prev_choice = self.ui.render_menu(prev_releases)
+                
+                prev_choice = ui.render_menu(prev_releases)
                 if prev_choice == -1:
-                    self.ui.render_error("Update cancelled.")
+                    ui.render_error("Update cancelled.")
                     sys.exit(0)
-
+                
                 selected_release = releases[prev_choice]
                 selected_tag = selected_release["tag_name"]
                 selected_name = selected_release["name"]
@@ -155,21 +154,20 @@ class Main:
                 selected_tag = "HEAD"
                 selected_name = "main branch HEAD"
                 selected_release = "HEAD"
-
+            
             # Confirmation prompt
-            confirm = self.ui.render_confirmation(
-                self.ui,
+            confirm = ui.render_confirmation(
                 f"Update {selected_tag if selected_tag != 'HEAD' else selected_name}",
                 selected_name
             )
-
+            
             if not confirm:
-                self.ui.render_error("Update cancelled.")
+                ui.render_error("Update cancelled.")
                 sys.exit(0)
-
+            
             # Download and extract directly to project root
             project_root = Path.cwd()
-
+            
             # Download the zip file
             headers = {
                 "Accept": "application/vnd.github+json",
@@ -178,77 +176,92 @@ class Main:
             zip_response = requests.get(selected_zip_url, headers=headers, timeout=60)
             zip_response.raise_for_status()
             zip_content = zip_response.content
-
+            
             # Write zip content to a temporary file and extract
             with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as zip_file:
                 zip_file.write(zip_content)
                 zip_file_path = Path(zip_file.name)
-
-        
-            with tempfile.TemporaryDirectory() as extract_temp:
-                # Extract to a subdirectory
-                extract_subdir = Path(extract_temp) / "extract"
-                extract_subdir.mkdir()
-                
-                with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
-                    zip_ref.extractall(extract_subdir)
-                
-                # Find the top-level directory in the extracted files
-                top_level_dir = None
-                for item in extract_subdir.iterdir():
-                    if item.is_dir() and not item.name.startswith(('.', '_')):
-                        top_level_dir = item
-                        break
-                
-                if top_level_dir:
-                    # Move files from top-level directory to project root
-                    for file_path in top_level_dir.rglob("*"):
-                        if file_path.is_file():
-                            rel_path = file_path.relative_to(top_level_dir)
-                            target = project_root / rel_path
-                            target.parent.mkdir(parents=True, exist_ok=True)
-                            target.write_bytes(file_path.read_bytes())
-                            # Clean up the old file
-                            file_path.unlink()
-                            self.ui.print_message(f"Updated: {rel_path}")
+            
+            try:
+                # Extract to a temp directory
+                with tempfile.TemporaryDirectory() as extract_temp:
+                    # Extract to a subdirectory
+                    extract_subdir = Path(extract_temp) / "extract"
+                    extract_subdir.mkdir()
                     
-                    # Remove the top-level directory from extract_subdir
-                    shutil.rmtree(top_level_dir)
-                    self.ui.print_message(f"Removed: {top_level_dir.name}")
+                    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                        zip_ref.extractall(extract_subdir)
                     
-                    self.ui.render_success("Self-update complete!")
-        except Exception as e:
-            self.ui.render_error(f"Self-update failed: {e}")
-            sys.exit(2)
-        finally:
-            # Clean up temporary zip file
-            if zip_file_path.exists():
-                zip_file_path.unlink()
+                    # Find the top-level directory in the extracted files
+                    top_level_dir = None
+                    for item in extract_subdir.iterdir():
+                        if item.is_dir() and not item.name.startswith(('.', '_')):
+                            top_level_dir = item
+                            break
+                    
+                    if top_level_dir:
+                        # Move files from top-level directory to project root
+                        for file_path in top_level_dir.rglob("*"):
+                            if file_path.is_file():
+                                rel_path = file_path.relative_to(top_level_dir)
+                                target = project_root / rel_path
+                                target.parent.mkdir(parents=True, exist_ok=True)
+                                target.write_bytes(file_path.read_bytes())
+                                # Clean up the old file
+                                file_path.unlink()
+                                ui.print_message(f"Updated: {rel_path}")
+                        
+                        # Remove the top-level directory from extract_subdir
+                        shutil.rmtree(top_level_dir)
+                        ui.print_message(f"Removed: {top_level_dir.name}")
+                
+                ui.render_success("Self-update complete!")
+            finally:
+                # Clean up temporary zip file
+                if zip_file_path.exists():
+                    zip_file_path.unlink()
             
             # Restart with same arguments
-            self.ui.print_message(f"Restarting with original arguments: {args}")
+            ui.print_message(f"Restarting with original arguments: {args}")
             
             # Re-parse args to preserve llama_args
             new_args = [sys.argv[0]]
-            for arg in sys.argv[1:]:
-                if arg != "--self-update":
-                    new_args.append(arg)
+            for key, value in vars(args).items():
+                new_args.append(f"--{key}" if not key.startswith("llama_") else f"{key}={value}" if value else f"--{key}")
+            
+            # Clear any cached modules to force reimport
+            modules_to_clear = [
+                'main', 'runner', 'llama_updater', 'logging'
+            ]
+            for module in modules_to_clear:
+                if module in sys.modules:
+                    del sys.modules[module]
+            
+            # Execute restart using subprocess
+            import subprocess
             
             # Execute and replace current process
-            os.execvp(sys.executable, new_args)
+            subprocess.run([sys.executable] + new_args, 
+                         stdout=subprocess.PIPE, 
+                         stderr=subprocess.PIPE, 
+                         text=True)
+            
+            # If we get here, something went wrong, exit with error
+            ui.render_error("Restart failed, exiting.")
+            sys.exit(2)
+            
+        except Exception as e:
+            ui.render_error(f"Self-update failed: {e}")
+            sys.exit(2)
 
     def run(self) -> None:
         """Main execution flow."""
-        if platform.system() == 'Windows':
-            print("Warning: Running on native Windows. Not all functionality may work as intended.\nFor full support, please run inside Windows Subsystem for Linux (WSL).", file=sys.stderr, end='')
-            
         # Parse arguments
         self.args = self.parse_args()
-
-
+        
         # Load config (auto-generate if missing)
         self.config = self.load_config()
-
+        
         # Set up logging
         logging_config = self.config.get("logging", {})
         if logging_config.get("enabled", True):
@@ -256,15 +269,14 @@ class Main:
         else:
             self.logger = None
 
-
         # Handle special operations
         if self.args.self_update:
-            self.ui.print_message("\n[Self-Update Mode]\n")
+            print("\n[Self-Update Mode]\n")
             self.perform_self_update(self.args)
             return
-
+        
         if self.args.install_llama:
-            self.ui.print_message("\n[Install llama.cpp]\n")
+            print("\n[Install llama.cpp]\n")
             try:
                 LlamaUpdater().install()
             except SystemExit:
@@ -272,18 +284,18 @@ class Main:
             except Exception as e:
                 # Re-raise if it's a known updater error
                 from llama_updater import (RateLimitError, GitHubAPIError, 
-                                            DownloadError, ExtractionError, 
-                                            PlatformNotFoundError, LlamaUpdaterError)
+                                          DownloadError, ExtractionError, 
+                                          PlatformNotFoundError, LlamaUpdaterError)
                 if isinstance(e, (RateLimitError, GitHubAPIError, 
-                                   DownloadError, ExtractionError, 
-                                   PlatformNotFoundError, LlamaUpdaterError)):
+                                 DownloadError, ExtractionError, 
+                                 PlatformNotFoundError, LlamaUpdaterError)):
                     raise
                 print(f"Error: {e}")
                 sys.exit(1)
             return
-
+        
         if self.args.update_llama:
-            self.ui.print_message("\n[Update llama.cpp]\n")
+            print("\n[Update llama.cpp]\n")
             try:
                 LlamaUpdater().update()
             except SystemExit:
@@ -291,33 +303,34 @@ class Main:
             except Exception as e:
                 # Re-raise if it's a known updater error
                 from llama_updater import (RateLimitError, GitHubAPIError, 
-                                            DownloadError, ExtractionError, 
-                                            PlatformNotFoundError, LlamaUpdaterError)
+                                          DownloadError, ExtractionError, 
+                                          PlatformNotFoundError, LlamaUpdaterError)
                 if isinstance(e, (RateLimitError, GitHubAPIError, 
-                                   DownloadError, ExtractionError, 
-                                   PlatformNotFoundError, LlamaUpdaterError)):
+                                 DownloadError, ExtractionError, 
+                                 PlatformNotFoundError, LlamaUpdaterError)):
                     raise
                 print(f"Error: {e}")
                 sys.exit(1)
             return
-
+        
         if self.args.stop_server:
-            self.ui.print_message("\n[Stop Server Mode]\n")
+            print("\n[Stop Server Mode]\n")
             exit_code = stop_server()
             sys.exit(exit_code)
-
+        
         # Default: Run llama-server
-        self.ui.print_message("\n[Run llama-server]\n")
-
+        print("\n[Run llama-server]\n")
+        
         # Check if llama-cpp is installed
         llama_cpp_path = Path.cwd() / "llama-cpp" / "llama-server"
         if not llama_cpp_path.exists():
-            self.ui.print_message("Error: llama-cpp is not installed. Please run with --install-llama first.")
-            self.ui.print_message("\nUsage: ./llama-server-manager --install-llama")
+            print("Error: llama-cpp is not installed. Please run with --install-llama first.")
+            print("\nUsage: ./llama-server-manager --install-llama")
             sys.exit(1)
-
+        
         runner = Runner(self.args, self.config)
         runner.run()
+
 
 if __name__ == "__main__":
     app = Main()

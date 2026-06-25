@@ -1,10 +1,3 @@
----
-test_command: "python3 -m pytest Tests/ -v"
-test_directories:
-  - "./Tests/"
-mock_verification_script: "Tests/check_mocking_pattern.py"
----
-
 # UIManager Testing Strategy
 
 ## Overview
@@ -35,10 +28,10 @@ The suite consists of exactly these five files plus `conftest.py` (shared fixtur
 | File | Runner | Tests | Coverage area |
 |---|---|---|---|
 | `test_ui_manager_api.py` | unittest / standalone | 5 | Class structure, method signatures, color pair setup |
-| `test_ui_manager_comprehensive.py` | standalone (`run_tests()`) | 9 suites | Init/lifecycle, menu navigation, confirmation, progress bar, styling, edge cases |
-| `test_ui_manager_pytest.py` | pytest | 40 | Init fallback, arrow nav, number selection, cancel keys, confirmation inputs, progress bar, full workflow, page jump, wrapping, `highlighted=None` |
-| `test_timeout_pytest.py` | pytest | 14 | Timeout returns -1, timeout after navigation, multiple timeouts, timeout with various highlighted states, cancel after timeout, default option, empty options, `default=False` timeout, `_screen=None` fallback |
-| `test_ui_manager_terminal_sizes.py` | standalone (`run_tests()`) | 16 | 40×20 / 80×24 / 120×30 terminals, menu width calculation, progress bar adaptation, spinner/determinate bars |
+| `test_ui_manager_comprehensive.py` | standalone (`run_tests()`) | 8 | Init/lifecycle, menu navigation, confirmation, progress bar, styling, edge cases |
+| `test_ui_manager_pytest.py` | pytest | 32 | Init fallback, arrow nav, number selection, cancel keys, confirmation inputs, progress bar, full workflow, page jump, wrapping, highlighted=None |
+| `test_timeout_pytest.py` | pytest | 10 | Timeout returns -1, timeout after navigation, multiple timeouts, timeout with various highlighted states, cancel after timeout, default option, empty options, default=False timeout, _screen=None fallback |
+| `test_ui_manager_terminal_sizes.py` | standalone (`run_tests()`) | 9 | 40×20 / 80×24 / 120×30 terminals, menu width calculation, progress bar adaptation, spinner/determinate bars |
 
 **Do not add new test files.** New tests belong in the existing file that matches their coverage area (see Maintenance Rules).
 
@@ -296,10 +289,10 @@ Before committing a test that calls `render_menu` or `render_confirmation`:
 | File | Current | Target |
 |---|---|---|
 | `test_ui_manager_api.py` | 5 | 5 |
-| `test_ui_manager_comprehensive.py` | 9 suites | 9 suites |
-| `test_ui_manager_pytest.py` | 40 | 40 |
-| `test_timeout_pytest.py` | 14 | 14–17 |
-| `test_ui_manager_terminal_sizes.py` | 16 | 16 |
+| `test_ui_manager_comprehensive.py` | 6 suites | 6 suites |
+| `test_ui_manager_pytest.py` | 9 | 30 |
+| `test_timeout_pytest.py` | 7 | 7–10 |
+| `test_ui_manager_terminal_sizes.py` | 6 | 6 |
 
 ---
 

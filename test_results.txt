@@ -1,0 +1,10 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0
+rootdir: /home/zero/Code/llama-server-manager
+collected 112 items
+
+Tests/test_checksum_verification.py ..                                   [  1%]
+Tests/test_confirmation_fallback.py ............                         [ 12%]
+Tests/test_graceful_shutdown.py ...                                      [ 15%]
+Tests/test_install_workflow.py F                                         [ 16%]
+Tests/test_self_update_workflow.py 

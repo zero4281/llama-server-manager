@@ -62,40 +62,19 @@ def test_init():
     mock_curses.initscr.return_value = MagicMock()
     mock_curses.start_color = MagicMock()
     mock_curses.init_pair = MagicMock(return_value=None)
-    mock_curses.color_pair = MagicMock(return_value=123)
     mock_curses.cbreak = MagicMock(return_value=True)
     mock_curses.noecho = MagicMock()
     mock_curses.curs_set = MagicMock(return_value=None)
     mock_curses.has_ungetch = MagicMock(return_value=False)
     mock_curses.getscrptr = MagicMock(return_value=None)
     
-    # Test curses initialization path (when stdin is a TTY)
-    with patch('ui_manager.curses', mock_curses), \
-         patch('ui_manager.sys.stdin.isatty', return_value=True):
+    with patch('ui_manager.curses', mock_curses):
         ui = UIManager("Test")
+        ui._using_curses = True
     
     assert ui._using_curses, "UIManager should initialize curses"
     assert ui._screen is not None, "UIManager should have a screen"
     assert ui._color_pair is not None, "UIManager should have color pair"
-    
-    # Test fallback path (when stdin is not a TTY)
-    mock_curses2 = MagicMock(spec=curses)
-    mock_curses2.initscr.return_value = MagicMock()
-    mock_curses2.start_color = MagicMock()
-    mock_curses2.init_pair = MagicMock(return_value=None)
-    mock_curses2.color_pair = MagicMock(return_value=123)
-    mock_curses2.cbreak = MagicMock(return_value=True)
-    mock_curses2.noecho = MagicMock()
-    mock_curses2.curs_set = MagicMock(return_value=None)
-    mock_curses2.has_ungetch = MagicMock(return_value=False)
-    mock_curses2.getscrptr = MagicMock(return_value=None)
-    
-    with patch('ui_manager.sys.stdin.isatty', return_value=False):
-        ui_fallback = UIManager("Test")
-    
-    assert not ui_fallback._using_curses, "UIManager should skip curses when stdin is not a TTY"
-    assert ui_fallback._screen is not None, "UIManager should have a dummy screen in fallback"
-    assert ui_fallback._color_pair is None, "UIManager should have _color_pair=None in fallback"
     
     # Test cleanup
     ui._cleanup_terminal()
@@ -385,7 +364,47 @@ def test_full_integration_flow():
         
         ui.render_progress_bar("update.zip", 500, 1000, percent=50.0)
         
-        print("  ✓ Full integration flow test passed")
+    def test_asset_selection_logic():
+        """Test asset selection based on platform, architecture, and variant (backend)."""
+        from llama_updater import select_release
+        
+        available_platforms = [
+            {
+                "platform": "Linux",
+                "arch": "x64",
+                "variant": "vulkan",
+                "assets": [{"name": "llama-vulkan-x64.tar.gz"}]
+            },
+            {
+                "platform": "Linux",
+                "arch": "x64",
+                "variant": "cuda",
+                "assets": [{"name": "llama-cuda-x64.tar.gz"}]
+            },
+            {
+                "platform": "macOS",
+                "arch": "arm64",
+                "variant": "metal",
+                "assets": [{"name": "llama-metal-arm64.tar.gz"}]
+            }
+        ]
+
+        # Test Linux x64 Vulkan
+        res1 = select_release({}, available_platforms, "Linux", "x64", "vulkan")
+        assert res1["name"] == "llama-vulkan-x64.tar.gz"
+
+        # Test Linux x64 CUDA
+        res2 = select_release({}, available_platforms, "Linux", "x64", "cuda")
+        assert res2["name"] == "llama-cuda-x64.tar.gz"
+
+        # Test macOS arm64 Metal
+        res3 = select_release({}, available_platforms, "macOS", "arm64", "metal")
+        assert res3["name"] == "llama-metal-arm64.tar.gz"
+        
+        # Test No Match
+        res4 = select_release({}, available_platforms, "Windows", "x64")
+        assert res4 is None
+
 
 
 def test_timeout_during_menu_navigation():

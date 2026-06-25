@@ -71,8 +71,43 @@ import os
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from wrapper_config import ConfigLogger, load_config
-logger = ConfigLogger(load_config())# Logging configuration
+logger = logging.getLogger(__name__)
+
+# Logging configuration
+UI_MANAGER_DEBUG = os.environ.get("UI_MANAGER_DEBUG", "0").lower() in ("1", "true")
+UI_MANAGER_LOG_LEVEL = logging.DEBUG if UI_MANAGER_DEBUG else logging.INFO
+
+
+def _configure_logging():
+    """Configure logging for UIManager."""
+    if not logger.handlers:
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%H:%M:%S'
+        )
+        handler = logging.StreamHandler()
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(UI_MANAGER_LOG_LEVEL)
+
+
+# Configure logging at module load time
+_configure_logging()
+
+
+def enable_debug_mode():
+    """Enable debug logging for UIManager."""
+    global UI_MANAGER_DEBUG, UI_MANAGER_LOG_LEVEL
+    UI_MANAGER_DEBUG = True
+    UI_MANAGER_LOG_LEVEL = logging.DEBUG
+    logger.setLevel(logging.DEBUG)
+    # Re-add handler with debug level
+    if logger.handlers:
+        handler = logger.handlers[0]
+        handler.setLevel(logging.DEBUG)
+    else:
+        _configure_logging()
+
 
 class UIManagerError(Exception):
     """Base exception for UIManager errors."""
@@ -109,42 +144,20 @@ class UIManager:
         self._screen = None
         self._title = title or "Llama Server Wrapper"
         self._color_pair = None
-        self._color_pair_2 = None
         self._using_curses = False
         self._initialized = False
         self._progress_bar_win = None  # Store progress bar window reference
         
         try:
-            if not sys.stdin.isatty() and os.environ.get("TEST_MODE") != "1":
-                self._using_curses = False
-                # Ensure self._screen is not None for tests
-                self._screen = type('DummyScreen', (), {
-                    'refresh': lambda self: None,
-                    'erase': lambda self: None,
-                    'addstr': lambda self, y, x, s: None,
-                    'attron': lambda self, a: None,
-                    'attroff': lambda self, a: None,
-                    'box': lambda self: None,
-                    'getch': lambda self: None,
-                    'timeout': lambda self, t: None,
-                    'cbreak': lambda self: None,
-                    'noecho': lambda self: None,
-                    'curs_set': lambda self, v: None,
-                    'getmaxyx': lambda self: (24, 80),
-                    'keypad': lambda self, b: None
-                })()
-                return
-                
             # Initialize curses
             self._screen = curses.initscr()
             
             # Use alternate screen buffer for full-screen UI
             curses.start_color()
             curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
-            self._color_pair = curses.color_pair(1)
+            self._color_pair = curses.color_pair(1) | curses.A_BOLD
             
-            curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)
-            self._color_pair_2 = curses.color_pair(2)
+            curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)  # Reverse video
             
             # Set terminal mode for interactive curses
             try:
@@ -207,7 +220,7 @@ class UIManager:
                 curses.echo()
                 curses.nocbreak()
                 curses.keypad(False)
-            except (curses.error, AttributeError, OSError) as e:
+            except (AttributeError, OSError) as e:
                 logger.warning(f"Failed to reset terminal modes: {e}")
             
             # Reset terminal mode
@@ -215,24 +228,24 @@ class UIManager:
                 curses.echo()
                 curses.nocbreak()
                 curses.keypad(False)
-            except (curses.error, AttributeError, OSError) as e:
+            except (AttributeError, OSError) as e:
                 logger.warning(f"Failed to reset terminal modes: {e}")
             
             try:
                 curses.curs_set(1)  # Show cursor
-            except (curses.error, AttributeError, OSError) as e:
+            except (AttributeError, OSError) as e:
                 logger.warning(f"Failed to set cursor: {e}")
             
             # Reset colors
             try:
                 if hasattr(curses, 'reset_pair_matrix'):
                     curses.reset_pair_matrix()
-            except (curses.error, AttributeError, OSError) as e:
+            except (AttributeError, OSError) as e:
                 logger.warning(f"Failed to reset color pairs: {e}")
             
             try:
                 curses.endwin()
-            except (curses.error, AttributeError, OSError) as e:
+            except (AttributeError, OSError) as e:
                 logger.warning(f"Failed to endwin: {e}")
         except (curses.error, OSError, EOFError, TypeError) as e:
             logger.error(f"Error restoring terminal state: {e}")
@@ -513,10 +526,11 @@ class UIManager:
             return -1
         
         # Check for non-interactive mode or curses failure at the start
-        if not self._screen:
-            logger.warning(f"render_menu: curses not initialized, falling back to console with timeout={timeout}")
-            
-            # Ensure terminal is ready before rendering
+        if (not sys.stdin.isatty() and not self._using_curses) or not self._screen:
+            logger.warning(f"render_menu: stdin is not a TTY and curses not initialized, returning -1 with timeout={timeout}")
+            return -1 if timeout is None else 0
+        
+        # Ensure terminal is ready before rendering
         if self._using_curses and self._screen:
             if not self._ensure_terminal_ready():
                 logger.warning("Terminal not ready, falling back to console")
@@ -538,7 +552,7 @@ class UIManager:
                 marker = " (default)" if default is not None and i == default else ""
                 label = opt.get('label', '')
                 desc = opt.get('description', '')
-                full_label = f"  {i + 1}. {label}{marker}"
+                full_label = f"  {i}. {label}{marker}"
                 print(full_label)
                 if desc:
                     print(f"     {desc}")
@@ -553,7 +567,7 @@ class UIManager:
                     try:
                         data = os.read(0, 1)
                         if data:
-                            choice_str = sys.stdin.readline().strip()
+                            choice_str = data.decode('utf-8').strip()
                     except (OSError, EOFError):
                         try:
                             data = sys.stdin.read(1)
@@ -567,46 +581,35 @@ class UIManager:
                 choice_str = ""
             
             try:
-                idx = int(choice_str) - 1
-                if 0 <= idx < len(options):
-                    return idx
-                return -1
+                idx = int(choice_str)
+                return idx if 0 <= idx < len(options) else -1
             except ValueError:
-                     if choice_str == "" and default is not None:
-                         return default
-                     elif choice_str == "" and default is None and len(options) > 0:
-                         return 0
-                     return -1
-        else:
-            # Curses path - curses is available
-            self._screen.erase()
-            self._screen.refresh()  # Force full screen refresh to clear old content
-            screen_height, screen_width = self._screen.getmaxyx()
-            menu_height = len(options) + 4
-            
-            # Calculate menu width: max label length + padding, but ensure minimum percentage and fit on screen
-            max_label_len = max(len(opt.get('label', '')) for opt in options) if options else 20
-            min_width = int(screen_width * self.MIN_WIDTH_PERCENT)
-            menu_width = max(min_width, min(max_label_len + 15, screen_width - 8)) + 2
-            
-            y_offset = 2
-            x_offset = 4
-            highlighted_idx = highlighted if highlighted is not None else 0
-            
-            # Calculate centered position
-            y_center = max(2, (screen_height - menu_height) // 2)
-            x_center = max(2, (screen_width - menu_width) // 2)
-            
-            # Define redraw function
-            def redraw(win, hi_idx):
-                # Hide cursor globally (this affects the terminal)
-                if self._using_curses and self._screen:
-                    try:
-                        # Check if curses is initialized before calling functions
-                        if not curses.isendwin():
-                            curses.curs_set(0)
-                    except (curses.error, AttributeError):
-                        pass  # Ignore errors in mocked environments
+                return -1
+
+        # Create menu window
+        self._screen.erase()
+        self._screen.refresh()  # Force full screen refresh to clear old content
+        screen_height, screen_width = self._screen.getmaxyx()
+        menu_height = len(options) + 4
+        
+        # Calculate menu width: max label length + padding, but ensure minimum percentage and fit on screen
+        max_label_len = max(len(opt.get('label', '')) for opt in options) if options else 20
+        min_width = int(screen_width * self.MIN_WIDTH_PERCENT)
+        menu_width = max(min_width, min(max_label_len + 15, screen_width - 8)) + 2
+        
+        y_offset = 2
+        x_offset = 4
+        highlighted_idx = highlighted if highlighted is not None else 0
+        
+        # Calculate centered position
+        y_center = max(2, (screen_height - menu_height) // 2)
+        x_center = max(2, (screen_width - menu_width) // 2)
+        
+        # Define redraw function
+        def redraw(win, hi_idx):
+            try:
+                logger.debug(f"Redraw called: win={win}, hi_idx={hi_idx}, options_count={len(options)}")
+                curses.curs_set(0) # It's possible that this is needed because the cursor is getting displayed as part of a captured error.
                 
                 # Validate window before operations
                 if not self._validate_window(win):
@@ -621,62 +624,60 @@ class UIManager:
                 win.erase()
                 
                 # Redraw the border with box() to ensure it's properly drawn
-                try:
-                    win.box()
-                except (curses.error, AttributeError):
-                    pass  # Ignore box errors in mocked environments
+                win.box()
                 
                 box_width = menu_width - (x_offset * 2)
                 
                 white_attr = self._get_white_attr()
                 if white_attr is not None:
-                    try:
-                        win.attron(white_attr)
-                        win.addstr(0, x_offset, f"{self._title}".center(box_width))
-                        win.attroff(white_attr)
-                        win.addstr(1, 1, "-" * (menu_width - 2))
-                    except (curses.error, AttributeError):
-                        pass  # Ignore errors in mocked environments
+                    win.attron(white_attr)
+                    win.addstr(0, x_offset, f"{self._title}".center(box_width))
+                    win.attroff(white_attr)
+                    win.addstr(1, 1, "-" * (menu_width - 2))
                 for i, opt in enumerate(options):
                     label = opt.get('label', '')
                     desc = opt.get('description', '')
                     marker = " (default)" if default is not None and i == default else ""
-                    full_label = f"  {i + 1}. {label}{marker}"
+                    full_label = f"  {i}. {label}{marker}"
                     if i == hi_idx:
-                        if self._color_pair is not None:
-                            try:
-                                win.attron(self._color_pair | curses.A_BOLD | curses.A_REVERSE)
-                                win.addstr(i + 2, x_offset, full_label)
-                                if desc:
-                                    win.addstr(i + 3, x_offset, desc)
-                                win.attroff(self._color_pair | curses.A_BOLD | curses.A_REVERSE)
-                            except (curses.error, AttributeError):
-                                pass  # Ignore errors in mocked environments
-                        else:
-                            try:
-                                win.addstr(i + 2, x_offset, full_label)
-                                if desc:
-                                    win.addstr(i + 3, x_offset, desc)
-                            except (curses.error, AttributeError):
-                                pass  # Ignore errors in mocked environments
+                        win.attron(self._color_pair | curses.A_BOLD | curses.A_REVERSE)
+                        win.addstr(i + 2, x_offset, full_label)
+                        if desc:
+                            win.addstr(i + 3, x_offset, desc)
+                        win.attroff(self._color_pair | curses.A_BOLD | curses.A_REVERSE)
                     else:
-                        if self._color_pair is not None:
-                            try:
-                                win.attron(self._color_pair)
-                                win.addstr(i + 2, x_offset, full_label)
-                                if desc:
-                                    win.addstr(i + 3, x_offset, desc)
-                                win.attroff(self._color_pair)
-                            except (curses.error, AttributeError):
-                                pass  # Ignore errors in mocked environments
-                        else:
-                            try:
-                                win.addstr(i + 2, x_offset, full_label)
-                                if desc:
-                                    win.addstr(i + 3, x_offset, desc)
-                            except (curses.error, AttributeError):
-                                pass  # Ignore errors in mocked environments
+                        win.attron(self._color_pair)
+                        win.addstr(i + 2, x_offset, full_label)
+                        if desc:
+                            win.addstr(i + 3, x_offset, desc)
+                        win.attroff(self._color_pair)
+                footer = "Use arrow keys to navigate, type number to select, Enter to confirm, q to cancel"
+                truncated_footer = footer[:box_width] if len(footer) > box_width else footer
+                centered_footer = truncated_footer.center(box_width)
+                win.addstr(menu_height - 1, x_offset, centered_footer, curses.A_REVERSE)
+                
+                win.refresh()
+                logger.debug(f"Redraw completed successfully")
+            except curses.error as e:
+                logger.error(f"curses.error during redraw: {e}")
+                try:
+                    # Try to recover
+                    if hasattr(win, 'refresh'):
+                        try:
+                            win.refresh()
+                        except:
+                            pass
+                    self._screen.refresh()
+                except:
+                    pass
+                # Continue with redraw - don't raise
+                return
+            except (curses.error, OSError, EOFError, TypeError) as e:
+                logger.error(f"Unexpected error during redraw: {e}")
+                # Don't raise - continue with current state
+                return
 
+        try:
             logger.debug(f"Creating menu window: size={menu_height}x{menu_width}, pos=({y_center},{x_center})")
             menu_win = self.create_window(menu_height, menu_width, y_center, x_center)
             logger.debug(f"Window created: {menu_win}")
@@ -707,19 +708,28 @@ class UIManager:
                     return -1
             
             logger.debug(f"Redrawing menu with highlighted index: {highlighted_idx}")
-            try:
-                redraw(menu_win, highlighted_idx)
-            except (curses.error, OSError, EOFError, TypeError) as e:
-                logger.error(f"Unexpected error during redraw: {e}")
-                # Don't raise - continue with current state
-                return
+            redraw(menu_win, highlighted_idx)
             logger.debug(f"Menu redraw completed")
             
             # Log menu state for debugging
             logger.debug(f"Menu initialized: options_count={len(options)}, default={default}, highlighted={highlighted_idx}")
+        except (curses.error, AttributeError, OSError) as e:
+            logger.error(f"Menu window creation error: {e}")
+            try:
+                self._cleanup_terminal()
+            except:
+                pass
+            return -1
+        except (curses.error, OSError, EOFError, TypeError) as e:
+            logger.error(f"Unexpected error during menu rendering: {e}")
+            try:
+                self._cleanup_terminal()
+            except:
+                pass
+            return -1
         
         # Validate curses and terminal before input loop
-        if menu_win is not None and not self._validate_window(menu_win):
+        if not self._validate_window(menu_win):
             logger.warning("Menu window validation failed before input loop, returning -1")
             try:
                 self._cleanup_terminal()
@@ -779,10 +789,6 @@ class UIManager:
                             pass
                         return -1
                 
-                if key is None:
-                    logger.debug("Menu timeout occurred, returning -1")
-                    return -1
-                
                 # Log the raw key value with additional details for debugging
                 if key is not None:
                     if isinstance(key, int):
@@ -823,7 +829,7 @@ class UIManager:
                         elif key >= ord('0') and key <= ord('9'):
                             key_type = "NUMERIC"
                             key_name = f"DIGIT({chr(key)})"
-                            selection = int(chr(key)) - 1
+                            selection = int(chr(key))
                             if 0 <= selection < len(options):
                                 old_highlighted = highlighted_idx
                                 highlighted_idx = selection
@@ -852,7 +858,7 @@ class UIManager:
                     logger.debug(f"Input loop iteration: key=None (EOF/timeout)")
                 
 
-
+                
                 # Handle navigation and control keys
                 if key == curses.KEY_UP:
                     # Move up one option
@@ -958,12 +964,48 @@ class UIManager:
                 curses.napms(10) if hasattr(curses, 'napms') else None
                 
         except (curses.error, OSError, EOFError, TypeError) as e:
-            error_msg = str(e).lower()
-            # If it's a mocked curses error, try to continue without falling back
-            if "must call initscr" not in error_msg:
-                logger.error(f"Menu input loop error: {e}")
-                # Clear screen and fall back to console
-                logger.warning(f"Falling back to console mode due to error: {e}")
+            logger.error(f"Menu input loop error: {e}")
+            # Clear screen and fall back to console
+            logger.warning(f"Falling back to console mode due to error: {e}")
+            try:
+                self._cleanup_terminal()
+            except:
+                pass
+            for i, opt in enumerate(options):
+                marker = " (default)" if default is not None and i == default else ""
+                print(f"  {i}. {opt}{marker}")
+            try:
+                # Use non-blocking read for fallback
+                import os
+                choice_str = ""
+                try:
+                    data = os.read(0, 1)
+                    if data:
+                        choice_str = data.decode('utf-8').strip()
+                except (OSError, EOFError):
+                    try:
+                        data = sys.stdin.read(1)
+                        if data:
+                            choice_str = data.strip()
+                    except (OSError, EOFError):
+                        pass
+                idx = int(choice_str)
+                return idx if 0 <= idx < len(options) else -1
+            except Exception as input_error:
+                logger.error(f"Console fallback error: {input_error}")
+                return -1
+            try:
+                self._cleanup_terminal()
+            except:
+                pass
+            return -1
+        except (curses.error, OSError, EOFError, TypeError) as e:
+            logger.error(f"Unexpected error during menu rendering: {e}")
+            try:
+                self._cleanup_terminal()
+            except:
+                pass
+            return -1
 
     def _render_console_fallback(self, message: str, prompt: str = "", prompt_suffix: str = "") -> Optional[str]:
         """
@@ -1003,10 +1045,14 @@ class UIManager:
                 response = ""
             
             return response
-        except Exception as e:
-            logger.error(f"Error in _render_console_fallback: {e}")
-            return ""
-
+        except Exception:
+            print(f"{message}")
+            if prompt:
+                response = input(prompt).strip().lower()
+            else:
+                response = input().strip().lower()
+            return response
+    
     def _render_confirmation_fallback(self, message: str, default: bool = True) -> bool:
         """
         Fallback for confirmation prompts.
@@ -1118,16 +1164,16 @@ class UIManager:
                     # Render Yes button
                     yes_x = button_start_x
                     if hi_idx == 0:
-                        prompt_win.attron(self._color_pair if self._color_pair is not None else (curses.A_BOLD | curses.A_REVERSE))
+                        prompt_win.attron(self._color_pair | curses.A_BOLD | curses.A_REVERSE)
                     prompt_win.addstr(5, yes_x, f"[ Yes ]")
-                    prompt_win.attroff(self._color_pair if self._color_pair is not None else (curses.A_BOLD | curses.A_REVERSE))
+                    prompt_win.attroff(self._color_pair | curses.A_BOLD | curses.A_REVERSE)
                     
                     # Render No button
                     no_x = yes_x + button_width + button_spacing
                     if hi_idx == 1:
                         prompt_win.attron(self._color_pair | curses.A_BOLD | curses.A_REVERSE)
                     prompt_win.addstr(5, no_x, f"[ No  ]")
-                    prompt_win.attroff(self._color_pair if self._color_pair is not None else (curses.A_BOLD | curses.A_REVERSE))
+                    prompt_win.attroff(self._color_pair | curses.A_BOLD | curses.A_REVERSE)
                     
                     # Footer - row 7, centered with padding
                     footer = "Use arrow keys to navigate, Enter to confirm, q/ESC to cancel"
@@ -1148,8 +1194,9 @@ class UIManager:
                 # Check for timeout
                 elapsed = time.time() - start_time
                 if timeout is not None and elapsed >= timeout:
-                    logger.debug(f"Confirmation: timeout after {elapsed:.2f}s, assuming default {default}")
+                    logger.debug(f"Confirmation: timeout after {elapsed:.2f}s, assuming default yes")
                     return True
+                
                 try:
                     key = prompt_win.getch()
                 except (curses.error, OSError, EOFError) as e:
@@ -1357,10 +1404,10 @@ class UIManager:
                         bar_win.addstr(1, 1, "-" * (win_width - 2))
                     
                     # Progress information - row 2
-                    if spinner or total == 0:
+                    if spinner:
                         # Indeterminate progress with spinner
-                        spinner_chars = ["|", "/", "-", "\\"]
-                        spinner_idx = int(time.time() * 10) % 4
+                        spinner_chars = ["◐", "◓", "◑", "◒"]
+                        spinner_idx = int(time.time() * 3) % 4
                         status = f"Downloading {Path(filename).name}... ({spinner_chars[spinner_idx]})"
                         # Only truncate if win_width is valid
                         if win_width is not None and win_width > 4 and len(status) > win_width - 4:
@@ -1688,11 +1735,11 @@ class UIManager:
             
             if i == default:
                 self._screen.attron(curses.A_REVERSE | curses.A_BOLD)
-                self._screen.addstr(y + i + 1, x, f"  {i + 1}. {opt}{marker}")
+                self._screen.addstr(y + i + 1, x, f"  {i}. {opt}{marker}")
                 self._screen.attroff(curses.A_REVERSE | curses.A_BOLD)
             else:
                 self._screen.attron(self._color_pair)
-                self._screen.addstr(y + i + 1, x, f"  {i + 1}. {opt}{marker}")
+                self._screen.addstr(y + i + 1, x, f"  {i}. {opt}{marker}")
                 self._screen.attroff(self._color_pair)
 
         self._screen.refresh()

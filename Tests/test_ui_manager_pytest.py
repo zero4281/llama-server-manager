@@ -44,22 +44,7 @@ class TestUIManagerPytest:
         with patch('curses.initscr', side_effect=curses.error("Failed")):
             ui = UIManager("Test")
             assert not ui._using_curses
-            # In fallback mode, _screen is a DummyScreen, not None (for test compatibility)
-            assert ui._screen is not None
-
-    def test_init_fallback_non_tty_stdin(self):
-        """Test that UI falls back gracefully when stdin is not a TTY."""
-        with patch('sys.stdin.isatty', return_value=False):
-            ui = UIManager("Test")
-            assert not ui._using_curses
-            # _screen should be a DummyScreen object (not None)
-            assert ui._screen is not None
-            # Verify DummyScreen has expected methods
-            assert hasattr(ui._screen, 'refresh')
-            assert hasattr(ui._screen, 'erase')
-            assert hasattr(ui._screen, 'addstr')
-            # _color_pair should be None in fallback mode
-            assert ui._color_pair is None
+            assert ui._screen is None
     
     def test_menu_navigation_arrows(self):
         """Test arrow key navigation in menu."""
@@ -90,32 +75,30 @@ class TestUIManagerPytest:
                 result = ui.render_menu(options, default=0, highlighted=0)
                 assert result == 0
     
-    def test_menu_typing_selection_fallback(self):
-        """Test that render_menu returns -1 in fallback mode (curses not available).
-        
-        This test verifies the fallback behavior when UIManager skips curses
-        initialization entirely. In this case, render_menu should return -1
-        (cancel) instead of processing typed digits.
-        """
+    def test_menu_typing_selection(self):
+        """Test selecting by typing the number."""
         options = [{'label': 'Option'}]
         
-        # Create UIManager without curses - simulates fallback mode
-        with patch('curses.initscr', side_effect=curses.error("Failed")):
-            ui = UIManager("Test")
-            assert not ui._using_curses
-            # In fallback mode, _screen is a DummyScreen, not None (for test compatibility)
-            assert ui._screen is not None
+        ui = create_ui()
         
-        with patch.object(ui, 'refresh'), \
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+        
+        with patch.object(ui, '_screen') as mock_screen, \
+             patch.object(ui, 'refresh'), \
              patch('builtins.input', return_value='\n'), \
-             patch('sys.stdin.readline', return_value=''), \
-             patch('sys.stdin.isatty', return_value=False):
+             patch('sys.stdin.readline', return_value='\n'), \
+             patch('sys.stdin.isatty', return_value=False), \
+             patch('ui_manager.curses.newwin', return_value=mock_win):
+                 
+            mock_screen.getmaxyx.return_value = (20, 60)
             
-            # Call render_menu in fallback mode with invalid input (empty string)
-            # This should return default (0) per fallback behavior, not -1
-            result = ui.render_menu(options, default=0, highlighted=0)
-            # Note: Current fallback returns default (0) when input is empty, not -1
-            # The test verifies this behavior
+            with patch.object(mock_win, 'getch') as mock_getch:
+                mock_getch.side_effect = [ord('0'), 10]  # Type '0' (ASCII 48) then Enter
+                    
+                # Call render_menu which will use the mocked window
+                result = ui.render_menu(options, default=0, highlighted=0)
+                assert result == 0
     
     def test_menu_cancel_keys(self):
         """Test that cancel keys return -1."""
@@ -141,32 +124,32 @@ class TestUIManagerPytest:
     def test_confirmation_enter_confirms(self):
         """Enter key confirms the action."""
         ui = create_ui()
-            
+        
         with patch.object(ui, '_screen') as mock_screen, \
              patch.object(ui, 'refresh'), \
              patch('ui_manager.curses.newwin', return_value=MagicMock()) as mock_newwin:
-
+            
             mock_win = mock_newwin.return_value
             mock_win.getyx.return_value = (0, 0)
             mock_screen.getmaxyx.return_value = (20, 60)
-
+            
             with patch.object(mock_win, 'getch') as mock_getch:
                 mock_getch.return_value = 10  # Enter
-
-                result = ui.render_confirmation("Are you sure?", "Release 1.0")
+                
+                result = ui.render_confirmation("Are you sure?", release_info="Release 1.0")
                 assert result is True
     
     def test_confirmation_n_cancels(self):
         """n or N cancels the action."""
         ui = create_ui()
-            
+        
         with patch.object(ui, '_screen') as mock_screen, \
              patch.object(ui, 'refresh'), \
              patch('ui_manager.curses.newwin', return_value=MagicMock()) as mock_newwin, \
              patch('sys.stdin.isatty', return_value=True), \
              patch('curses.hasattr', side_effect=lambda mod, attr: True), \
              patch.object(ui, '_validate_window', return_value=True):
-
+            
             mock_win = mock_newwin.return_value
             mock_win.getyx.return_value = (0, 0)
             mock_win.erase.return_value = None
@@ -175,31 +158,31 @@ class TestUIManagerPytest:
             mock_win.attroff.return_value = None
             mock_win.refresh.return_value = None
             mock_screen.getmaxyx.return_value = (20, 60)
-
+            
             with patch.object(mock_win, 'getch') as mock_getch:
                 mock_getch.return_value = ord('n')
-                result = ui.render_confirmation("Are you sure?", "Release 1.0")
+                result = ui.render_confirmation("Are you sure?", release_info="Release 1.0")
                 assert result is False
     
     def test_confirmation_y_confirms(self):
         """y or Y confirms the action."""
         ui = create_ui()
-            
+        
         with patch.object(ui, '_screen') as mock_screen, \
              patch.object(ui, 'refresh'), \
              patch('ui_manager.curses.newwin', return_value=MagicMock()) as mock_newwin, \
              patch('sys.stdin.isatty', return_value=False):
-
+            
             mock_win = mock_newwin.return_value
             mock_win.getyx.return_value = (0, 0)
             mock_screen.getmaxyx.return_value = (20, 60)
-
+            
             with patch.object(mock_win, 'getch') as mock_getch:
                 mock_getch.return_value = ord('y')
                 # Mock window validation to return True
                 mock_win._validate_window = MagicMock(return_value=True)
-
-                result = ui.render_confirmation("Are you sure?", "Release 1.0")
+                
+                result = ui.render_confirmation("Are you sure?", release_info="Release 1.0")
                 assert result is True
 class TestMenuPageJump:
     """Tests for KEY_PPAGE and KEY_NPAGE page jump behavior."""

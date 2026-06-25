@@ -6,8 +6,7 @@ the appropriate platform/architecture, downloading and extracting
 archives, and managing the llama-cpp installation directory.
 """
 
-from wrapper_config import load_config
-
+import hashlib
 import datetime
 import json
 import os
@@ -18,7 +17,7 @@ import sys
 import tarfile
 import tempfile
 import time
-import hashlib
+import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -248,53 +247,42 @@ def parse_asset_name(name: str) -> Dict[str, str]:
     # Old format: platform-arch[-variant] (e.g., llama-server-linux-arm64)
     # New format: llama-{tag}-bin-{platform}-{arch} (e.g., llama-b8763-bin-ubuntu-x64)
     
-    # Convert platform names to standard names
-    platform_map = {
-        "macos": "macOS",
-        "win": "Windows",
-        "ubuntu": "Linux",
-        "openEuler": "Linux",
-        "debian": "Linux",
-        "centos": "Linux",
-        "rocky": "Linux",
-        "alpine": "Linux",
-        "archlinux": "Linux",
-        "fedora": "Linux",
-        "redhat": "Linux",
-        "rhel": "Linux",
-        "amazon": "Linux",
-        "oracle": "Linux",
-        "suse": "Linux",
-        "opensuse": "Linux",
-        "gentoo": "Linux",
-        "manjaro": "Linux",
-        "elementary": "Linux",
-        "pop": "Linux",
-        "zorin": "Linux",
-        "linuxmint": "Linux",
-        "deepin": "Linux",
-        "kali": "Linux",
-        "parrot": "Linux",
-    }
-    
     # Try new format first: llama-{tag}-bin-{platform}-{arch}[-variant]
     # Tag can contain hyphens, so we need a more flexible pattern
+    # Also handle optional variant suffix like -vulkan, -cuda, etc.
     # Platform can contain hyphens (e.g., rocky-linux), arch is always x64 or arm64
-    # Variant is optional.
-    new_pattern = r"^llama-([a-zA-Z0-9_-]+)-bin-([a-zA-Z0-9_-]+)-(x64|arm64)(?:-([a-zA-Z0-9_-]+(?:-[a-zA-Z0-9_-]+)*))?$"
+    new_pattern = r"^llama-[a-zA-Z0-9_-]+-bin-([a-zA-Z0-9-]+)-(x64|arm64)(?:-(\w+))?$"
     match = re.match(new_pattern, base_name)
-    
     if match:
-        tag = match.group(1)
-        platform = match.group(2).lower()
-        arch = match.group(3).lower()
-        variant = match.group(4)
-        if variant:
-            variant = variant.lower()
-            # Extract only the first hyphenated component (e.g., "sycl" from "sycl-fp16")
-            if '-' in variant:
-                variant = variant.split('-')[0]
-        
+        platform = match.group(1).lower()
+        arch = match.group(2).lower()
+        variant = match.group(3)  # Capture variant if present (e.g., vulkan, cuda)
+        # Convert platform names to standard names
+        platform_map = {
+            "ubuntu": "Linux",
+            "openEuler": "Linux",
+            "debian": "Linux",
+            "centos": "Linux",
+            "rocky": "Linux",
+            "alpine": "Linux",
+            "archlinux": "Linux",
+            "fedora": "Linux",
+            "redhat": "Linux",
+            "rhel": "Linux",
+            "amazon": "Linux",
+            "oracle": "Linux",
+            "suse": "Linux",
+            "opensuse": "Linux",
+            "gentoo": "Linux",
+            "manjaro": "Linux",
+            "elementary": "Linux",
+            "pop": "Linux",
+            "zorin": "Linux",
+            "linuxmint": "Linux",
+            "deepin": "Linux",
+            "kali": "Linux",
+            "parrot": "Linux",
+        }
         # Handle compound names like rocky-linux
         if platform in platform_map:
             platform_name = platform_map[platform]
@@ -302,34 +290,16 @@ def parse_asset_name(name: str) -> Dict[str, str]:
             platform_name = platform_map[platform.split('-')[0]]
         else:
             platform_name = platform
-        
         # Capitalize first letter for consistency with test expectations
         platform_name = platform_name.capitalize()
         return {
             "platform": platform_name,
             "arch": arch,
-            "variant": variant
+            "variant": variant if variant else None
         }
-    
-    # No match for new format, try old format: project-platform-arch
-    pattern = r"^(\w+)-(\w+)-(\w+)-(\w+)"
-    match = re.match(pattern, base_name)
-    if match:
-        platform = platform_map.get(match.group(3).lower(), match.group(3))
-        arch = match.group(4).lower()
-        platform = platform.capitalize()
-        return {
-            "platform": platform,
-            "arch": arch,
-            "variant": None
-        }
-    
-    return {"platform": None, "arch": None, "variant": None}
-
     
     # Try old format: project-platform-arch
     # e.g., llama-server-linux-arm64
-
     pattern = r"^(\w+)-(\w+)-(\w+)-(\w+)"
     match = re.match(pattern, base_name)
     if match:
@@ -344,6 +314,13 @@ def parse_asset_name(name: str) -> Dict[str, str]:
         arch = match.group(4).lower()
         # Capitalize first letter
         platform = platform.capitalize()
+        return {
+            "platform": platform,
+            "arch": arch,
+            "variant": None
+        }
+        platform = platform_map.get(match.group(2).lower(), match.group(2))
+        arch = match.group(3) if match.group(3) else None
         return {
             "platform": platform,
             "arch": arch,
@@ -395,22 +372,15 @@ def get_checksum_assets(release: dict) -> List[dict]:
     checksum_assets = []
     for asset in release.get('assets', []):
         name_lower = asset['name'].lower()
-        # Check for common checksum file patterns
-        # - Standard patterns: .sha256sum.txt, .sha256sum
-        # - Contains sha256 or checksum (case-insensitive)
-        # - Common patterns: sha256sums, checksums, sha256sums.txt, checksums.txt
-        if (name_lower.endswith('.sha256sum.txt') or 
-            name_lower.endswith('.sha256sum') or
-            'sha256' in name_lower or 
-            'checksum' in name_lower or
-            name_lower.endswith('sha256sums') or
-            name_lower.endswith('checksums') or
-            name_lower.endswith('sha256sums.txt') or
-            name_lower.endswith('checksums.txt') or
-            name_lower == 'sha256sums' or
-            name_lower == 'checksums'):
+        if 'sha256' in name_lower or 'checksum' in name_lower or name_lower.endswith('.txt'):
             checksum_assets.append(asset)
     return checksum_assets
+
+
+
+
+
+
 
 
 def download_checksum(archive_path: Path, checksum_asset: dict, ui_manager: Optional["UIManager"] = None) -> Path:
@@ -449,7 +419,14 @@ def select_release(release: dict, available_platforms: List[dict],
     # Find matching platform in available_platforms
     for platform_info in available_platforms:
         if platform_info['platform'].lower() == detected_platform.lower() and platform_info['arch'].lower() == detected_arch.lower():
-            return platform_info['assets'][0]
+            if variant and platform_info.get('variant') == variant:
+                return platform_info['assets'][0]
+            # If variant is provided but doesn't match, or if no variant is provided, 
+            # we fallback to the first asset of the platform/arch match
+            if not variant or platform_info.get('variant') is None:
+                return platform_info['assets'][0]
+            return None
+
     
     # If no exact match, show options and let user choose
     return None
@@ -580,6 +557,53 @@ def extract_archive(archive_path: Path, dest_dir: Path) -> None:
         raise ExtractionError(f"Extraction failed: {e}")
 
 
+def verify_checksum(archive_path: Path, checksum_path: Path) -> bool:
+    """
+    Verify archive against checksum file.
+    
+    Args:
+        archive_path: Path to archive file
+        checksum_path: Path to checksum file
+    
+    Returns:
+        True if verification passes
+    
+    Raises:
+        LlamaUpdaterError: If verification fails
+    """
+    import hashlib
+    
+    try:
+        # Calculate actual hash of archive
+        actual_hash = hashlib.sha256()
+        with open(archive_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(65536), b''):
+                actual_hash.update(chunk)
+        actual_hash_str = actual_hash.hexdigest()
+        
+        # Read expected hash from checksum file
+        with open(checksum_path, 'r') as f:
+            checksum_data = f.read().strip()
+        
+        # Parse expected hash (format: "hash  filename" or just "hash")
+        expected_hash = checksum_data.split()[0]
+        
+        print(f"Checking checksum...")
+        print(f"  Expected: {expected_hash}")
+        print(f"  Actual:   {actual_hash_str}")
+        
+        if actual_hash_str == expected_hash:
+            print("Checksum verification passed!")
+            return True
+        else:
+            print("Checksum verification FAILED!")
+            raise LlamaUpdaterError(
+                f"Checksum mismatch! Archive may be corrupted or tampered. "
+                f"Please try again or contact support."
+            )
+    
+    except Exception as e:
+        raise LlamaUpdaterError(f"Checksum verification failed: {e}")
 
 
 def ensure_executable(path: Path) -> None:
@@ -596,7 +620,7 @@ def ensure_executable(path: Path) -> None:
             pass  # Ignore permission errors
 
 
-def verify_installation(ui_manager: Optional["UIManager"] = None) -> None:
+def verify_installation() -> None:
     """
     Run post-install sanity check (llama-server --version).
     
@@ -606,7 +630,7 @@ def verify_installation(ui_manager: Optional["UIManager"] = None) -> None:
     llama_server = LLAMA_CPP_DIR / "llama-server"
     
     if not llama_server.exists():
-        ui_manager.print_message("Warning: Could not find llama-server executable for verification")
+        print("Warning: Could not find llama-server executable for verification")
         return
     
     try:
@@ -623,16 +647,14 @@ def verify_installation(ui_manager: Optional["UIManager"] = None) -> None:
             match = re.search(r'version:\s*(.+)$', result.stdout, re.MULTILINE)
             if match:
                 version_output = match.group(1).strip()
-                ui_manager.print_message(f"llama-server version: {version_output}")
-
-
+                print(f"llama-server version: {version_output}\n")
         else:
-            ui_manager.print_message(f"\nWarning: llama-server --version returned exit code {result.returncode}")
-            ui_manager.print_message(f"Output: {result.stderr[:200]}")
+            print(f"\nWarning: llama-server --version returned exit code {result.returncode}")
+            print(f"Output: {result.stderr[:200]}")
     except subprocess.TimeoutExpired:
-        ui_manager.print_message("\nWarning: llama-server --version timed out")
+        print("\nWarning: llama-server --version timed out")
     except Exception as e:
-        ui_manager.print_message(f"\nWarning: Could not verify llama-server version: {e}")
+        print(f"\nWarning: Could not verify llama-server version: {e}")
 
 
 def delete_existing_installation() -> None:
@@ -660,17 +682,31 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     """
     from ui_manager import UIManager
     
-    # Load configuration to check for previous installation selections
-    config = load_config()
-    install_info = config.get("install", {})
+    ui = ui_manager if ui_manager is not None else UIManager("Install llama.cpp")
     
-    ui_manager.print_message(f"Installing llama.cpp release {release_tag}...")
+    ui.print_message(f"Installing llama.cpp release {release_tag}...")
     
-    # Prepare for atomic update by identifying the new directory
-    temp_dir = LLAMA_CPP_DIR.parent / f"llama-cpp_new_{int(time.time())}"
-    # (Logic will be handled in the extraction/move phase)
+    # Update config.json with installation info
+    import json
+    with open("config.json", "r") as f:
+        config = json.load(f)
+    
+    parsed_info = parse_asset_name(release["assets"][0]["name"])
+    config["install"] = {
+        "release": release_tag,
+        "platform": parsed_info["platform"],
+        "arch": parsed_info["arch"],
+        "backend": parsed_info.get("variant", "")
+    }
+    
+    with open("config.json", "w") as f:
+        json.dump(config, f, indent=2)
+    
+    ui.print_message(f"Config updated with release: {release_tag}")
 
-    
+    # Delete existing installation first
+    delete_existing_installation()
+
     # Detect platform
     detected_platform, detected_arch = detect_platform()
     
@@ -690,46 +726,23 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     
     # Find the matching platform info for auto-highlight
     default_platform_idx = None
-    if install_info.get("platform") and install_info.get("arch"):
-        for i, platform_info in enumerate(available_platforms, 1):
-            if (platform_info['platform'].lower() == install_info['platform'].lower() and 
-                platform_info['arch'].lower() == install_info['arch'].lower()):
-                default_platform_idx = i - 1
-                break
-    else:
-        # Fallback to auto-detection
-        for i, platform_info in enumerate(available_platforms, 1):
-            if platform_info['platform'].lower() == detected_platform.lower() and platform_info['arch'].lower() == detected_arch.lower():
-                default_platform_idx = i - 1
-                break
+    for i, platform_info in enumerate(available_platforms, 1):
+        if platform_info['platform'].lower() == detected_platform.lower() and platform_info['arch'].lower() == detected_arch.lower():
+            default_platform_idx = i - 1  # Zero-based index
+            break
     
     # Render platform selection menu
-    selected_platform_idx = ui_manager.render_menu(platform_options, default=default_platform_idx, highlighted=default_platform_idx)
+    selected_platform_idx = ui.render_menu(platform_options, default=default_platform_idx, highlighted=default_platform_idx)
     
     if selected_platform_idx == -1:
-        ui_manager.print_message("Platform selection cancelled.")
+        print("Platform selection cancelled.")
         return
     
     selected_platform_info = available_platforms[selected_platform_idx]
     
     # Prepare zip file options for menu
     zip_options = []
-    
-    # Sort assets to prioritize vulkan, then cuda, then sycl, then others
-    # We do this by creating a priority map for variants
-    priority_map = {
-        "vulkan": 0,
-        "cuda": 1,
-        "sycl": 2,
-    }
-    
-    # Sort assets based on their variant priority
-    sorted_assets = sorted(
-        selected_platform_info['assets'],
-         key=lambda x: priority_map.get((parse_asset_name(x['name'])['variant'] or '').lower(), 99)
-    )
-    
-    for i, asset in enumerate(sorted_assets, 1):
+    for i, asset in enumerate(selected_platform_info['assets'], 1):
         is_default = (i == 1)
         marker = " (default)" if is_default else ""
         zip_entry = {
@@ -738,84 +751,50 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         }
         zip_options.append(zip_entry)
     
-    # Find default zip/backend option
-    default_zip_idx = None
-    if install_info.get("backend"):
-        for i, asset in enumerate(sorted_assets, 1):
-            if install_info["backend"].lower() in asset['name'].lower():
-                default_zip_idx = i - 1
-                break
-    else:
-        # Default to vulkan if available
-        for i, asset in enumerate(sorted_assets, 1):
-            parsed = parse_asset_name(asset['name'])
-            if parsed['variant'] and parsed['variant'].lower() == 'vulkan':
-                default_zip_idx = i - 1
-                break
-                
     # Render zip file selection menu
-    selected_zip_idx = ui_manager.render_menu(zip_options, default=default_zip_idx, highlighted=default_zip_idx)
-
+    selected_zip_idx = ui.render_menu(zip_options, default=0)
     
     if selected_zip_idx == -1:
-        ui_manager.print_message("Zip file selection cancelled.")
+        print("Zip file selection cancelled.")
         return
     
     selected_asset = selected_platform_info['assets'][selected_zip_idx]
     asset_name = selected_asset['name']
     
     # Show selected release info through UIManager
-    ui_manager.print_message(f"\nSelected: {release_tag} ({asset_name})")
+    ui.print_message(f"\nSelected: {release_tag} ({asset_name})")
     
     # Check UI mode before render_confirmation
-    if not ui_manager._using_curses or not ui_manager._screen:
+    if not ui._using_curses or not ui._screen:
         ui_logger.warning("UI manager not using curses, falling back to console for confirmation")
     
     # Confirmation prompt
     release_info = f"{release_tag} ({asset_name})"
-    confirmed = ui_manager.render_confirmation(f"Proceed with installation?", release_info)
+    confirmed = ui.render_confirmation(f"Proceed with installation?", release_info)
     
     if not confirmed:
-        ui_manager.print_message("Installation cancelled.")
+        print("Installation cancelled.")
         return
     
     ui_logger.debug(f"User confirmed installation of {release_tag} - {asset_name}")
-    
+
     # Download
-    ui_manager.print_message(f"\nDownloading {asset_name}...")
+    ui.print_message(f"\nDownloading {asset_name}...")
     archive_path = Path(tempfile.gettempdir()) / f"{asset_name}"
     
     try:
-        download_file(selected_asset['browser_download_url'], archive_path, ui_manager=ui_manager)
-        ui_manager.print_message(f"Downloaded to {archive_path}")
-        
+        download_file(selected_asset['browser_download_url'], archive_path, ui_manager=ui)
+        ui.print_message(f"Downloaded to {archive_path}")
+
         # Check for checksum file
         checksum_assets = get_checksum_assets(release)
         if checksum_assets:
-            ui_manager.print_message("Checking checksum...")
+            ui.print_message("Checking checksum...")
             checksum_asset = checksum_assets[0]
             checksum_path = download_checksum(archive_path, checksum_asset, ui_manager=ui)
             
             try:
-                # Calculate actual hash of archive
-                actual_hash = hashlib.sha256()
-                with open(archive_path, 'rb') as f:
-                    for chunk in iter(lambda: f.read(65536), b''):
-                        actual_hash.update(chunk)
-                actual_hash_str = actual_hash.hexdigest()
-                
-                # Read expected hash from checksum file
-                with open(checksum_path, 'r') as f:
-                    checksum_data = f.read().strip()
-                
-                # Parse expected hash (format: "hash  filename" or just "hash")
-                expected_hash = checksum_data.split()[0]
-                
-                ui_manager.print_message(f"Checking SHA-256 checksum...")
-                ui_manager.print_message(f"  Expected: {expected_hash}")
-                ui_manager.print_message(f"  Actual:   {actual_hash_str}")
-                
-                if actual_hash_str != expected_hash:
+                if not verify_checksum(archive_path, checksum_path):
                     # Verification failed - clean up
                     archive_path.unlink(missing_ok=True)
                     checksum_path.unlink(missing_ok=True)
@@ -823,72 +802,30 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             finally:
                 checksum_path.unlink(missing_ok=True)
         else:
-            ui_manager.print_message("No checksum file available for this release, skipping verification")
-        
-        # Extract to a temporary folder for atomic update
-        temp_new_dir = LLAMA_CPP_DIR.parent / "llama-cpp_new"
-        
-        try:
-            # Extract to temporary folder
-            ui_manager.print_message(f"\nExtracting to temporary folder...")
-            if temp_new_dir.exists():
-                shutil.rmtree(temp_new_dir)
-            temp_new_dir.mkdir(parents=True, exist_ok=True)
-            
-            extract_archive(archive_path, temp_new_dir)
-            
-            # Atomic Swap
-            ui_manager.print_message(f"\nSwapping new installation into {LLAMA_CPP_DIR}...")
-            
-            old_dir = None
-            if LLAMA_CPP_DIR.exists():
-                old_dir = LLAMA_CPP_DIR.parent / "llama-cpp_old"
-                if old_dir.exists():
-                    shutil.rmtree(old_dir)
-                shutil.move(str(LLAMA_CPP_DIR), str(old_dir))
-            
-            shutil.move(str(temp_new_dir), str(LLAMA_CPP_DIR))
-            
-            # Ensure llama-server is executable in the new folder
-            llama_server = LLAMA_CPP_DIR / "llama-server"
-            if llama_server.exists():
-                ensure_executable(llama_server)
-                ui_manager.print_message(f"Made {llama_server} executable")
-            
-            # Post-install sanity check
-            verify_installation(ui_manager)
-            
-            # Cleanup old directory
-            if old_dir and old_dir.exists():
-                shutil.rmtree(old_dir)
-            
-        except Exception as e:
-            if temp_new_dir.exists():
-                shutil.rmtree(temp_new_dir)
-            raise e
-        finally:
-            archive_path.unlink(missing_ok=True)
+            print("No checksum file available for this release, skipping verification")
 
+        # Extract
+        ui.print_message(f"\nExtracting to {LLAMA_CPP_DIR}")
+        extract_archive(archive_path, LLAMA_CPP_DIR)
 
+        # Ensure llama-server is executable
+        llama_server = LLAMA_CPP_DIR / "llama-server"
+        if llama_server.exists():
+            ensure_executable(llama_server)
+            ui.print_message(f"Made {llama_server} executable")
+
+        # Clean up
+        archive_path.unlink(missing_ok=True)
         
-        # Persist installation selections to config.json
-        config = load_config()
-        config["install"] = {
-            "release": release_tag,
-            "platform": selected_platform_info['platform'],
-            "arch": selected_platform_info['arch'],
-            "backend": selected_platform_info['variant']
-        }
-        with open(Path.cwd() / "config.json", "w") as f:
-            json.dump(config, f, indent=2)
-        
-        ui_manager.print_message("Installation complete!")
-        
+        # Post-install sanity check
+        verify_installation()
+
+        ui.print_message("Installation complete!")
+
     except Exception as e:
         # Clean up on error
         archive_path.unlink(missing_ok=True)
         raise e
-
 
 
 class LlamaUpdater:
@@ -914,6 +851,7 @@ class LlamaUpdater:
         ui_logger.debug("Fetching latest llama.cpp release...")
         try:
             release = get_latest_release()
+            print(f"DEBUG: release: {release}")
             release_tag = release["tag_name"]
             
             ui_logger.debug(f"Latest release: {release_tag} ({release['name']})")
@@ -942,10 +880,16 @@ class LlamaUpdater:
         tag_options = [
             {'label': 'Enter a tag manually', 'description': ''}
         ]
-        for i, r in enumerate(recent_releases, 2):
+        for i, r in enumerate(recent_releases[1:], 2):
             tag_options.append({
                 'label': r['tag_name'],
                 'description': 'latest' if r['tag_name'] == release_tag else ''
+            })
+        # Add remaining 2 recent releases to make 5 total
+        for r in recent_releases[1:3]:
+            tag_options.append({
+                'label': r['tag_name'],
+                'description': ''
             })
         
         # Use UIManager for tag selection
@@ -953,17 +897,17 @@ class LlamaUpdater:
         selected_tag_idx = ui.render_menu(tag_options, default=1, highlighted=1)
         
         if selected_tag_idx == -1:
-            ui.print_message("Tag selection cancelled.")
+            print("Tag selection cancelled.")
             return
         elif selected_tag_idx == 0:
             # Manual entry
             manual_tag = ui.get_input("Enter release tag: ")
             if not manual_tag:
-                ui.print_message("Tag entry cancelled.")
+                print("Tag entry cancelled.")
                 return
             release = get_release_by_tag(manual_tag)
             if release is None:
-                ui.print_message(f"Release not found for tag: {manual_tag}")
+                print(f"Release not found for tag: {manual_tag}")
                 return
             release_tag = release["tag_name"]
         else:
@@ -974,7 +918,7 @@ class LlamaUpdater:
         if release is not None and release_tag:
             install_release(release, release_tag, ui)
         else:
-            ui.print_message("Installation cancelled or failed to select a valid release.")
+            print("Installation cancelled or failed to select a valid release.")
 
     def update(self) -> None:
         """
@@ -982,8 +926,38 @@ class LlamaUpdater:
 
         This is similar to install() but implies updating existing installation.
         """
-        ui.print_message("Updating llama.cpp to latest release...")
+        print("Updating llama.cpp to latest release...")
         self.install()
 
 
+def main():
+    """CLI entry point for llama_updater."""
+    import argparse
 
+    parser = argparse.ArgumentParser(description="Download and install llama.cpp releases")
+    parser.add_argument("--install", action="store_true", help="Install latest release")
+    parser.add_argument("--update", action="store_true", help="Update to latest release")
+    parser.add_argument("--tag", type=str, help="Specific release tag to install")
+
+    args = parser.parse_args()
+
+    if args.tag:
+        # Install specific tag
+        release = get_release_by_tag(args.tag)
+        install_release(release, args.tag)
+    elif args.install or args.update:
+        updater = LlamaUpdater()
+        if args.update:
+            updater.update()
+        else:
+            updater.install()
+    else:
+        # Default: show available releases
+        releases = list_releases()
+        print(f"Found {len(releases)} releases:")
+        for i, r in enumerate(releases[:10], 1):  # Show first 10
+            print(f"  {i}. {r['tag_name']} - {r['name']}")
+
+
+if __name__ == "__main__":
+    main()

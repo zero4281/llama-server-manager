@@ -1,7 +1,7 @@
 # Llama Server Manager — Software Requirements Document
 
-**Version:** 1.6  
-**Date:** June 2026  
+**Version:** 1.5  
+**Date:** April 2026  
 **Repository:** https://github.com/zero4281/llama-server-manager
 
 ---
@@ -28,14 +28,14 @@ This document defines the requirements for the Llama Server Manager project — 
 
 All interactive menus, prompts, progress bars, and confirmation dialogs are rendered using the `curses` module (Python standard library) with a black background and green text.
 
-| Property               | Value                                            |
-| ---------------------- | ------------------------------------------------ |
-| Repository             | https://github.com/zero4281/llama-server-manager |
-| Primary Language       | Python 3.12+                                     |
-| Secondary Language     | Bash (start script only)                         |
-| Minimum Python Version | 3.12                                             |
-| Target Platforms       | Linux, macOS, Windows (via WSL only)             |
-| llama.cpp Source       | https://github.com/ggml-org/llama.cpp/releases   |
+| Property | Value |
+|---|---|
+| Repository | https://github.com/zero4281/llama-server-manager |
+| Primary Language | Python 3.12+ |
+| Secondary Language | Bash (start script only) |
+| Minimum Python Version | 3.12 |
+| Target Platforms | Linux, macOS, Windows (via WSL only) |
+| llama.cpp Source | https://github.com/ggml-org/llama.cpp/releases |
 
 ---
 
@@ -89,48 +89,13 @@ Top-level `options` keys control the wrapper itself. The `llama-server.options` 
 
 Controls verbosity and destination of the wrapper's own log output (separate from llama-server output).
 
-| Key       | Type         | Default  | Description                                               |
-| --------- | ------------ | -------- | --------------------------------------------------------- |
-| `enabled` | boolean      | `true`   | Whether wrapper logging is active                         |
-| `level`   | string       | `"INFO"` | One of `DEBUG`, `INFO`, `WARNING`, `ERROR`                |
-| `file`    | string\|null | `null`   | Path to wrapper log file, or `null` to log to stdout only |
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | boolean | `true` | Whether wrapper logging is active |
+| `level` | string | `"INFO"` | One of `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `file` | string\|null | `null` | Path to wrapper log file, or `null` to log to stdout only |
 
 > **Note:** The llama-server output log is controlled separately via the `log-file` key in `config.json`'s `llama-server.options` section, or overridden at runtime via the `--log-file` CLI flag (see Section 7).
-
-### 3.3 `install` — last installation selections
-
-Stores the selections made during the most recent `--install-llama` or `--update-llama` run so they can be pre-filled as defaults the next time the install menus are shown (see §6.3.1–§6.3.4).
-
-| Key        | Type         | Description                                                                                                                                      |
-| ---------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `release`  | string\|null | The release tag last installed (e.g. `"b9637"`), or `null` if no install has been performed                                                      |
-| `platform` | string\|null | The platform token as it appears in the archive filename (e.g. `"ubuntu"`, `"macos"`, `"win"`)                                                   |
-| `arch`     | string\|null | The architecture token (e.g. `"x64"`, `"arm64"`)                                                                                                 |
-| `backend`  | string\|null | The raw backend token string as it appears in the archive filename (e.g. `"cuda-13.3"`, `"vulkan"`), or `null` for builds with no backend tokens |
-
-Example `config.json` after a successful install:
-
-```json
-{
-  "options": {},
-  "llama-server": {
-    "options": {}
-  },
-  "logging": {
-    "enabled": true,
-    "level": "INFO",
-    "file": null
-  },
-  "install": {
-    "release": "b9637",
-    "platform": "ubuntu",
-    "arch": "x64",
-    "backend": "vulkan"
-  }
-}
-```
-
-If the `install` key is absent or any of its sub-keys are `null`, the corresponding menu in the install workflow falls back to the auto-detected value (§6.4) or presents no default if detection also fails. Saved selections take lower priority than auto-detection: auto-detected values always pre-empt the saved ones.
 
 ---
 
@@ -145,7 +110,6 @@ If the `install` key is absent or any of its sub-keys are `null`, the correspond
 
 - Before launching `main.py`, check whether `.venv/bin/activate` exists in the project directory.
   - If it **does not exist**, print a message prompting the user to create the virtual environment and exit without launching `main.py`:
-    
     ```
     Virtual environment not found. Please create it first:
       python3 -m venv .venv
@@ -153,12 +117,10 @@ If the `install` key is absent or any of its sub-keys are `null`, the correspond
       pip install -r requirements.txt
     ```
   - If it **exists**, activate it with:
-    
     ```bash
     source .venv/bin/activate
     ```
 - After activation, call `main.py` using the Python interpreter, passing through all command-line arguments unchanged:
-  
   ```bash
   python3 main.py "$@"
   ```
@@ -180,7 +142,6 @@ If the `install` key is absent or any of its sub-keys are `null`, the correspond
 
 - On startup, detect whether the process is running on Windows outside of WSL by checking the platform with Python's `platform` module.
 - If running on native Windows (i.e. not inside WSL), print a warning message to stderr before initialising the ncurses UI:
-  
   ```
   Warning: Running on native Windows. Not all functionality may work as intended.
   For full support, please run inside Windows Subsystem for Linux (WSL).
@@ -189,14 +150,14 @@ If the `install` key is absent or any of its sub-keys are `null`, the correspond
 
 ### 5.2 Command-line arguments
 
-| Argument          | Type         | Description                                                                                                                                                                                             |
-| ----------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--self-update`   | Flag         | Update the wrapper's own scripts from the project GitHub repository. Prompts the user to choose between the latest release, a previous release, or the repository `main` branch HEAD before proceeding. |
-| `--install-llama` | Flag         | Download and install the newest release of llama.cpp. Delegates to `LlamaUpdater` in `llama_updater.py`.                                                                                                |
-| `--update-llama`  | Flag         | Update an existing llama.cpp installation to the latest release. Delegates to `LlamaUpdater`.                                                                                                           |
-| `--stop-server`   | Flag         | Signal `runner.py` to gracefully stop a running `llama-server` process.                                                                                                                                 |
-| `--log-file`      | String       | Path for llama-server output log. Overrides the `log-file` value in `config.json`. Defaults to `llama-server.log` in the project folder if not set in either place.                                     |
-| `<llama args>`    | Pass-through | Any other arguments are collected and forwarded verbatim to `llama-server` via `runner.py`.                                                                                                             |
+| Argument | Type | Description |
+|---|---|---|
+| `--self-update` | Flag | Update the wrapper's own scripts from the project GitHub repository. Prompts the user to choose between the latest release, a previous release, or the repository `main` branch HEAD before proceeding. |
+| `--install-llama` | Flag | Download and install the newest release of llama.cpp. Delegates to `LlamaUpdater` in `llama_updater.py`. |
+| `--update-llama` | Flag | Update an existing llama.cpp installation to the latest release. Delegates to `LlamaUpdater`. |
+| `--stop-server` | Flag | Signal `runner.py` to gracefully stop a running `llama-server` process. |
+| `--log-file` | String | Path for llama-server output log. Overrides the `log-file` value in `config.json`. Defaults to `llama-server.log` in the project folder if not set in either place. |
+| `<llama args>` | Pass-through | Any other arguments are collected and forwarded verbatim to `llama-server` via `runner.py`. |
 
 ### 5.3 Self-update behaviour (`--self-update`)
 
@@ -215,7 +176,6 @@ Choice [1]:
 - Pressing Enter without input selects the default (option 1, latest release).
 - Selecting **option 2** fetches the list of available releases from the GitHub Releases API (same endpoints as Section 6.2, with `owner = zero4281`, `repo = llama-server-manager`) and presents a numbered list for the user to choose from.
 - Selecting **option 3** downloads the current `main` branch HEAD as a ZIP archive from:
-  
   ```
   https://github.com/zero4281/llama-server-manager/archive/refs/heads/main.zip
   ```
@@ -262,13 +222,12 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 5. If `--stop-server`: signal `runner.py` to stop `llama-server`; exit on completion.
 6. Otherwise: check whether the `./llama-cpp` directory exists.
    - If it **does not exist**, display the following error via `UIManager` (bordered curses window) and exit with a non-zero status code:
-     
-     ```
-     ┌────────────────────────────────────────────────┐
-     │ llama-cpp not found. Please install it first:  │
-     │   llama-server-manager --install-llama         │
-     └────────────────────────────────────────────────┘
-     ```
+```
+┌────────────────────────────────────────────────┐
+│ llama-cpp not found. Please install it first:  │
+│   llama-server-manager --install-llama         │
+└────────────────────────────────────────────────┘
+```
    - If it **exists**, load `config.json`, merge pass-through args, and invoke `Runner`.
 
 ---
@@ -296,11 +255,11 @@ X-GitHub-Api-Version: 2022-11-28
 
 The following endpoints are used:
 
-| Purpose                                   | Method | Endpoint                                    |
-| ----------------------------------------- | ------ | ------------------------------------------- |
-| Get the latest release                    | `GET`  | `/repos/{owner}/{repo}/releases/latest`     |
-| List all releases (for version selection) | `GET`  | `/repos/{owner}/{repo}/releases`            |
-| Get a specific release by tag             | `GET`  | `/repos/{owner}/{repo}/releases/tags/{tag}` |
+| Purpose | Method | Endpoint |
+|---|---|---|
+| Get the latest release | `GET` | `/repos/{owner}/{repo}/releases/latest` |
+| List all releases (for version selection) | `GET` | `/repos/{owner}/{repo}/releases` |
+| Get a specific release by tag | `GET` | `/repos/{owner}/{repo}/releases/tags/{tag}` |
 
 For llama.cpp these map to `owner = ggml-org` and `repo = llama.cpp`. Example:
 
@@ -335,95 +294,41 @@ If the user selects option `0`, prompt for the tag string:
 Enter release tag: 
 ```
 
-Once a release tag is resolved, the user selects an asset through a sequence of three narrowing menus (§6.3.2–§6.3.4) followed by a confirmation prompt (§6.3.5). Each menu filters the candidate asset list based on the choices made in the previous steps. All menus are rendered via `UIManager` inside bordered curses windows. At every step, the auto-detected recommended value (where available) is pre-selected as the default and rendered in reverse video consistent with §8.2. If auto-detection fails for a given field, no default is pre-selected for that menu and the user must choose explicitly. All option lists are derived by parsing asset filenames according to §6.3.6; archives that do not match the expected pattern are omitted.
+#### 6.3.2 Asset (zip file) selection prompt
 
-#### 6.3.2 Platform selection
-
-Parse the full asset list for the selected release and present the distinct platform values as a numbered menu. Example:
+After a release tag is resolved, fetch its asset list from the GitHub API and present all available zip files as a numbered list via `UIManager`. Auto-detect the current platform and architecture using Python's `platform` module and highlight the recommended asset. The recommended option is also the default if the user presses Enter without a selection. Example:
 
 ```
-Select a platform:
-  1) macOS         ← recommended
-  2) Ubuntu
-  3) Windows
+Select a zip file to install:
+  1) llama-b8800-bin-ubuntu-x64.zip  ← recommended
+  2) llama-b8800-bin-win-avx2-x64.zip
+  3) llama-b8800-bin-macos-arm64.zip
+  4) llama-b8800-bin-macos-x64.zip
+  ...
 Choice [1]:
 ```
 
-#### 6.3.3 Architecture selection
+If auto-detection fails (platform or architecture cannot be determined), no option is highlighted and no default is pre-selected; the user must choose explicitly.
 
-Filter the asset list to the chosen platform and present the distinct architecture values as a numbered menu. Example:
+#### 6.3.3 Confirmation prompt
 
-```
-Select an architecture:
-  1) arm64         ← recommended
-  2) x64
-Choice [1]:
-```
-
-#### 6.3.4 Backend / SDK selection
-
-Filter the asset list to the chosen platform and architecture and present the distinct backend / SDK values as a numbered menu. Backends with no additional tokens are listed as `(none)`. Example:
+After the user selects a release tag and asset, `UIManager` must render a bordered curses window displaying both selections and prompt for confirmation before downloading anything. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with Section 8.4. Example layout:
 
 ```
-Select a backend / SDK:
-  1) (none)
-  2) CUDA 13.3     ← recommended
-  3) OpenVINO 2026.0
-  4) Vulkan
-Choice [2]:
-```
-
-#### 6.3.5 Confirmation prompt
-
-After all four selections are made, `UIManager` must render a bordered curses window summarising the full selection and prompt for confirmation before downloading anything. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with §8.4. Example layout:
-
-```
-┌────────────────────────────────────────────────────┐
-│ Release:  b9637                                    │
-│ Platform: Ubuntu   Arch: x64   Backend: Vulkan     │
-│ Archive:  llama-b9637-bin-ubuntu-vulkan-x64.tar.gz │
-│                                                    │
-│ Proceed with installation?                         │
-│                                                    │
-│          ▶ [ Yes ]          [ No  ]                │
-└────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ Selected release: b8800 (llama-b8800-bin-ubuntu-x64.zip) │
+│ Proceed with installation?                               │
+│                                                          │
+│             ▶ [ Yes ]          [ No  ]                   │
+└──────────────────────────────────────────────────────────┘
 ```
 
 Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits with status code `0` without modifying any files.
 
-Upon a confirmed successful installation, `LlamaUpdater` must write the four selections — release, platform, arch, and backend — to the `install` section of `config.json` (see §3.3). The write must occur after the archive has been extracted successfully and before the post-install sanity check (§6.5). If the write fails, log the error and continue; a config save failure does not make the installation itself a failure.
-
-#### 6.3.6 Archive filename parsing
-
-Release archive names follow the pattern:
-
-```
-llama-[release]-bin-[platform]-[backend-and-version-tokens]-[arch].[ext]
-```
-
-`LlamaUpdater` must parse each filename into structured fields to populate the sequential menus in §6.3.2–§6.3.4. The parsing rules are:
-
-1. **Strip the prefix and extension.** Remove the leading `llama-` and trailing `.zip` or `.tar.gz`. The remainder is a hyphen-delimited token list.
-2. **Extract the release tag.** The tokens before `-bin-` form the release (e.g. `b9637`).
-3. **Extract the platform.** The first token after `bin` is always the platform (`macos`, `ubuntu`, `win`, etc.).
-4. **Extract the architecture.** The last token in the list is always the architecture (`x64`, `arm64`, etc.).
-5. **Extract the backend / SDK tokens.** All remaining tokens between the platform and the architecture are the backend and optional version (e.g. `vulkan`, `cuda` + `13.3`, `openvino` + `2026.0`, `avx2`). Join them with a space and title-case the backend name for display (e.g. `cuda 13.3` → `CUDA 13.3`, `openvino 2026.0` → `OpenVINO 2026.0`, `vulkan` → `Vulkan`). If there are no tokens between the platform and architecture, the backend is `(none)`.
-
-Examples:
-
-| Raw filename                                        | Platform | Arch  | Backend / SDK   |
-| --------------------------------------------------- | -------- | ----- | --------------- |
-| `llama-b9637-bin-macos-arm64.tar.gz`                | macOS    | arm64 | (none)          |
-| `llama-b9637-bin-ubuntu-vulkan-x64.tar.gz`          | Ubuntu   | x64   | Vulkan          |
-| `llama-b9637-bin-ubuntu-openvino-2026.0-x64.tar.gz` | Ubuntu   | x64   | OpenVINO 2026.0 |
-| `llama-b9637-bin-win-cuda-13.3-x64.zip`             | Windows  | x64   | CUDA 13.3       |
-
-If a filename does not match the expected pattern (missing `bin` separator, unrecognisable structure, etc.), omit it from all menus rather than displaying a malformed entry.
-
 ### 6.4 Platform & architecture detection
 
 - Auto-detect the current platform (Linux, Windows, macOS) and architecture (`x86_64`, `arm64`, etc.) using Python's `platform` module.
-- Use the detected values to pre-select the recommended option in the platform (§6.3.2), architecture (§6.3.3), and backend (§6.3.4) menus.
+- Use the detected platform/architecture to determine and highlight the recommended asset in the selection list (see Section 6.3.2).
 - If detection fails, display all assets without a highlighted recommendation and require the user to select explicitly.
 
 ### 6.5 Download & extraction
@@ -577,12 +482,11 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 ## Revision History
 
-| Version | Date       | Author   | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------- | ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.6     | June 2026  | zero4281 | Replaced raw-filename asset list with a structured sequential selection workflow: platform (§6.3.2), architecture (§6.3.3), backend / SDK (§6.3.4), confirmation (§6.3.5). Added §6.3.6 defining the archive filename parsing rules and canonical display names for known backends (CUDA, OpenVINO, Vulkan). Added §3.3 `install` key to `config.json` to persist the last-used selections; §6.3.5 now writes these after a successful extraction. Updated §6.4 cross-references accordingly.                                                      |
-| 1.5     | April 2026 | zero4281 | Clarified that the entire interactive workflow must remain within the curses environment after UIManager initialisation; no stdout/stderr output is permitted post-init. Updated confirmation prompts in §5.3.2 and §6.3.3 to show curses bordered window layout. Updated §5.4 llama-cpp-not-found error, §5.3.3 update failure error, §6.5 success/warning messages, and §6.6 API error messages to use UIManager instead of direct print calls. Strengthened §8.4 and §8.6 to require UIManager to remain active for the full workflow duration. |
-| 1.4     | April 2026 | zero4281 | Added ncurses CLI UI module (`ui_manager.py`, Section 8); all menus, prompts, and progress bars rendered with black background and green text; Windows now requires WSL with runtime detection warning; updated cross-platform and dependency requirements accordingly                                                                                                                                                                                                                                                                             |
-| 1.3     | April 2026 | zero4281 | Removed `--foreground` command-line option                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| 1.2     | April 2026 | zero4281 | Expanded Section 6 install workflow: interactive release tag + asset selection with auto-detected recommendation, all-assets display, checksum verification, download progress bar, delete-and-replace of existing llama-cpp folder, post-install success message and sanity check                                                                                                                                                                                                                                                                 |
-| 1.1     | April 2026 | zero4281 | Added user confirmation and source selection for `--self-update`; added user confirmation prompt to llama.cpp install/update                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| 1.0     | April 2026 | zero4281 | Initial draft                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Version | Date | Author | Notes |
+|---|---|---|---|
+| 1.5 | April 2026 | zero4281 | Clarified that the entire interactive workflow must remain within the curses environment after UIManager initialisation; no stdout/stderr output is permitted post-init. Updated confirmation prompts in §5.3.2 and §6.3.3 to show curses bordered window layout. Updated §5.4 llama-cpp-not-found error, §5.3.3 update failure error, §6.5 success/warning messages, and §6.6 API error messages to use UIManager instead of direct print calls. Strengthened §8.4 and §8.6 to require UIManager to remain active for the full workflow duration. |
+| 1.4 | April 2026 | zero4281 | Added ncurses CLI UI module (`ui_manager.py`, Section 8); all menus, prompts, and progress bars rendered with black background and green text; Windows now requires WSL with runtime detection warning; updated cross-platform and dependency requirements accordingly |
+| 1.3 | April 2026 | zero4281 | Removed `--foreground` command-line option |
+| 1.2 | April 2026 | zero4281 | Expanded Section 6 install workflow: interactive release tag + asset selection with auto-detected recommendation, all-assets display, checksum verification, download progress bar, delete-and-replace of existing llama-cpp folder, post-install success message and sanity check |
+| 1.1 | April 2026 | zero4281 | Added user confirmation and source selection for `--self-update`; added user confirmation prompt to llama.cpp install/update |
+| 1.0 | April 2026 | zero4281 | Initial draft |

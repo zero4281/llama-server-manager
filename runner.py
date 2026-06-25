@@ -12,7 +12,6 @@ import sys
 import time
 from pathlib import Path
 from typing import Optional
-from wrapper_config import load_config
 
 
 # Paths
@@ -22,77 +21,82 @@ PID_FILE = Path.cwd() / "llama-server.pid"
 class Runner:
     """Manages the execution of llama-server process."""
 
-    def __init__(self, args, config: Optional[dict] = None, ui_manager: Optional["UIManager"] = None):
+    def __init__(self, args, config: dict):
         """
         Initialize Runner.
 
         Args:
             args: Parsed command-line arguments
-            config: Configuration from config.json (loads from wrapper_config.py if None)
+            config: Configuration from config.json
         """
         self.args = args
-        self.config = config if config is not None else load_config()
+        self.config = config
         self.pid_file = PID_FILE
         self.llama_server_path = Path.cwd() / "llama-cpp" / "llama-server"
-        self.ui_manager = ui_manager
+        self.force_killed = False
 
-
-    def _load_config_options(self) -> list:
-        """
-        Load configuration options from the llama-server section of the config.
-
-        Returns:
-            A list of command-line arguments for llama-server.
-        """
-        config_args = []
-        options = self.config.get("llama-server", {}).get("options", {})
-
-        for key, value in options.items():
-            if value is None:
-                if not key.startswith("-"):
-                    config_args.append(f"--{key}")
-                else:
-                    config_args.append(key)
-            elif isinstance(value, bool):
-                if value:
-                    if not key.startswith("-"):
-                        config_args.append(f"--{key}")
-                    else:
-                        config_args.append(key)
-            else:
-                if not key.startswith("-"):
-                    config_args.append(f"--{key}")
-                config_args.append(str(value))
-
-        return config_args
     def run(self) -> None:
         """Main run method - launches llama-server."""
         # Load configuration options
         config_args = self._load_config_options()
         
         # Merge args and config options
-        llama_args = getattr(self.args, 'llama_args', [])
-        merged_args = config_args + llama_args
+        merged_args = self._merge_args(config_args)
         
         # Build command
         command = self._build_command(merged_args)
         
         self._run_background(command, merged_args)
 
-    def _build_command(self, args: list) -> list:
+    def _load_config_options(self) -> list:
         """
-        Build the command line arguments for llama-server.
-
-        Args:
-            args: Merged command-line arguments.
+        Load options from config.json\'s llama-server.options section.
 
         Returns:
-            List of command-line arguments including the path to the executable.
+            List of command-line arguments
         """
-        return [str(self.llama_server_path)] + args
+        options = self.config.get("llama-server", {}).get("options", {})
+        args = []
+        for key, value in options.items():
+            if value is not None and value != "":
+                args.extend([f"--{key}", f"{value}"])
+            else:
+                args.append(f"--{key}")
+        return args
 
+    def _merge_args(self, config_args: list) -> list:
+        """
+        Merge configuration args with CLI args.
 
+        CLI args take precedence over config args. This is a simple
+        concatenation since argparse already handles duplicate handling.
 
+        Args:
+            config_args: Arguments from config.json
+
+        Returns:
+            Merged list of arguments
+        """
+        # Get pass-through args from main
+        llama_args = getattr(self.args, 'llama_args', [])
+        return config_args + llama_args
+
+    def _build_command(self, merged_args: list) -> list:
+        """
+        Build the command to run llama-server.
+
+        Args:
+            merged_args: Merged arguments from config and CLI
+
+        Returns:
+            List of command arguments
+        """
+        cmd = [str(self.llama_server_path)]
+        
+        # Add merged args
+        cmd.extend(merged_args)
+        
+        return cmd
 
     def _run_background(self, command: list, merged_args: list) -> None:
         """
@@ -111,12 +115,8 @@ class Runner:
             with open(self.pid_file, "w") as f:
                 f.write(str(pid))
 
-            if self.ui_manager is not None:
-                self.ui_manager.print_message(f"llama-server started with PID {pid}")
-                self.ui_manager.print_message(f"PID file: {self.pid_file}")
-            else:
-                print(f"llama-server started with PID {pid}")
-                print(f"PID file: {self.pid_file}")
+            print(f"llama-server started with PID {pid}")
+            print(f"PID file: {self.pid_file}")
 
         except Exception as e:
             self._cleanup()
@@ -131,7 +131,7 @@ class Runner:
                 pass
 
 
-def stop_server(ui_manager: Optional["UIManager"] = None) -> int:
+def stop_server() -> int:
     """
     Stop a running llama-server process.
 
@@ -143,7 +143,7 @@ def stop_server(ui_manager: Optional["UIManager"] = None) -> int:
         with open(PID_FILE, "r") as f:
             pid = int(f.read().strip())
     except (FileNotFoundError, ValueError):
-        ui_manager.print_message("No running llama-server found (no PID file).")
+        print("No running llama-server found (no PID file).")
         return 1
 
     force_killed = False
@@ -163,12 +163,12 @@ def stop_server(ui_manager: Optional["UIManager"] = None) -> int:
             time.sleep(1)
     except OSError as e:
         if e.errno == signal.SIGKILL:
-            ui_manager.print_message("Process died while waiting...")
+            print("Process died while waiting...")
             return 0
         raise
 
     # Process didn't exit after 60 seconds, force kill
-    ui_manager.print_message("Process did not exit cleanly, forcing termination...")
+    print("Process did not exit cleanly, forcing termination...")
     
     if sys.platform == 'win32':
         import ctypes
@@ -185,9 +185,9 @@ def stop_server(ui_manager: Optional["UIManager"] = None) -> int:
         PID_FILE.unlink()
 
     if force_killed:
-        ui_manager.print_message("llama-server force-terminated")
+        print("llama-server force-terminated")
         return 1
     else:
-        ui_manager.print_message("llama-server stopped")
+        print("llama-server stopped")
         return 0
 
