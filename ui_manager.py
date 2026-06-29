@@ -217,36 +217,14 @@ class UIManager:
             
             # Reset terminal mode
             try:
-                curses.echo()
-                curses.nocbreak()
-                curses.keypad(False)
-            except (AttributeError, OSError) as e:
+                if hasattr(curses, 'echo'): curses.echo()
+                if hasattr(curses, 'nocbreak'): curses.nocbreak()
+                if hasattr(curses, 'keypad'): curses.keypad(False)
+                if hasattr(curses, 'curs_set'): curses.curs_set(1)
+                if hasattr(curses, 'reset_pair_matrix'): curses.reset_pair_matrix()
+                if hasattr(curses, 'endwin'): curses.endwin()
+            except (curses.error, AttributeError, OSError) as e:
                 logger.warning(f"Failed to reset terminal modes: {e}")
-            
-            # Reset terminal mode
-            try:
-                curses.echo()
-                curses.nocbreak()
-                curses.keypad(False)
-            except (AttributeError, OSError) as e:
-                logger.warning(f"Failed to reset terminal modes: {e}")
-            
-            try:
-                curses.curs_set(1)  # Show cursor
-            except (AttributeError, OSError) as e:
-                logger.warning(f"Failed to set cursor: {e}")
-            
-            # Reset colors
-            try:
-                if hasattr(curses, 'reset_pair_matrix'):
-                    curses.reset_pair_matrix()
-            except (AttributeError, OSError) as e:
-                logger.warning(f"Failed to reset color pairs: {e}")
-            
-            try:
-                curses.endwin()
-            except (AttributeError, OSError) as e:
-                logger.warning(f"Failed to endwin: {e}")
         except (curses.error, OSError, EOFError, TypeError) as e:
             logger.error(f"Error restoring terminal state: {e}")
         finally:
@@ -765,13 +743,21 @@ class UIManager:
                     if key is None:
                          elapsed = time.time() - start_time
                          if timeout is None or elapsed >= timeout:
-                             logger.debug(f"render_menu: timeout reached, returning -1")
-                             return -1
+                              logger.debug(f"render_menu: timeout reached, returning -1")
+                              return -1
                          else:
-                             # Redraw for timeout but continue loop
-                             redraw(menu_win, highlighted_idx)
-                             curses.napms(10) if hasattr(curses, 'napms') else None
-                             continue
+                              # Redraw for timeout but continue loop
+                              redraw(menu_win, highlighted_idx)
+                              curses.napms(10) if hasattr(curses, 'napms') else None
+                              continue
+                except KeyboardInterrupt:
+                    # Handle Ctrl+C gracefully - restore terminal and re-raise
+                    logger.warning("KeyboardInterrupt received, restoring terminal state")
+                    try:
+                        self._cleanup_terminal()
+                    except Exception as cleanup_error:
+                        logger.error(f"Error cleaning up terminal on KeyboardInterrupt: {cleanup_error}")
+                    raise
                 except (curses.error, AttributeError, OSError, EOFError, TypeError) as e:
                     logger.error(f"Menu getch() error: {e}")
                     # Try to recover before giving up
@@ -869,6 +855,19 @@ class UIManager:
                     logger.debug(f"Input loop iteration: key=None (EOF/timeout)")
                 
 
+                
+                # Check for truly invalid keys - return -1 immediately
+                if key is not None:
+                    # Digits (0-9) and printable ASCII (32-126) should pass through to existing handlers
+                    if isinstance(key, int) and not (key >= ord('0') and key <= ord('9') or 32 <= key < 127) and key not in (
+                        curses.KEY_UP, curses.KEY_DOWN, curses.KEY_LEFT, curses.KEY_RIGHT,
+                        curses.KEY_PPAGE, curses.KEY_NPAGE, curses.KEY_ENTER, curses.KEY_RESIZE,
+                        curses.KEY_BACKSPACE, 10, 13, 27, 127, 8, ord('q'),
+                        ord('y'), ord('Y'), ord('n'), ord('N')
+                    ):
+                        # Truly invalid key - treat as cancel/timeout
+                        logger.debug(f"Truly invalid key {key} received, treating as cancel")
+                        return -1
                 
                 # Handle navigation and control keys
                 if key == curses.KEY_UP:
@@ -973,7 +972,16 @@ class UIManager:
                     logger.error(f"Redraw failed on timeout: {redraw_error}")
 
                 # Small delay to prevent rapid redraws
-                curses.napms(10) if hasattr(curses, 'napms') else None
+                try:
+                    curses.napms(10) if hasattr(curses, 'napms') else None
+                except KeyboardInterrupt:
+                    # Handle Ctrl+C gracefully - restore terminal and re-raise
+                    logger.warning("KeyboardInterrupt received during napms, restoring terminal state")
+                    try:
+                        self._cleanup_terminal()
+                    except Exception as cleanup_error:
+                        logger.error(f"Error cleaning up terminal on KeyboardInterrupt: {cleanup_error}")
+                    raise
                 
         except (curses.error, OSError, EOFError, TypeError) as e:
             logger.error(f"Menu input loop error: {e}")
@@ -1159,7 +1167,7 @@ class UIManager:
                     centered_msg = truncated_msg.center(box_width)
                     prompt_win.addstr(2, 3, centered_msg)
                     
-                    # Release INfo - row 3, centered with padding
+                    # Release Info - row 3, centered with padding
                     truncated_release_info = release_info[:box_width] if len(release_info) > box_width else release_info
                     centered_release_info = truncated_release_info.center(box_width)
                     prompt_win.addstr(3, 3, centered_release_info)
@@ -1196,6 +1204,69 @@ class UIManager:
                     prompt_win.refresh()
                 except curses.error:
                     pass
+            
+            # Input loop for confirmation
+            highlighted_idx = 0
+            while True:
+                # Check if window is still valid
+                if not self._validate_window(prompt_win):
+                    logger.warning("Window validation failed in confirmation input loop")
+                    return self._render_confirmation_fallback(message, default)
+                
+                try:
+                    key = prompt_win.getch()
+                    elapsed = time.time() - start_time
+                    
+                    if key is None:
+                        # Timeout handling
+                        if timeout is None or elapsed >= timeout:
+                            logger.debug(f"Confirmation: timeout reached, returning default={default}")
+                            return default
+                        else:
+                            # Redraw to refresh display
+                            redraw(highlighted_idx)
+                            if hasattr(curses, 'napms'):
+                                curses.napms(10)
+                            continue
+                    
+                    # Handle navigation keys (highlight Yes/No)
+                    if key in (curses.KEY_UP, 259):
+                        if highlighted_idx > 0:
+                            highlighted_idx -= 1
+                        else:
+                            highlighted_idx = 1  # Wrap to No
+                        redraw(highlighted_idx)
+                        continue
+                    
+                    if key in (curses.KEY_DOWN, 258):
+                        if highlighted_idx < 1:
+                            highlighted_idx = 0  # Wrap to Yes
+                        else:
+                            highlighted_idx += 1
+                        redraw(highlighted_idx)
+                        continue
+                    
+                    # Confirm: Enter, y, Y
+                    if key in (curses.KEY_ENTER, 10, 13, ord('y'), ord('Y')):
+                        return True
+                    
+                    # Cancel: n, N, Esc, q, KEY_RESIZE, KEY_BACKSPACE, 27, 127, 8
+                    if key in (ord('n'), ord('N'), 27, curses.KEY_RESIZE, 
+                               curses.KEY_BACKSPACE, 127, 8):
+                        return False
+                    
+                    # Timeout - redraw to refresh display
+                    redraw(highlighted_idx)
+                    if hasattr(curses, 'napms'):
+                        curses.napms(10)
+                
+                except (curses.error, OSError, EOFError, TypeError) as e:
+                    logger.error(f"Confirmation input error: {e}")
+                    return self._render_confirmation_fallback(message, default)
+        
+        except (curses.error, OSError, EOFError, TypeError) as e:
+            logger.error(f"Confirmation rendering error: {e}")
+            return self._render_confirmation_fallback(message, default)
             
             # Initial state
             highlighted_idx = 0
@@ -1268,8 +1339,8 @@ class UIManager:
                 
                 # Timeout - redraw to refresh display
                 redraw(highlighted_idx)
-        except (curses.error, OSError, EOFError, TypeError) as e:
-            logger.error(f"Unexpected error during confirmation: {e}")
+        except (curses.error, OSError, EOFError, TypeError) as exc:
+            logger.error(f"Unexpected error during confirmation: {exc}")
             return self._render_confirmation_fallback(message, default)
         except Exception as e:
             logger.error(f"Unexpected error during confirmation: {e}")

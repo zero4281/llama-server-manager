@@ -156,21 +156,35 @@ class TestTimeoutPytest:
         
         for highlighted in [0, 2, 4, None]:
             ui = create_ui()
+            mock_screen = MagicMock()
+            mock_screen.getmaxyx.return_value = (24, 80)
+            mock_screen.erase.return_value = None
+            mock_screen.refresh.return_value = None
+            mock_screen.box.return_value = None
+            mock_screen.addstr.return_value = None
+            mock_screen.attron.return_value = None
+            mock_screen.attroff.return_value = None
+            mock_screen.keypad.return_value = None
 
-            with patch.object(ui, '_screen') as mock_screen, \
-                 patch.object(ui, 'refresh'), \
-                 patch('curses.KEY_RESIZE'), \
-                 patch('ui_manager.curses.newwin', return_value=MagicMock()) as mock_newwin:
+            mock_win = MagicMock()
+            mock_win.getyx.return_value = (0, 0)
+            mock_win.getmaxyx.return_value = (24, 80)
+            mock_win.box.return_value = None
+            mock_win.erase.return_value = None
+            mock_win.refresh.return_value = None
+            mock_win.addstr.return_value = None
+            mock_win.attron.return_value = None
+            mock_win.attroff.return_value = None
+            mock_win.keypad.return_value = None
 
-                mock_win = mock_newwin.return_value
-                mock_win.getyx.return_value = (0, 0)
-                mock_screen.getmaxyx.return_value = (20, 60)
-
-            with patch.object(mock_win, 'getch') as mock_getch:
-                     mock_getch.side_effect = [None, None, None, ord('q')]
-                     
-                     result = ui.render_menu(options, default=1, highlighted=highlighted)
-                     assert result == -1
+            with patch.object(ui, '_screen', mock_screen):
+                with patch.object(ui, 'refresh', return_value=None):
+                    with patch('ui_manager.curses.newwin', return_value=mock_win):
+                        with patch.object(mock_win, 'getch') as mock_getch:
+                            mock_getch.side_effect = [None, None, None, ord('q')]
+                            
+                            result = ui.render_menu(options, default=1, highlighted=highlighted)
+                            assert result == -1
     
     def test_timeout_then_cancel(self):
         """Cancel should still work after timeout."""
