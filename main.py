@@ -1,4 +1,4 @@
-"""
+"""  
 main.py — Main entry point for llama-server-manager.
 
 This is the central CLI tool that orchestrates all operations:
@@ -13,6 +13,8 @@ import os
 import shutil
 import sys
 from pathlib import Path
+
+from ui_manager import UIManager
 
 # Add current directory to path for imports
 sys.path.insert(0, str(Path.cwd()))
@@ -262,21 +264,21 @@ class Main:
         # Load config (auto-generate if missing)
         self.config = self.load_config()
         
-        # Set up logging
+        # Set up logging and UI manager
         logging_config = self.config.get("logging", {})
         if logging_config.get("enabled", True):
             self.logger = get_logger(self.config, logging_config.get("level", "INFO"))
-        else:
-            self.logger = None
+        
+        self.ui = UIManager("llama-server-manager")
 
         # Handle special operations
         if self.args.self_update:
-            print("\n[Self-Update Mode]\n")
+            self.ui.print_message("\n[Self-Update Mode]\n")
             self.perform_self_update(self.args)
             return
         
         if self.args.install_llama:
-            print("\n[Install llama.cpp]\n")
+            self.ui.print_message("\n[Install llama.cpp]\n")
             try:
                 LlamaUpdater().install()
             except SystemExit:
@@ -290,12 +292,12 @@ class Main:
                                  DownloadError, ExtractionError, 
                                  PlatformNotFoundError, LlamaUpdaterError)):
                     raise
-                print(f"Error: {e}")
+                self.ui.render_error(f"Error: {e}")
                 sys.exit(1)
             return
         
         if self.args.update_llama:
-            print("\n[Update llama.cpp]\n")
+            self.ui.print_message("\n[Update llama.cpp]\n")
             try:
                 LlamaUpdater().update()
             except SystemExit:
@@ -309,23 +311,23 @@ class Main:
                                  DownloadError, ExtractionError, 
                                  PlatformNotFoundError, LlamaUpdaterError)):
                     raise
-                print(f"Error: {e}")
+                self.ui.render_error(f"Error: {e}")
                 sys.exit(1)
             return
         
         if self.args.stop_server:
-            print("\n[Stop Server Mode]\n")
+            self.ui.print_message("\n[Stop Server Mode]\n")
             exit_code = stop_server()
             sys.exit(exit_code)
         
         # Default: Run llama-server
-        print("\n[Run llama-server]\n")
+        self.ui.print_message("\n[Run llama-server]\n")
         
         # Check if llama-cpp is installed
         llama_cpp_path = Path.cwd() / "llama-cpp" / "llama-server"
         if not llama_cpp_path.exists():
-            print("Error: llama-cpp is not installed. Please run with --install-llama first.")
-            print("\nUsage: ./llama-server-manager --install-llama")
+            self.ui.render_error("llama-cpp is not installed. Please run with --install-llama first.")
+            self.ui.render_error("\nUsage: ./llama-server-manager --install-llama")
             sys.exit(1)
         
         runner = Runner(self.args, self.config)

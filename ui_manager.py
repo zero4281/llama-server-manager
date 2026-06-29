@@ -528,7 +528,7 @@ class UIManager:
         # Check for non-interactive mode or curses failure at the start
         if (not sys.stdin.isatty() and not self._using_curses) or not self._screen:
             logger.warning(f"render_menu: stdin is not a TTY and curses not initialized, returning -1 with timeout={timeout}")
-            return -1 if timeout is None else 0
+            return -1
         
         # Ensure terminal is ready before rendering
         if self._using_curses and self._screen:
@@ -595,7 +595,7 @@ class UIManager:
         # Calculate menu width: max label length + padding, but ensure minimum percentage and fit on screen
         max_label_len = max(len(opt.get('label', '')) for opt in options) if options else 20
         min_width = int(screen_width * self.MIN_WIDTH_PERCENT)
-        menu_width = max(min_width, min(max_label_len + 15, screen_width - 8)) + 2
+        menu_width = min(max(min_width, max_label_len + 15), screen_width - 8)
         
         y_offset = 2
         x_offset = 4
@@ -762,6 +762,16 @@ class UIManager:
                 try:
                     key = menu_win.getch()
                     logger.debug(f"DEBUG: getch() returned key={key}")
+                    if key is None:
+                         elapsed = time.time() - start_time
+                         if timeout is None or elapsed >= timeout:
+                             logger.debug(f"render_menu: timeout reached, returning -1")
+                             return -1
+                         else:
+                             # Redraw for timeout but continue loop
+                             redraw(menu_win, highlighted_idx)
+                             curses.napms(10) if hasattr(curses, 'napms') else None
+                             continue
                 except (curses.error, AttributeError, OSError, EOFError, TypeError) as e:
                     logger.error(f"Menu getch() error: {e}")
                     # Try to recover before giving up
@@ -838,7 +848,8 @@ class UIManager:
                                     redraw(menu_win, highlighted_idx)
                                 except Exception as redraw_error:
                                     logger.error(f"Redraw failed after numeric key {key_name}: {redraw_error}")
-                                continue
+                            # Continue for all numeric keys (in-range and out-of-range)
+                            continue
                         
                         # Check for character keys (printable ASCII)
                         elif 32 <= key < 127:
@@ -877,6 +888,7 @@ class UIManager:
                 if key == curses.KEY_PPAGE:
                     # Page up - move up half the visible menu
                     old_hi = highlighted_idx
+                    logger.debug(f"DEBUG: KEY_PPAGE detected, key={key}, curses.KEY_PPAGE={curses.KEY_PPAGE}, equal={key == curses.KEY_PPAGE}")
                     # Calculate page size based on screen height and menu size
                     page_size = max(1, min(len(options) // 2, (menu_height - 2) // 2))
                     new_idx = highlighted_idx - page_size
@@ -1194,11 +1206,22 @@ class UIManager:
                 # Check for timeout
                 elapsed = time.time() - start_time
                 if timeout is not None and elapsed >= timeout:
-                    logger.debug(f"Confirmation: timeout after {elapsed:.2f}s, assuming default yes")
-                    return True
+                    logger.debug(f"Confirmation: timeout after {elapsed:.2f}s, returning default={default}")
+                    return default
                 
                 try:
-                    key = prompt_win.getch()
+                     key = prompt_win.getch()
+                     logger.debug(f"DEBUG: getch() returned key={key}")
+                     if key is None:
+                         elapsed = time.time() - start_time
+                         if timeout is None or elapsed >= timeout:
+                             logger.debug(f"Confirmation: timeout reached, returning {default}")
+                             return default
+                         else:
+                             # Redraw for timeout but continue loop
+                             redraw(prompt_win, highlighted_idx)
+                             curses.napms(10) if hasattr(curses, 'napms') else None
+                             continue
                 except (curses.error, OSError, EOFError) as e:
                     logger.error(f"Confirmation getch() error: {e}")
                     continue
@@ -1319,7 +1342,7 @@ class UIManager:
         # Width is min(max(60, width - 12), 100) to ensure it fits on screen with minimum 60
         # Subtract 2 for padding, 2 for window border, and 8 for status line
         max_width = int(width) - 12
-        win_width = min(100, max(60, max_width))  # Cap at 100, minimum 60, or terminal width - 12
+        win_width = min(100, width - 10)
         win_height = 6
         
         # Calculate centered position

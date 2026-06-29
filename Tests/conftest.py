@@ -75,13 +75,4 @@ def mock_win():
     return win
 
 
-@pytest.fixture
-def ui(mock_curses):
-    """A UIManager instance with curses fully mocked, _using_curses=True."""
-    from ui_manager import UIManager
-    with patch('ui_manager.curses', mock_curses):
-        instance = UIManager("Test")
-        instance._using_curses = True
-        instance._color_pair = mock_curses.color_pair(1) | mock_curses.A_REVERSE
-        instance._screen = mock_curses.screen
-    return instance
+

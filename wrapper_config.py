@@ -74,15 +74,23 @@ class ConfigLogger:
 
 # Default configuration
 DEFAULT_CONFIG = {
-    "options": {},
-    "llama-server": {"options": {}},
+    "options": {
+        "logfile": "./llama-server-manager.log"
+    },
+    "llama-server": {
+        "options": {
+            "host": "0.0.0.0",
+            "port": "11235",
+            "models-max": "1",
+            "log-file": "llama-server.log"
+        }
+    },
     "logging": {
         "enabled": True,
         "level": "INFO",
         "file": None
     }
 }
-
 
 def load_config(config_path: Optional[Path] = None) -> dict:
     """

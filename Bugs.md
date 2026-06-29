@@ -2,9 +2,39 @@
 
 ## Current Bug Reports
 
-### 🔴 HIGH: Self-update fails with a bytes/string type error
+
+### 🔴 HIGH: `ui_manager.py` terminal corruption on interrupt
 **Status:** 🟠 **OPEN**  
-**Priority:** **P1** - Major feature broken; self-update completely non-functional
+**Priority:** **P2** - Terminal corruption on interrupt (High impact on user experience)
+
+**Description:**  
+When running `Tests/test_ui_manager_comprehensive.py::test_edge_cases`, the process hangs at `ui_manager.py:976` during `curses.napms(10)`. Interrupting with `Ctrl+C` leads to a `KeyboardInterrupt`, but leaves the terminal in a corrupted state. Subsequent commands result in `AttributeError: module 'curses' has no attribute 'keypad'` and `_curses.error: nocbreak() returned ERR`, indicating that the terminal's keypad and cbreak modes were not properly restored.
+
+**Reproduction Steps:**
+1. Run: `python3 -m pytest Tests/test_ui_manager_comprehensive.py::test_edge_cases`
+2. Wait for the test to reach the `render_menu` input loop.
+3. Press `Ctrl+C`.
+4. Observe the terminal corruption and the `AttributeError` on subsequent commands.
+
+**Root Cause Analysis:**
+The `curses.napms(10)` call is a blocking operation. When interrupted by a `KeyboardInterrupt`, the `curses` library's state is not fully restored because the `napms` call is still active. The `UIManager`'s `_restore_terminal_state` method is not called because the interrupt happens before the next loop iteration or during a blocking call that prevents the catch block from executing gracefully.
+
+**Affected Components:**
+- `ui_manager.py:render_menu` (specifically the input loop)
+- `Tests/test_ui_manager_comprehensive.py`
+
+**Dependencies:**
+- `curses` (Standard Library)
+
+**Workaround:**
+None. The user must manually run `stty sane` or restart the terminal session to restore terminal state after a corruption.
+
+**Test Coverage:**
+- `Tests/test_ui_manager_comprehensive.py` (Existing, but requires manual verification of terminal state after interrupt)
+
+**Impact:**
+- Users experience terminal corruption, making it difficult to use the terminal after the wrapper is interrupted.
+- The wrapper fails to gracefully handle interrupts during blocking UI operations.
 
 **Description:**  
 When running `./llama-server-manager --self-update`, the self-update process fails with a type error: "argument should be a str or an os.PathLike object where __fspath__ returns a str, not 'bytes'". The error occurs during the zip file extraction phase when `zipfile.ZipFile()` is called with bytes instead of a file path string.
@@ -55,8 +85,39 @@ Self-update is a critical maintenance feature that allows users to keep the wrap
 
 ## Summary
 
-**Last Updated:** May 3, 2026  
-**Overall Status:** All critical bugs resolved.
+
+### 🔴 MEDIUM: `ui_manager.py` hangs on `napms` and throws cleanup errors
+**Status:** 🟠 **OPEN**  
+**Priority:** **P3** - Functional hang and cleanup exceptions
+
+**Description:**  
+When running `Tests/test_ui_manager_comprehensive.py::test_edge_cases`, the process hangs at `ui_manager.py:976` during `curses.napms(10)`. Interrupting with `Ctrl+C` breaks the hang but triggers a series of exceptions during the `UIManager`'s cleanup phase, including `AttributeError: module 'curses' has no attribute 'keypad'` and `_curses.error: nocbreak() returned ERR`. While the terminal remains usable after the process exits, the internal cleanup logic is failing to execute gracefully.
+
+**Reproduction Steps:**
+1. Run: `python3 -m pytest Tests/test_ui_manager_comprehensive.py::test_edge_cases`
+2. Wait for the test to progress until it hits the `napms` call in `render_menu`.
+3. Press `Ctrl+C`.
+4. Observe the process exiting with cleanup errors.
+
+**Root Cause Analysis:**
+The `curses.napms(10)` call is a blocking operation. When interrupted by a `KeyboardInterrupt`, the `UIManager`'s `_restore_terminal_state` method is called (either directly or via `__del__`), but it encounters errors because the `curses` module state is inconsistent or the requested operations (like `keypad` or `nocbreak`) are unavailable/fail in the current context.
+
+**Affected Components:**
+- `ui_manager.py:render_menu` (specifically the input loop)
+- `Tests/test_ui_manager_comprehensive.py`
+
+**Dependencies:**
+- `curses` (Standard Library)
+
+**Workaround:**
+None. The user must use `Ctrl+C` to break the hang.
+
+**Test Coverage:**
+- `Tests/test_ui_manager_comprehensive.py` (Existing)
+
+**Impact:**
+- Functional hang during testing of edge cases.
+- Internal cleanup exceptions occur, though the terminal remains in a usable state.
 
 * **Resolved:** Self-update fails with bytes/string type error (P1)
 * **Resolved:** Fallback logic in render_menu not being triggered (P1)

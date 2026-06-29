@@ -29,7 +29,7 @@ The suite consists of exactly these five files plus `conftest.py` (shared fixtur
 |---|---|---|---|
 | `test_ui_manager_api.py` | unittest / standalone | 5 | Class structure, method signatures, color pair setup |
 | `test_ui_manager_comprehensive.py` | standalone (`run_tests()`) | 8 | Init/lifecycle, menu navigation, confirmation, progress bar, styling, edge cases |
-| `test_ui_manager_pytest.py` | pytest | 32 | Init fallback, arrow nav, number selection, cancel keys, confirmation inputs, progress bar, full workflow, page jump, wrapping, highlighted=None |
+| `test_ui_manager_pytest.py` | pytest | 46 | Init fallback, arrow nav, number selection, cancel keys, confirmation inputs, progress bar, full workflow, page jump, wrapping, highlighted=None |
 | `test_timeout_pytest.py` | pytest | 10 | Timeout returns -1, timeout after navigation, multiple timeouts, timeout with various highlighted states, cancel after timeout, default option, empty options, default=False timeout, _screen=None fallback |
 | `test_ui_manager_terminal_sizes.py` | standalone (`run_tests()`) | 9 | 40×20 / 80×24 / 120×30 terminals, menu width calculation, progress bar adaptation, spinner/determinate bars |
 
@@ -220,7 +220,9 @@ These are the behaviors the tests verify. If you change `ui_manager.py`, the tes
 
 - Returns the 0-based index of the selected option when the user presses Enter
 - `KEY_UP` and `KEY_DOWN` cycle through options with wrapping (top wraps to bottom and vice versa)
-- `KEY_PPAGE` jumps to the first option; `KEY_NPAGE` jumps to the last
+- `KEY_PPAGE` jumps UP by page size (half the menu or screen height, whichever is smaller, minimum 1) with wrapping
+- `KEY_NPAGE` jumps DOWN by page size (half the menu or screen height, whichever is smaller, minimum 1) with wrapping
+- Page size calculation: `max(1, min(len(options) // 2, (menu_height - 2) // 2))`
 - Typing a digit selects that option directly by number (0-indexed); an out-of-range digit is ignored
 - Any cancel key (`q`, Escape/27, `KEY_RESIZE`, `KEY_BACKSPACE`, 127, 8) returns `-1`
 - A `getch` timeout (returns `None` or `-1`) returns `-1`
@@ -289,10 +291,9 @@ Before committing a test that calls `render_menu` or `render_confirmation`:
 | File | Current | Target |
 |---|---|---|
 | `test_ui_manager_api.py` | 5 | 5 |
-| `test_ui_manager_comprehensive.py` | 6 suites | 6 suites |
-| `test_ui_manager_pytest.py` | 9 | 30 |
-| `test_timeout_pytest.py` | 7 | 7–10 |
-| `test_ui_manager_terminal_sizes.py` | 6 | 6 |
+| `test_ui_manager_comprehensive.py` | 8 suites | 6 suites |
+| `test_ui_manager_pytest.py` | 46 | 30 |
+| `test_ui_manager_terminal_sizes.py` | 9 | 6 |
 
 ---
 
