@@ -21,7 +21,7 @@ PID_FILE = Path.cwd() / "llama-server.pid"
 class Runner:
     """Manages the execution of llama-server process."""
 
-    def __init__(self, args, config: dict):
+    def __init__(self, args, config: dict, ui):
         """
         Initialize Runner.
 
@@ -31,6 +31,7 @@ class Runner:
         """
         self.args = args
         self.config = config
+        self.ui = ui
         self.pid_file = PID_FILE
         self.llama_server_path = Path.cwd() / "llama-cpp" / "llama-server"
         self.force_killed = False
@@ -114,9 +115,10 @@ class Runner:
             pid = process.pid
             with open(self.pid_file, "w") as f:
                 f.write(str(pid))
+            
+            self.ui.print_message(f"llama-server started with PID {pid}")
+            self.ui.print_message(f"PID file: {self.pid_file}")
 
-            print(f"llama-server started with PID {pid}")
-            print(f"PID file: {self.pid_file}")
 
         except Exception as e:
             self._cleanup()
@@ -131,63 +133,64 @@ class Runner:
                 pass
 
 
-def stop_server() -> int:
-    """
-    Stop a running llama-server process.
-
-    Returns:
-        0 if clean shutdown, non-zero if force-killed
-    """
-    try:
-        # Read PID file
-        with open(PID_FILE, "r") as f:
-            pid = int(f.read().strip())
-    except (FileNotFoundError, ValueError):
-        print("No running llama-server found (no PID file).")
-        return 1
-
-    force_killed = False
-
-    try:
-        # Send SIGTERM first
-        os.kill(pid, signal.SIGTERM)
+    def stop_server(self) -> int:
+        """
+        Stop a running llama-server process.
         
-        # Wait up to 60 seconds for process to exit
-        for i in range(60):
-            try:
-                # Check if process exists (raises OSError if not)
-                os.kill(pid, 0)
-            except OSError:
-                # Process has exited
+        Returns:
+            0 if clean shutdown, non-zero if force-killed
+        """
+        try:
+            # Read PID file
+            with open(PID_FILE, "r") as f:
+                pid = int(f.read().strip())
+        except (FileNotFoundError, ValueError):
+            self.ui.print_message("No running llama-server found (no PID file).")
+            return 1
+        
+        force_killed = False
+        
+        try:
+            # Send SIGTERM first
+            os.kill(pid, signal.SIGTERM)
+            
+            # Wait up to 60 seconds for process to exit
+            for i in range(60):
+                try:
+                    # Check if process exists (raises OSError if not)
+                    os.kill(pid, 0)
+                except OSError:
+                    # Process has exited
+                    return 0
+                time.sleep(1)
+        except OSError as e:
+            if e.errno == signal.SIGKILL:
+                self.ui.print_message("Process died while waiting...")
                 return 0
-            time.sleep(1)
-    except OSError as e:
-        if e.errno == signal.SIGKILL:
-            print("Process died while waiting...")
+            raise
+        
+        # Process didn't exit after 60 seconds, force kill
+        self.ui.print_message("Process did not exit cleanly, forcing termination...")
+        
+        if sys.platform == 'win32':
+            import ctypes
+            import ctypes.wintypes
+            kernel32 = ctypes.windll.kernel32
+            kernel32.TerminateProcess(ctypes.c_int(pid), 1)
+        else:
+            os.kill(pid, signal.SIGKILL)
+        
+        force_killed = True
+        
+        # Remove PID file
+        if PID_FILE.exists():
+            PID_FILE.unlink()
+        
+        if force_killed:
+            self.ui.print_message("llama-server force-terminated")
+            return 1
+        else:
+            self.ui.print_message("llama-server stopped")
             return 0
-        raise
 
-    # Process didn't exit after 60 seconds, force kill
-    print("Process did not exit cleanly, forcing termination...")
-    
-    if sys.platform == 'win32':
-        import ctypes
-        import ctypes.wintypes
-        kernel32 = ctypes.windll.kernel32
-        kernel32.TerminateProcess(ctypes.c_int(pid), 1)
-    else:
-        os.kill(pid, signal.SIGKILL)
-    
-    force_killed = True
-
-    # Remove PID file
-    if PID_FILE.exists():
-        PID_FILE.unlink()
-
-    if force_killed:
-        print("llama-server force-terminated")
-        return 1
-    else:
-        print("llama-server stopped")
-        return 0
 

@@ -28,10 +28,11 @@ Use todowrite to create the following verification task and assign it to @genera
 
 ## Phase 2 — Generate/Replace Plan
 
-Based on the verified status from Phase 1, use todowrite to create the update task and assign it to @general. Pass the target version number provided by the orchestrator configuration.
+Based on the verified status from Phase 1, use todowrite to create the update task and assign it to @general. 
 
+> Read the current version string from the top of `./Requirements.md`. 
 > Create `./Plan.md` if it does not exist. If it does exist, completely overwrite and replace its entire contents to purge all obsolete entries, resolved gaps, and historical violations.
-> Rewrite the file as **Version [Insert Orchestrator Version Here]** based *only* on the current outstanding gaps found in Phase 1.
+> Rewrite the file as **Version [Insert Extracted Version String Here]** based *only* on the current outstanding gaps found in Phase 1.
 > Ensure the updated document strictly adheres to the standard layout:
 > - Section 1: Current State Assessment (with a compliance checklist and implementation verification table).
 > - Section 2: Core Engineering Decisions or Filename Consistency.

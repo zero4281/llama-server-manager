@@ -17,11 +17,10 @@ from pathlib import Path
 # Add current directory to path for imports
 sys.path.insert(0, str(Path.cwd()))
 
-from ui_manager import UIManager
-
 from wrapper_config import load_config, get_logger
+from ui_manager import UIManager
+from runner import Runner
 from llama_updater import LlamaUpdater
-from runner import stop_server, Runner
 
 
 class Main:
@@ -31,6 +30,7 @@ class Main:
         self.args = None
         self.config = None
         self.logger = None
+        self.ui = UIManager("Llama Server Manager")
 
     def parse_args(self, args: list = None) -> argparse.Namespace:
         """
@@ -90,8 +90,8 @@ class Main:
             import tempfile
             from ui_manager import UIManager
             
-            ui = UIManager("Self-Update")
-            ui.print_message("Performing self-update...")
+            self.ui = UIManager("Self-Update")
+            self.ui.print_message("Performing self-update...")
             
             # Source selection menu
             source_options = [
@@ -101,10 +101,10 @@ class Main:
             ]
             
             default_source = 0
-            selected_source = ui.render_menu(source_options, default=default_source)
+            selected_source = self.ui.render_menu(source_options, default=default_source)
             
             if selected_source == -1:
-                ui.render_error("Update cancelled.")
+                self.ui.render_error("Update cancelled.")
                 sys.exit(0)
             
             selected_zip_url = ""
@@ -141,9 +141,9 @@ class Main:
                     for rel in releases
                 ]
                 
-                prev_choice = ui.render_menu(prev_releases)
+                prev_choice = self.ui.render_menu(prev_releases)
                 if prev_choice == -1:
-                    ui.render_error("Update cancelled.")
+                    self.ui.render_error("Update cancelled.")
                     sys.exit(0)
                 
                 selected_release = releases[prev_choice]
@@ -158,11 +158,7 @@ class Main:
                 selected_release = "HEAD"
             
             # Confirmation prompt
-            confirm = ui.render_confirmation(
-                ui,
-                f"Update {selected_tag if selected_tag != 'HEAD' else selected_name}",
-                selected_name
-            )
+            confirm = ui.render_confirmation(f"Selected: {selected_tag if selected_tag != 'HEAD' else selected_name}", f"({selected_name})")
             
             if not confirm:
                 ui.render_error("Update cancelled.")
@@ -204,21 +200,50 @@ class Main:
                     
                     if top_level_dir:
                         # Move files from top-level directory to project root
-                        for file_path in top_level_dir.rglob("*"):
-                            if file_path.is_file():
-                                rel_path = file_path.relative_to(top_level_dir)
-                                target = project_root / rel_path
-                                target.parent.mkdir(parents=True, exist_ok=True)
-                                target.write_bytes(file_path.read_bytes())
-                                # Clean up the old file
-                                file_path.unlink()
-                                ui.print_message(f"Updated: {rel_path}")
+                        moved_files = []
+                        try:
+                            for file_path in top_level_dir.rglob("*"):
+                                if file_path.is_file():
+                                    rel_path = file_path.relative_to(top_level_dir)
+                                    target = project_root / rel_path
+                                    target.parent.mkdir(parents=True, exist_ok=True)
+                                    
+                                    try:
+                                        target.write_bytes(file_path.read_bytes())
+                                        try:
+                                            file_path.unlink()
+                                            moved_files.append((file_path, target))
+                                            ui.print_message(f"Updated: {rel_path}")
+                                        except Exception:
+                                            # Partial move: exists in both.
+                                            if target.exists():
+                                                target.unlink()
+                                            raise
+                                        except Exception:
+                                            # Failed to write to target.
+                                            if target.exists():
+                                                target.unlink()
+                                        raise
+                                    except Exception as e:
+                                        ui.render_error(f"Error during file move: {e}")
+                                        for original, target in reversed(moved_files):
+                                            # Rollback: move from target back to original
+                                            # Since original was unlinked, it can be recreated
+                                            original.parent.mkdir(parents=True, exist_ok=True)
+                                            original.write_bytes(target.read_bytes())
+                                            target.unlink()
+                                        ui.render_error("Rollback completed.")
+                                        raise e
+                        finally:
+                            if top_level_dir.exists():
+                                shutil.rmtree(top_level_dir)
+                                ui.print_message(f"Removed: {top_level_dir.name}")
                         
-                        # Remove the top-level directory from extract_subdir
-                        shutil.rmtree(top_level_dir)
-                        ui.print_message(f"Removed: {top_level_dir.name}")
-                
-                ui.render_success("Self-update complete!")
+                        # If we reached here, update was successful
+                        ui.render_success("Self-update complete!")
+
+
+                        
             finally:
                 # Clean up temporary zip file
                 if zip_file_path.exists():
@@ -227,10 +252,7 @@ class Main:
             # Restart with same arguments
             ui.print_message(f"Restarting with original arguments: {args}")
             
-            # Re-parse args to preserve llama_args
-            new_args = [sys.argv[0]]
-            for key, value in vars(args).items():
-                new_args.append(f"--{key}" if not key.startswith("llama_") else f"{key}={value}" if value else f"--{key}")
+            new_args = ["main.py"] + sys.argv[1:]
             
             # Clear any cached modules to force reimport
             modules_to_clear = [
@@ -244,14 +266,11 @@ class Main:
             import subprocess
             
             # Execute and replace current process
-            subprocess.run([sys.executable] + new_args, 
-                         stdout=subprocess.PIPE, 
-                         stderr=subprocess.PIPE, 
-                         text=True)
-            
-            # If we get here, something went wrong, exit with error
-            ui.render_error("Restart failed, exiting.")
-            sys.exit(2)
+            subprocess.Popen([sys.executable, "main.py"] + sys.argv[1:], 
+                             stdout=subprocess.PIPE, 
+                             stderr=subprocess.PIPE, 
+                             text=True)
+            sys.exit(0)
             
         except Exception as e:
             ui.render_error(f"Self-update failed: {e}")
@@ -272,18 +291,18 @@ class Main:
         else:
             self.logger = None
 
+        runner = Runner(self.args, self.config, self.ui)
+        
         # Handle special operations
         if self.args.self_update:
-            ui = UIManager("Main")
-            ui.print_message("\n[Self-Update Mode]\n")
-            self.perform_self_update(self.args, ui)
+            self.ui.print_message("\n[Self-Update Mode]\n")
+            self.perform_self_update(self.args)
             return
         
         if self.args.install_llama:
-            ui = UIManager("Main")
-            ui.print_message("\n[Install llama.cpp]\n")
+            self.ui.print_message("\n[Install llama.cpp]\n")
             try:
-                LlamaUpdater().install(ui_manager=ui)
+                 LlamaUpdater(ui_manager=self.ui).install()
             except SystemExit:
                 raise
             except Exception as e:
@@ -292,18 +311,17 @@ class Main:
                                           DownloadError, ExtractionError, 
                                           PlatformNotFoundError, LlamaUpdaterError)
                 if isinstance(e, (RateLimitError, GitHubAPIError, 
-                                 DownloadError, ExtractionError, 
-                                 PlatformNotFoundError, LlamaUpdaterError)):
+                                  DownloadError, ExtractionError, 
+                                  PlatformNotFoundError, LlamaUpdaterError)):
                     raise
-                ui.render_error(f"Error: {e}")
+                self.ui.render_error(f"Error: {e}")
                 sys.exit(1)
             return
         
         if self.args.update_llama:
-            ui = UIManager("Main")
-            ui.print_message("\n[Update llama.cpp]\n")
+            self.ui.print_message("\n[Update llama.cpp]\n")
             try:
-                LlamaUpdater().update(ui_manager=ui)
+                 LlamaUpdater(ui_manager=self.ui).update()
             except SystemExit:
                 raise
             except Exception as e:
@@ -312,32 +330,30 @@ class Main:
                                           DownloadError, ExtractionError, 
                                           PlatformNotFoundError, LlamaUpdaterError)
                 if isinstance(e, (RateLimitError, GitHubAPIError, 
-                                 DownloadError, ExtractionError, 
-                                 PlatformNotFoundError, LlamaUpdaterError)):
+                                  DownloadError, ExtractionError, 
+                                  PlatformNotFoundError, LlamaUpdaterError)):
                     raise
-                ui.render_error(f"Error: {e}")
+                self.ui.render_error(f"Error: {e}")
                 sys.exit(1)
             return
         
         if self.args.stop_server:
-            ui = UIManager("Main")
-            ui.print_message("\n[Stop Server Mode]\n")
-            exit_code = stop_server()
+            self.ui.print_message("\n[Stop Server Mode]\n")
+            exit_code = runner.stop_server()
             sys.exit(exit_code)
         
         # Default: Run llama-server
-        ui = UIManager("Main")
-        ui.print_message("\n[Run llama-server]\n")
+        self.ui.print_message("\n[Run llama-server]\n")
         
         # Check if llama-cpp is installed
         llama_cpp_path = Path.cwd() / "llama-cpp" / "llama-server"
         if not llama_cpp_path.exists():
-            ui.render_error("Error: llama-cpp is not installed. Please run with --install-llama first.")
-            ui.render_error("\nUsage: ./llama-server-manager --install-llama")
+            self.ui.render_error("Error: llama-cpp is not installed. Please run with --install-llama first.")
+            self.ui.print_message("\nUsage: ./llama-server-manager --install-llama")
             sys.exit(1)
         
-        runner = Runner(self.args, self.config)
         runner.run()
+
 
 
 if __name__ == "__main__":
