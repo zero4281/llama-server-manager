@@ -1,7 +1,7 @@
 # Llama Server Manager — Software Requirements Document
 
-**Version:** 1.5  
-**Date:** April 2026  
+**Version:** 1.0.6  
+**Date:** July 2026  
 **Repository:** https://github.com/zero4281/llama-server-manager
 
 ---
@@ -370,13 +370,10 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 
 - Launch `./llama-cpp/llama-server` (`./llama-cpp/llama-server.exe` on Windows) with the assembled argument list.
 - Record the PID of the launched `llama-server` process.
-
-### 7.4 Daemon mode
-
 - Write the PID to `llama-server.pid` in the project directory.
 - `main.py` returns control to the shell immediately after launch.
 
-### 7.5 Logging (llama-server output)
+### 7.4 Logging (llama-server output)
 
 The log file path is resolved in the following order of precedence:
 
@@ -386,7 +383,7 @@ The log file path is resolved in the following order of precedence:
 
 The resolved path is passed to `llama-server` via its `--log-file` flag.
 
-### 7.6 Graceful shutdown
+### 7.5 Graceful shutdown
 
 Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the `--stop-server` argument passed to `main.py`.
 
@@ -484,9 +481,10 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
-| 1.5 | April 2026 | zero4281 | Clarified that the entire interactive workflow must remain within the curses environment after UIManager initialisation; no stdout/stderr output is permitted post-init. Updated confirmation prompts in §5.3.2 and §6.3.3 to show curses bordered window layout. Updated §5.4 llama-cpp-not-found error, §5.3.3 update failure error, §6.5 success/warning messages, and §6.6 API error messages to use UIManager instead of direct print calls. Strengthened §8.4 and §8.6 to require UIManager to remain active for the full workflow duration. |
-| 1.4 | April 2026 | zero4281 | Added ncurses CLI UI module (`ui_manager.py`, Section 8); all menus, prompts, and progress bars rendered with black background and green text; Windows now requires WSL with runtime detection warning; updated cross-platform and dependency requirements accordingly |
-| 1.3 | April 2026 | zero4281 | Removed `--foreground` command-line option |
-| 1.2 | April 2026 | zero4281 | Expanded Section 6 install workflow: interactive release tag + asset selection with auto-detected recommendation, all-assets display, checksum verification, download progress bar, delete-and-replace of existing llama-cpp folder, post-install success message and sanity check |
-| 1.1 | April 2026 | zero4281 | Added user confirmation and source selection for `--self-update`; added user confirmation prompt to llama.cpp install/update |
-| 1.0 | April 2026 | zero4281 | Initial draft |
+| 1.0.6 | July 2026 | zero4281 | Removed §7.4 Daemon mode (the program is not a daemon); moved PID file (`llama-server.pid`) requirement and shell-return behaviour into §7.3 Process execution. Renumbered former §7.5 Logging → §7.4 and former §7.6 Graceful shutdown → §7.5. |
+| 1.0.5 | April 2026 | zero4281 | Clarified that the entire interactive workflow must remain within the curses environment after UIManager initialisation; no stdout/stderr output is permitted post-init. Updated confirmation prompts in §5.3.2 and §6.3.3 to show curses bordered window layout. Updated §5.4 llama-cpp-not-found error, §5.3.3 update failure error, §6.5 success/warning messages, and §6.6 API error messages to use UIManager instead of direct print calls. Strengthened §8.4 and §8.6 to require UIManager to remain active for the full workflow duration. |
+| 1.0.4 | April 2026 | zero4281 | Added ncurses CLI UI module (`ui_manager.py`, Section 8); all menus, prompts, and progress bars rendered with black background and green text; Windows now requires WSL with runtime detection warning; updated cross-platform and dependency requirements accordingly |
+| 1.0.3 | April 2026 | zero4281 | Removed `--foreground` command-line option |
+| 1.0.2 | April 2026 | zero4281 | Expanded Section 6 install workflow: interactive release tag + asset selection with auto-detected recommendation, all-assets display, checksum verification, download progress bar, delete-and-replace of existing llama-cpp folder, post-install success message and sanity check |
+| 1.0.1 | April 2026 | zero4281 | Added user confirmation and source selection for `--self-update`; added user confirmation prompt to llama.cpp install/update |
+| 1.0.0 | April 2026 | zero4281 | Initial draft |

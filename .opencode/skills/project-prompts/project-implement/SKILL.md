@@ -35,18 +35,24 @@ Each prompt to @general must include:
 
 ---
 
-## Phase 3 — Regression Testing & Verification
+## Phase 3 — Dynamic Manual Verification
 
-Once all structural code updates from Phase 2 are complete, use todowrite to create the verification task and assign it to @general.
+Once all structural code updates from Phase 2 are complete, use todowrite to create the verification task and assign it to @general to perform manual dynamic testing. 
 
-> Read `./Testing Strategy.md` to extract the project's configured test suite execution command.
-> 
-> Execute the test suite using that exact command.
-> 
-> Review the output:
-> - If all tests pass successfully, return a verification success message.
-> - If any tests fail, identify which source code updates caused the regression.
-> 
-> **CRITICAL:** Do not modify any test files to force a passing state. All fixes must be applied strictly to the source code files to bring them into alignment with the established test suites and requirements.
+The orchestrator must read the **Manual Dynamic Testing** section of `./Testing Strategy.md` to extract the mandatory testing constraints, execution environments, session logging/capture patterns, and the exact interactive verification lifecycle.
 
-**WAIT:** If tests fail, pass the failure logs back to @general as a new sub-task to fix the source code. Repeat Phase 3 until the project's test suite runs completely green.
+Based on the specific updates implemented in Phase 2 and the guidelines in `./Testing Strategy.md`, determine:
+1. The appropriate application startup command, runtime configuration, environment variables, or flags required to exercise the updated feature.
+2. The specific sequence of user inputs, parameters, payloads, or navigation paths needed to reach and trigger the modified functionality.
+
+Instruct @general to execute the dynamic verification steps according to the interaction procedure outlined in `./Testing Strategy.md`, enforcing the following rules:
+- **Scratch Artifacts:** State captures, execution logs, and output dumps (e.g., initial or post-input verification data) must be written strictly to scratch or temporary locations (such as `/tmp/` or the current working directory outside the designated test directories). They must **never** be written to active automated test directories or committed.
+- **Session Cleanup:** The application instance, background process, or interactive test session must be explicitly terminated and cleaned up once the final verification states are captured.
+
+Review the resulting artifacts:
+- Verify that the specific feature changes, success states, or outputs expected from the `Update.md` requirements are visible in the captured application states.
+- Confirm that the application handles input correctly, processes the dynamic workflow as expected, and does not crash or exhibit unintended behavior.
+
+**CRITICAL:** Fixes for any behavioral bugs, execution errors, or functional flaws discovered here must be applied strictly to the source code. Never modify automated test files, test configurations, or paper over the issue by adjusting the interactive execution script.
+
+**WAIT:** If the dynamic testing reveals failures, unexpected crashes, or incorrect behavior, pass the logs/behavior notes back to @general as a new sub-task to fix the source code. Repeat Phase 3 until the manual testing artifacts confirm stable, intended behavior.

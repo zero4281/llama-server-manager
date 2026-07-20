@@ -1,7 +1,9 @@
----
+---  
 name: project-update-tests
 description: Use this skill to review and update the test suite after code changes.
+
 ---
+
 # Skill Instructions
 **Constraint:** Do not modify any core source files. Only modify files located within the test directories defined in `./Testing Strategy.md`. Use the todowrite tool to track all tasks. 
 
@@ -20,7 +22,7 @@ Use todowrite to create the following three tasks and assign each to @general.
 Include the following context in every task:
 - Read `./Testing Strategy.md` to locate the correct testing folders, metadata properties, and execution commands.
 - Only modify files inside the identified test directories.
-- Read `./Requirements.md` and `./Plan.md` before starting.
+- Read `./Requirements.md` and **specifically Section 3 (Testing & Verification Status) of `./Plan.md`** before starting. Do not review core implementation tasks outside of this section.
 - Return a written summary of findings, including a list of specific fixes needed.
 
 ### Task 1 — Coverage Gaps
@@ -34,7 +36,7 @@ Include the following context in every task:
 **WAIT:** Do not proceed until Task 2 is complete and the summary is returned.
 
 ### Task 3 — Mocking Compliance
-> Read `./Testing Strategy.md` to check if a mock verification script path is defined in the configuration parameters. If a verification script is specified and exists on disk, run it using the environment's appropriate interpreter. Otherwise, manually scan the test directory files to ensure mocking patterns match the compliance rules defined in `./Testing Strategy.md`. Note any violations. Return a written summary listing any violations found.
+> Read `./Testing Strategy.md` to check if a mock verification script path is defined in the configuration parameters. If a verification script is specified and exists on disk, run it using the environment's appropriate interpreter. Otherwise, manually scan the test directory files to ensure mocking patterns match the compliance rules defined in `./Testing Strategy.md` (paying strict attention to the UIManager curses.newwin intercept rules). Note any violations. Return a written summary listing any violations found.
 
 ---
 

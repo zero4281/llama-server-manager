@@ -1,11 +1,14 @@
 ---
 name: project-bug-create
-description: Use this skill to triage, analyze, and document new issues in the Bugs.md file.
+description: Use this skill to triage, analyze, reproduce via manual terminal verification, and document new issues in the Bugs.md file.
+
 ---
+
 # Skill Instructions
+
 **Constraint:** Do not modify any source code files, test files, or configuration files. This is a documentation-only workflow. Only modify `./Bugs.md`. Use the todowrite tool to manage this triage iteration.
 
-⚠️ **AGENT BOUNDARY** — The orchestrator must NOT parse local project files or directly append entries to the bug tracking documents. All duplication scanning, technical dependency analysis, and document adjustments must be delegated to an @general agent.
+⚠️ **AGENT BOUNDARY** — The orchestrator must NOT parse local project files, execute terminal testing commands, or directly append entries to the bug tracking documents. All duplication scanning, technical dependency analysis, manual dynamic reproduction testing, and document adjustments must be delegated to an @general agent.
 
 **EXECUTION POLICY:** Perform tasks strictly in sequence. Do not spawn concurrent agents. You must pause and wait for explicit user approval via AskUserQuestion before finalizing and appending any bug entry to the filesystem.
 
@@ -18,20 +21,24 @@ Use AskUserQuestion to prompt the user for a clear, concise description of the i
 
 ---
 
-## Phase 2 — Technical Analysis & Drafting
+## Phase 2 — Technical Analysis, Manual Verification & Drafting
 
-Once intake details are received, use todowrite to create the analysis task and assign it to @general.
+Once intake details are received, use todowrite to create the combined analysis and manual verification task and assign it to @general.
 
 > Read `./Requirements.md`, `./Plan.md`, `./Testing Strategy.md`, and the existing `./Bugs.md`.
 > Parse the user's provided bug report:
 > "[Insert User Bug Report Here]"
 > 
-> Analyze the codebase context to achieve the following:
-> 1. Check the 'Current Bug Reports' section of `./Bugs.md` to ensure the bug is not a duplicate.
-> 2. Cross-reference `./Requirements.md` and `./Plan.md` to identify dependencies and affected modules.
-> 3. Reference `./Testing Strategy.md` to determine if a new test case is required to reproduce or verify this bug.
+> Execute manual dynamic verification to confirm and analyze the bug behavior before drafting the entry:
 > 
-> **CRITICAL:** Perform NO code changes, refactoring, or bug fixes. Draft a structured entry for `./Bugs.md` containing: Clear Title, Severity/Priority, Dependencies, and detailed Reproduction Steps. Return this draft to the orchestrator.
+> 1. **Dynamic Reproduction Session:** Read the 'Manual Dynamic Testing' section of `./Testing Strategy.md`. Formulate the appropriate application startup command, runtime configuration, and specific sequence of interactive user inputs/keypresses needed to exercise and expose the reported bug.
+> 2. **Run and Capture:** Launch the app inside a detached `tmux` session, send the keypresses to navigate to the faulty behavior, and capture the terminal state. 
+>    - *Scratch Artifact Pattern:* All state captures, logs, or text dumps must be written strictly to scratch or temporary locations (e.g., `/tmp/initial_menu.txt`, `/tmp/after_input.txt`). They must **never** be written to automated test directories or committed.
+>    - *Session Cleanup:* The interactive `tmux` session or background process must be explicitly terminated and cleaned up once states are captured.
+> 3. **Duplicate & Dependency Checks:** Check the 'Current Bug Reports' section of `./Bugs.md` to ensure the bug is not a duplicate. Cross-reference `./Requirements.md` and `./Plan.md` to identify dependencies and affected modules.
+> 4. **Test Suitability:** Reference `./Testing Strategy.md` to determine if a new automated test case is required later to prevent this bug from reoccurring.
+> 
+> **CRITICAL:** Perform NO code changes, refactoring, or active bug fixes. Draft a structured entry for `./Bugs.md` containing: Clear Title, Severity/Priority, Dependencies, and the verified, precise workflow required to reproduce the bug based on your manual dynamic testing results. Return this draft to the orchestrator.
 
 **WAIT:** Do not proceed until the agent returns the written draft.
 
