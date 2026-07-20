@@ -3,11 +3,13 @@
 ## Current Bug Reports
 
 ### 🔴 HIGH: Self-update fails with a bytes/string type error
-**Status:** 🟠 **OPEN**  
+**Status:** ⚪ **OBSOLETE**  
 **Priority:** **P1** - Major feature broken; self-update completely non-functional
 
 **Description:**  
 When running `./llama-server-manager --self-update`, the self-update process fails with a type error: "argument should be a str or an os.PathLike object where __fspath__ returns a str, not 'bytes'". The error occurs during the zip file extraction phase when `zipfile.ZipFile()` is called with bytes instead of a file path string.
+
+Note: This feature is no longer being prioritized.
 
 **Reproduction Steps:**
 1. Run: `./llama-server-manager --self-update <<< $"\n\n"`
@@ -52,11 +54,27 @@ Self-update is a critical maintenance feature that allows users to keep the wrap
 - The project cannot be maintained or evolved through automated means
 - Users are stuck with outdated versions that may contain bugs or security vulnerabilities
 - The wrapper's ability to self-correct and improve is compromised
+\n\n### 🔴 HIGH: LlamaUpdater.__init__() receives unexpected keyword argument 'ui'
+**Status:** 🟢 **CLOSED**  
+**Priority:** **P1** - Major feature (installation/update) crashes on startup.
+**Dependencies:** `main.py`, `llama_updater.py`
+
+**Description:**
+When attempting to install or update llama.cpp using the CLI, the application crashes immediately with a `TypeError`. This is because `main.py` passes the `ui` instance to the `LlamaUpdater` constructor using the `ui` keyword, but the `LlamaUpdater.__init__` method in `llama_updater.py` only accepts `ui_manager`.
+
+**Reproduction Steps:**
+1. Run the application with the installation flag: `./llama-server-manager --install-llama`
+2. **Actual Result:** The application crashes immediately with the following error:
+   `Error: LlamaUpdater.__init__() got an unexpected keyword argument 'ui'`
+3. **Expected Result:** The application should initialize the `LlamaUpdater` correctly and proceed to the platform selection menu.
+
+**Test Suitability:**
+A unit test for `LlamaUpdater` initialization should be added to verify that the `ui_manager` parameter is correctly handled and that the application can proceed to the platform selection menu without crashing.
 
 ## Summary
 
-**Last Updated:** May 3, 2026  
-**Overall Status:** All critical bugs resolved.
+**Last Updated:** July 20, 2026  
+**Overall Status:** Open P1 issues remain (some obsolete).
 
 * **Resolved:** Self-update fails with bytes/string type error (P1)
 * **Resolved:** Fallback logic in render_menu not being triggered (P1)
@@ -69,4 +87,4 @@ Self-update is a critical maintenance feature that allows users to keep the wrap
 * **Resolved:** Curses environment drops (P3)
 * **Resolved:** Menu border issues (P3)
 * **Resolved:** Confirmation prompt layout (P2)
-* **Resolved:** get_checksum_assets() returns no values (P1)
+* **Resolved:** Fixed TypeError by changing 'ui' to 'ui_manager' in LlamaUpdater initialization in main.py
