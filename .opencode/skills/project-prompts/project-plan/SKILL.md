@@ -1,7 +1,9 @@
 ---
 name: project-plan
 description: Use this skill to reconcile Requirements.md with the implementation codebase and generate/update Plan.md.
+
 ---
+
 # Skill Instructions
 **Constraint:** Do not modify any source code files, configuration files, or files inside `./Tests/`. Only modify `./Plan.md` and `./Update.md`. Use the todowrite tool to track the lifecycle of this planning iteration.
 
@@ -24,11 +26,12 @@ Use todowrite to create the following verification task and assign it to @genera
 
 ---
 
-## Phase 2 — Generate/Update Plan
+## Phase 2 — Generate/Replace Plan
 
 Based on the verified status from Phase 1, use todowrite to create the update task and assign it to @general. Pass the target version number provided by the orchestrator configuration.
 
-> Rewrite or update `./Plan.md` to accurately reflect the project status against the latest requirements. Mark this plan explicitly as **Version [Insert Orchestrator Version Here]**.
+> Create `./Plan.md` if it does not exist. If it does exist, completely overwrite and replace its entire contents to purge all obsolete entries, resolved gaps, and historical violations.
+> Rewrite the file as **Version [Insert Orchestrator Version Here]** based *only* on the current outstanding gaps found in Phase 1.
 > Ensure the updated document strictly adheres to the standard layout:
 > - Section 1: Current State Assessment (with a compliance checklist and implementation verification table).
 > - Section 2: Core Engineering Decisions or Filename Consistency.
