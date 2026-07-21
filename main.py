@@ -202,45 +202,41 @@ class Main:
                         # Move files from top-level directory to project root
                         moved_files = []
                         try:
+                            backup_dir = project_root / ".backup"
+                            backup_dir.mkdir(parents=True, exist_ok=True)
+                            backups = []
+                            
                             for file_path in top_level_dir.rglob("*"):
                                 if file_path.is_file():
                                     rel_path = file_path.relative_to(top_level_dir)
-                                    target = project_root / rel_path
-                                    target.parent.mkdir(parents=True, exist_ok=True)
+                                    if rel_path.name.endswith('.md') or 'tests' in rel_path.parts:
+                                        continue
                                     
-                                    try:
-                                        target.write_bytes(file_path.read_bytes())
-                                        try:
-                                            file_path.unlink()
-                                            moved_files.append((file_path, target))
-                                            ui.print_message(f"Updated: {rel_path}")
-                                        except Exception:
-                                            # Partial move: exists in both.
-                                            if target.exists():
-                                                target.unlink()
-                                            raise
-                                        except Exception:
-                                            # Failed to write to target.
-                                            if target.exists():
-                                                target.unlink()
-                                        raise
-                                    except Exception as e:
-                                        ui.render_error(f"Error during file move: {e}")
-                                        for original, target in reversed(moved_files):
-                                            # Rollback: move from target back to original
-                                            # Since original was unlinked, it can be recreated
-                                            original.parent.mkdir(parents=True, exist_ok=True)
-                                            original.write_bytes(target.read_bytes())
-                                            target.unlink()
-                                        ui.render_error("Rollback completed.")
-                                        raise e
+                                    target = project_root / rel_path
+                                    if target.exists():
+                                        backup_path = backup_dir / rel_path
+                                        backup_path.parent.mkdir(parents=True, exist_ok=True)
+                                        shutil.move(str(target), str(backup_path))
+                                        backups.append((backup_path, target))
+                                        shutil.move(str(file_path), str(target))
+                                    else:
+                                        target.parent.mkdir(parents=True, exist_ok=True)
+                                        shutil.move(str(file_path), str(target))
+                                    
+                                    self.ui.print_message(f"Updated: {rel_path}")
+                            
+                            if backup_dir.exists():
+                                shutil.rmtree(backup_dir)
+                            self.ui.render_success("Self-update complete!")
+                        except Exception as e:
+                            for backup_path, original_target_path in reversed(backups):
+                                shutil.move(str(backup_path), str(original_target_path))
+                            self.ui.render_error(f"Error during file move: {e}")
+                            raise e
                         finally:
                             if top_level_dir.exists():
                                 shutil.rmtree(top_level_dir)
-                                ui.print_message(f"Removed: {top_level_dir.name}")
-                        
-                        # If we reached here, update was successful
-                        ui.render_success("Self-update complete!")
+                                self.ui.print_message(f"Removed: {top_level_dir.name}")
 
 
                         

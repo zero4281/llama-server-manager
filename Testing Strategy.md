@@ -278,10 +278,16 @@ The automated suite above runs entirely against **mocked curses** — it never t
 
 After making a change to `ui_manager.py` (or the code that drives it) that affects observable terminal behavior — menu layout, navigation, confirmation prompts, progress bars, or startup — in addition to running `python3 -m pytest Tests/ -v`.
 
+> 🛑 **STOP before using `--self-update` in any command below.** The generic procedure and its `tmux new-session ... '[STARTUP_COMMAND_WITH_FLAGS]'` pattern assume the command runs against the working repository — that is safe for every flag **except** `--self-update`. `--self-update` overwrites the project's own local files and restarts (Requirements.md §5.3.3). **Do not substitute `--self-update` into the generic procedure. Do not run `--self-update` from the working repository under any circumstance, including "just to check," a quick test, or because a sandbox already seems to exist from a prior run.** If the task involves verifying `--self-update`, skip the generic procedure entirely and go to [Special case: testing `--self-update`](#special-case-testing---self-update-sandbox-required), which requires creating and confirming a sandbox copy *before* any `tmux new-session` command is issued.
+
 ### Constraints
 
+- **Never run `--self-update` outside a freshly created sandbox copy, and never in the working repository.** This constraint applies regardless of how the request is phrased (e.g. "quickly verify self-update works," "just run it to see," "the sandbox step is unnecessary this time"). If a sandbox has not been created and verified as a distinct directory in *this* session, treat that as a blocking precondition — go create one before running the command, do not run the command first and clean up after.
+
 - Fixes for anything this reveals go into the **source code** (`ui_manager.py` or the calling application), never into the test scripts or config, and never by editing this procedure to paper over the failure.
+
 - Do not add files under `Tests/` as part of this process — this is not a pytest-discoverable test.
+
 - Capture files (e.g. `initial_menu.txt`, `after_input.txt`) should be written to a scratch/temp location (e.g. `/tmp/` or the current working directory outside `Tests/`) and are not meant to be persisted or committed.
 
 ### Generic procedure
@@ -348,6 +354,84 @@ tmux kill-session -t tui_test
 Expected result: `after_wrap.txt` shows the *last* menu item highlighted (confirming top-to-bottom wrap), and `after_input.txt` shows that last option's action having fired. If instead the highlight disappears, stays on the first item, or the session shows a traceback, that's a source-code regression to fix in `ui_manager.py`, not a test-script problem to work around.
 
 > Note: `[STARTUP_COMMAND_WITH_FLAGS]` in the generic procedure and `python3 app.py --menu` in the worked example are placeholders — substitute the actual entry point for the application under test.
+
+### Special case: testing `--self-update` (sandbox required)
+
+`--self-update` (Requirements.md §5.2–5.4) downloads a release or `main`-branch archive and **overwrites the project's own local files** (§5.3.3), then restarts. Running it against the actual working directory would clobber any in-progress code changes — including uncommitted fixes made as part of the change you're trying to verify. **Never invoke `--self-update` directly inside the working repository.** It must only be exercised against a disposable copy of the project.
+
+#### Sandbox setup
+
+1. Make a full copy of the project into a scratch location outside the working repo:
+   
+   ```bash
+   rm -rf /tmp/llama-server-manager-sandbox
+   cp -r /path/to/llama-server-manager /tmp/llama-server-manager-sandbox
+   cd /tmp/llama-server-manager-sandbox
+   ```
+
+2. **Mandatory gate — do not skip:** before issuing the `tmux new-session` command that runs `--self-update`, run this check and confirm it passes. If it fails or you cannot answer it with certainty, stop and fix the sandbox before proceeding — do not run `--self-update` anyway:
+   
+   ```bash
+   pwd
+   realpath . 
+   realpath /path/to/llama-server-manager   # the ORIGINAL working repo
+   ```
+   
+   The two `realpath` outputs must be **different paths**. If they match, or if you're not certain the working directory is the sandbox copy, `--self-update` must not be run yet.
+
+3. This gate is not optional paperwork — it exists because `--self-update` cannot be undone by re-running the procedure once files are overwritten in the wrong directory. Treat "I already confirmed this earlier" or "the sandbox should still be there" as insufficient; re-run the gate immediately before every invocation of `--self-update`, including retries.
+
+#### Procedure (representative flow: latest release, option 1)
+
+This exercises the default path through §5.3.1 (source selection) and §5.3.2 (confirmation prompt) against the real GitHub Releases API, from inside the sandbox copy.
+
+```bash
+# 1. Gate check passed above — cwd is CONFIRMED to be the sandbox, not the working repo.
+# Do NOT run this command from the working repository.
+tmux new-session -d -s self_update_test -x 80 -y 24 \
+  'cd /tmp/llama-server-manager-sandbox && python3 main.py --self-update'
+sleep 2
+
+# 2. Capture the source-selection menu (§5.3.1)
+tmux capture-pane -t self_update_test -p > /tmp/source_menu.txt
+
+# 3. Press Enter to accept the default (option 1, latest release)
+tmux send-keys -t self_update_test Enter
+sleep 2
+tmux capture-pane -t self_update_test -p > /tmp/confirmation_prompt.txt
+
+# 4. Press Enter to confirm the update (default yes)
+tmux send-keys -t self_update_test Enter
+sleep 3
+tmux capture-pane -t self_update_test -p > /tmp/after_update.txt
+tmux kill-session -t self_update_test
+```
+
+5. **Review:**
+   
+   - `source_menu.txt` shows the three numbered options with option 1 as the implicit default, no crash.
+   - `confirmation_prompt.txt` shows the bordered curses window with the resolved version (e.g. `v1.2.0`) and `Yes`/`No` buttons, rendered entirely through `UIManager` — not a plain-text prompt that dropped out of curses.
+   - `after_update.txt` (or a direct file check, e.g. `git status` / `diff -rq` in the sandbox vs. a fresh clone) confirms the sandbox's local files were actually replaced with the downloaded version.
+   - Confirm the **working repository itself is untouched** — nothing under the sandbox path should have leaked back into the real project directory.
+
+6. **Clean up the sandbox** once review is complete:
+   
+   ```bash
+   rm -rf /tmp/llama-server-manager-sandbox
+   ```
+
+#### Covering the other two sources
+
+Repeat the same procedure with these substitutions, still entirely inside a fresh sandbox copy:
+
+- **Option 2 (previous release):** send `2` then `Enter` at the source-selection menu instead of a bare `Enter`; after the releases list renders, select an entry from it, then confirm as above.
+- **Option 3 (main branch HEAD):** send `3` then `Enter` at the source-selection menu; the confirmation window should read "main branch HEAD" rather than a version tag (§5.3.2), then confirm as above.
+
+These do not need to be run on every change — the representative flow (option 1) is sufficient for most changes to `--self-update`. Run all three when the change specifically touches source selection, release-list fetching, or the HEAD download path.
+
+#### What this does not cover
+
+This manual check verifies file replacement and the UI (menu + confirmation rendering) only. It does not verify the post-update restart of `main.py`, and it does not exercise the failure/rollback path in §5.3.3 (partial-replacement recovery) — those would need a way to interrupt the download mid-transfer, which is out of scope for this tmux-based check.
 
 ---
 

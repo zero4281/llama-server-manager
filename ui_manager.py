@@ -1,72 +1,10 @@
 #!/usr/bin/env python3
-"""
-uimanager.py — ncurses CLI user interface module.
-
-This module provides ncurses-based UI rendering for menus, prompts,
-progress bars, and other interactive elements with black background
-and green text styling.
-
-Key Code Reference
-==================
-
-All UIManager methods use standard curses key codes. Below is a quick reference:
-
-### Navigation & Control Keys
-| Key Code | Constant | Description | Used For |
-|----------|----------|-------------|----------|
-| `curses.KEY_UP` | KEY_UP | Move cursor up | Menu navigation, highlight selection |
-| `curses.KEY_DOWN` | KEY_DOWN | Move cursor down | Menu navigation, highlight selection |
-| `curses.KEY_LEFT` | KEY_LEFT | Move cursor left | Not used in menus |
-| `curses.KEY_RIGHT` | KEY_RIGHT | Move cursor right | Not used in menus |
-| `curses.KEY_PPAGE` | KEY_PPAGE | Page up | Jump to top of menu |
-| `curses.KEY_NPAGE` | KEY_NPAGE | Page down | Jump to bottom of menu |
-| `curses.KEY_ENTER` | KEY_ENTER | Enter key | Confirm selection, confirm actions |
-| `curses.KEY_RESIZE` | KEY_RESIZE | Terminal resize | Cancel operation |
-| `curses.KEY_BACKSPACE` | KEY_BACKSPACE | Backspace | Cancel operation |
-
-### Cancel Keys (Escape, DEL, Backspace)
-| Key Code | ASCII | Description |
-|----------|-------|-------------|
-| `curses.KEY_RESIZE` | 27 (Escape) | Cancel operation |
-| `curses.KEY_BACKSPACE` | 127 (DEL) | Cancel operation |
-| ASCII 27 | - | Escape key |
-| ASCII 127 | - | DEL key |
-| ASCII 8 | - | Backspace (alternative) |
-| `ord('q')` | 113 | Cancel operation |
-
-### Input Characters
-| Character | ASCII | Description | Used For |
-|-----------|-------|-------------|----------|
-| `'0'` - `'9'` | 48-57 | Select option by number | Menu selection |
-| `'y'` / `'Y'` | 121 | Confirm action | Confirmation dialogs |
-| `'n'` / `'N'` | 110 | Cancel action | Confirmation dialogs |
-
-### Other Control Keys
-| Key Code | ASCII | Description | Used For |
-|----------|-------|-------------|----------|
-| ASCII 10 | - | LF/Enter | Confirm selection |
-| ASCII 13 | - | CR/Enter | Confirm selection |
-
-Main Methods:
-- `render_menu(options, default, highlighted)`: Returns selected index or -1 (cancel)
-- `render_confirmation(message, default)`: Returns True (confirm) or False (cancel)
-- `render_progress_bar(filename, current, total)`: Waits for any key
-- `render_success(message)`: Waits for any key
-- `render_error(message)`: Waits for any key
-- `print_simple_menu(options, default, highlighted)`: Returns selected index or None (cancel)
-- `get_input(prompt)`: Returns input string
-- `get_numbered_input(options, default)`: Returns selected index or None (cancel)
-
-Usage Examples:
-- Menu: Use arrow keys to navigate, type number to select, Enter to confirm, q/Esc to cancel
-- Confirmation: Enter/Y to confirm, n/Esc to cancel, timeout defaults to yes
-- Progress bars: Press any key to continue
-"""
+import logging
 
 import curses
 import sys
 import time
-import logging
+from wrapper_config import load_config, get_logger
 import os
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -1307,14 +1245,6 @@ class UIManager:
             )
             return
         
-        if width is None or height is None:
-            # Fall back to console if we can't determine terminal size
-            logger.warning(f"Terminal size is None, falling back to console")
-            self._render_console_fallback(
-                f"Downloading {Path(filename).name}... {current}/{total} ({percent or (current/total*100 if total else 0.0):.1f}%)"
-            )
-            return
-        
         # Auto-resize: window width adapts to terminal
         # Width is min(max(60, width - 12), 100) to ensure it fits on screen with minimum 60
         # Subtract 2 for padding, 2 for window border, and 8 for status line
@@ -1781,4 +1711,4 @@ class UIManager:
                 idx = int(choice)
                 return idx if 0 <= idx < len(options) else None
             except ValueError:
-                return None#!/usr/bin/env python3
+                 return None
