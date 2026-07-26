@@ -1,34 +1,33 @@
-# Gap Assessment and Alignment Plan
+# Gap Assessment Update
 
-## Summary
-The project requires alignment with the functional baseline defined in `Requirements.md`. Key updates include fixing log file resolution in `runner.py` to ensure default paths are passed as CLI flags, consolidating `main.py` error messages into a single bordered curses window, and ensuring correct lifecycle management of the `UIManager`.
+## Summary of Required Alignment
+The codebase requires alignment with `Requirements.md` and `Plan.md` by implementing the missing logging module, correcting the startup sequence in `main.py`, and removing non-compliant configuration and directory structures.
 
 ## Implemented but Non-Required: Features to Remove
-None identified. All currently implemented features in the source code align with the functional baseline defined in `Requirements.md`.
+| File/Directory Target | Line Range | Rationale |
+| :--- | :--- | :--- |
+| `wrapper_config.py` | Full File | Identified as extra in `Plan.md`; violates the required logging idiom. |
+| `llama_wrapper/` | Full Directory | Non-compliant with the flat structure mandate in `Plan.md`. |
 
 ## Compliance Table
-
-| Component | Status | Notes |
-|---|---|---|
-| **Requirements.md Core Sections** | | |
-| 1. Overview | Compliant | |
-| 2. Project Structure | Compliant | |
-| 3. Configuration File | Compliant | |
-| 4. Start Script | Compliant | |
-| 5. Main Entry Point | Partial | Requires consolidation of error messages in `main.py`. |
-| 6. llama.cpp Update Module | Compliant | |
-| 7. Run Script | Partial | Requires fix for log file resolution in `runner.py`. |
-| 8. CLI UI Module | Compliant | |
-| 9. Non-Functional Requirements | Compliant | |
-| **Plan Sections** | | |
-| Section 1: State Assessment | Compliant | No outstanding gaps (excluding specific fixes). |
-| Section 2: Engineering Decisions | Compliant | Filenames and structure are verified. |
-| Section 4: Exit Codes | Compliant | |
-| Section 5: Security | Compliant | |
-| Section 6: Dependencies | Compliant | |
-| Section 7: Non-functional | Compliant | |
+| Source Section | Status | Notes |
+| :--- | :--- | :--- |
+| Requirements.md: 1 | Compliant | |
+| Requirements.md: 2 | Compliant | |
+| Requirements.md: 4 | Compliant | |
+| Requirements.md: 5 | Non-Compliant | `main.py` instantiates `UIManager` before `LoggerSetup`. |
+| Requirements.md: 6 | Non-Compliant | `logger.py` missing; `main.py` and `llama_updater.py` use incorrect logging. |
+| Requirements.md: 7 | Compliant | |
+| Plan.md: 1 | Compliant | |
+| Plan.md: 2 | Compliant | |
+| Plan.md: 4 | Compliant | |
+| Plan.md: 5 | Non-Compliant | `main.py` instantiation order violation. |
+| Plan.md: 6 | Non-Compliant | `logger.py` missing; logging idiom violations. |
+| Plan.md: 7 | Compliant | |
 
 ## Next Steps
-1. Modify `runner.py` to ensure `--log-file llama-server.log` is included in merged arguments if absent from both `config.json` and CLI.
-2. Consolidate the "not found" message and "Usage" instruction in `main.py:347-349` into a single string for `ui.render_error`.
-3. Verify `ui_manager.py` warning vs error usage and consider adding a `render_warning` method if a specific warning UI is required.
+1. Create `logger.py` to satisfy Section 6 of `Requirements.md`.
+2. Refactor `main.py` to use `logger.py` and ensure `LoggerSetup` completes before `UIManager` instantiation.
+3. Migrate functionality from `wrapper_config.py` and delete the file.
+4. Flatten the `llama_wrapper/` directory.
+5. Update `llama_updater.py` to use `logging.getLogger(__name__)`.

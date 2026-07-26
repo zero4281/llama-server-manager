@@ -58,7 +58,9 @@ import logging
 import curses
 import sys
 import time
-from wrapper_config import load_config, get_logger
+from config import load_config
+
+
 import os
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -475,7 +477,8 @@ class UIManager:
             # Enable keypad mode on the main screen for arrow keys, Page Up/Down, Escape
             if self._screen:
                 try:
-                    self._screen.keypad(True)
+                     if hasattr(curses, 'keypad'):
+                         self._screen.keypad(True)
                 except (OSError, IOError, AttributeError):
                     # In mocked environments, keypad may fail
                     # This is acceptable - we can still operate if we have a valid screen
@@ -1299,14 +1302,14 @@ class UIManager:
         
         try:
             # Calculate progress percentage if not provided
-            if percent is None and total > 0:
+            if percent is None and (total if total is not None else 0) > 0:
                 percent = min(current / total * 100, 100.0)
             elif percent is None and total <= 0:
                 percent = 0
             # If percent is provided, use it as-is
             
             # Calculate estimated time if not provided
-            if estimated_time is None and speed is not None and total > current:
+            if estimated_time is None and speed is not None and (total if total is not None else 0) > current:
                 remaining = total - current
                 estimated_time = int(remaining / speed) if speed > 0 else 0
                 # Cap at 9999 seconds to avoid excessive display
