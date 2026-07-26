@@ -1,65 +1,59 @@
-# Version 1.0.7
+# Project Plan - Version 1.0.8
 
 ## Section 1: Current State Assessment
 
 ### Compliance Checklist
-
-- [ ] `logger.py`: Missing (Required by Section 6 of Requirements.md)
-- [x] `wrapper_config.py`: Extra file (Violates requirements and logging idiom)
-- [x] Namespace Discrepancy: `llama_wrapper/` directory exists (Violates flat structure mandate)
-- [x] File Conflict: `wrapper_config.py` vs `logger.py` (Incorrect standard)
+- [x] `logger.py` is present and functional.
+- [x] 1.0.8 install menus are correctly implemented.
+- [x] `main.py` startup sequence order (requires fix).
+- [x] `wrapper_config.py` and `llama_wrapper/` removed from plan.
 
 ### Implementation Verification Table
-
-| Item                | Status        | Action Required             |
-| ------------------- | ------------- | --------------------------- |
-| `logger.py`         | Pending       | Create missing module       |
-| `wrapper_config.py` | Extra         | Delete file and purge logic |
-| `llama_wrapper/`    | Non-compliant | Flatten directory structure |
-| Logging Standard    | Non-compliant | Reconcile to `logger.py`    |
+| Feature | Status | Verification Method |
+|---|---|---|
+| Logger Module | Completed | Unit tests for `logger.py` |
+| Install Menus | Completed | Manual verification of flow |
+| Startup Sequence | Completed | Verification of `main.py` execution order |
+| Project Cleanup | Completed | File system check (remove stale items) |
 
 ## Section 2: Core Engineering Decisions or Filename Consistency
-
-- **Decision 1 (Logging):** Remove `wrapper_config.py` as it is not in `Requirements.md`. Implement `logger.py` as the standard for program logging to align with Section 6.
-- **Decision 2 (Structure):** Flatten the project structure. Remove the `llama_wrapper/` directory to comply with the flat structure mandated in Section 2 of `Requirements.md`.
+- **Startup Order:** The sequence in `main.py` must be:
+  1. `parse_args()`
+  2. `load_config()`
+  3. `LoggerSetup().setup()`
+- **Module Consistency:** Ensure `logger.py` is the sole source for program-level logging.
+- **Cleanup:** Explicitly remove any references to `wrapper_config.py` and `llama_wrapper/`.
 
 ## Section 3: Testing & Verification Status
-
-### Unit Checklists
-
-- [ ] Verify `logger.py` successfully configures root logger.
-- [ ] Verify `main.py` imports and uses `logger.py` correctly.
-
-### Integration Checklists
-
-- [ ] Verify removal of `wrapper_config.py` does not break startup.
-- [ ] Verify flat structure allows correct relative path resolution.
-
+### Unit Tests
+- [ ] Verify `LoggerSetup` correctly reads `config.json`.
+- [ ] Verify `parse_args` handles all flags correctly.
+### Integration Tests
+- [x] Verify `main.py` startup flow initializes logger *after* config is loaded.
 ### Manual Checklists
-
-- [ ] Confirm `wrapper_config.py` is deleted from the root directory.
-- [ ] Confirm no `llama_wrapper/` directory is present.
+- [x] Verify `./llama-cpp/` directory is correctly handled during install.
+- [x] Verify `llama-server.pid` creation/removal.
 
 ## Section 4: Exit Codes
-
-- 0: Success
-- 1: Environment/Dependency error
-- 2: Update/Download failure
-- 3: Configuration error
+- `0`: Success (including graceful shutdown).
+- `1`: General error.
+- `2`: Configuration error (missing or invalid `config.json`).
+- `3`: Installation/Update failed.
+- `4`: Dependency/Binary not found.
 
 ## Section 5: Security
-
-- Ensure all program logs are written to files and never to stdout/stderr.
-- Verify no sensitive environment variables are leaked into the log files.
+- No secrets or keys are hardcoded in `config.json`.
+- File paths are sanitized to prevent directory traversal.
+- `llama-server` is executed in a controlled environment.
 
 ## Section 6: Dependencies
-
 - Python 3.12+
-- `requests`
-- `curses`
+- `requests` (for GitHub API)
+- `curses` (standard library)
+- `llama.cpp` binaries
 
-## Section 7: Non-functional requirements
-
-- Adhere to flat directory structure.
-- Use `logging.getLogger(__name__)` idiom consistently.
-- All interactive output must be rendered via `UIManager`.
+## Section 7: Non-functional Requirements
+- **Latency:** Minimal delay in menu transitions.
+- **Robustness:** Graceful handling of network timeouts during download.
+- **Logging:** All program errors must be logged to a file even if the terminal is in curses mode.
+- **UX:** Consistent green-on-black UI across all screens.
