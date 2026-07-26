@@ -727,7 +727,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             break
     
     # Render platform selection menu
-    selected_platform_idx = ui.render_menu(platform_options, default=default_platform_idx, highlighted=default_platform_idx)
+    selected_platform_idx = ui.render_menu(platform_options, default=default_platform_idx, highlighted=default_platform_idx, title="Select Operating System & Architecture")
     
     if selected_platform_idx == -1:
         ui.render_error("Platform selection cancelled.")
@@ -763,7 +763,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         }
         backend_options.append(backend_entry)
     
-    selected_backend_idx = ui.render_menu(backend_options, default=0)
+    selected_backend_idx = ui.render_menu(backend_options, default=0, title="Select Compute Backend")
     
     if selected_backend_idx == -1:
         ui.render_error("Compute Backend selection cancelled.")
@@ -814,7 +814,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         }
         backend_options.append(backend_entry)
     
-    selected_backend_idx = ui.render_menu(backend_options, default=0)
+    selected_backend_idx = ui.render_menu(backend_options, default=0, title="Select Compute Backend")
     
     if selected_backend_idx == -1:
         ui.render_error("Compute Backend selection cancelled.")
@@ -849,7 +849,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         zip_options.append(zip_entry)
     
     # Render zip file selection menu
-    selected_zip_idx = ui.render_menu(zip_options, default=0)
+    selected_zip_idx = ui.render_menu(zip_options, default=0, title="Select Archive")
     
     if selected_zip_idx == -1:
         ui.render_error("Zip file selection cancelled.")
@@ -993,7 +993,7 @@ class LlamaUpdater:
         
         # Use UIManager for tag selection
         ui = ui_manager if ui_manager is not None else UIManager("Select a Tag for llama.cpp")
-        selected_tag_idx = ui.render_menu(tag_options, default=1, highlighted=1)
+        selected_tag_idx = ui.render_menu(tag_options, default=1, highlighted=1, title="Select a Release")
         
         if selected_tag_idx == -1:
             ui.render_error("Tag selection cancelled.")
