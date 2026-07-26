@@ -1,0 +1,42 @@
+import json
+import logging
+from pathlib import Path
+from typing import Optional
+
+class LoggerSetup:
+    """
+    Configures the root logger based on the logging section of config.json.
+    """
+    def __init__(self, config_path: Optional[str] = None):
+        if config_path is None:
+            config_path = Path.cwd() / "config.json"
+        else:
+            config_path = Path(config_path)
+            
+        with open(config_path, "r") as f:
+            self.config = json.load(f)
+
+    def setup(self) -> None:
+        logging_config = self.config.get("logging", {})
+        enabled = logging_config.get("enabled", True)
+        
+        if not enabled:
+            for handler in logging.root.handlers[:]:
+                logging.root.removeHandler(handler)
+            return
+
+        level_str = logging_config.get("level", "INFO").upper()
+        level = getattr(logging, level_str, logging.INFO)
+        logging.root.setLevel(level)
+
+        log_file = logging_config.get("file")
+        if log_file is None:
+            log_file = "llama-server-manager.log"
+        
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+            
+        file_handler = logging.FileHandler(log_file, mode="a")
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        file_handler.setFormatter(formatter)
+        logging.root.addHandler(file_handler)

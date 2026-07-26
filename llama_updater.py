@@ -22,8 +22,8 @@ from typing import Dict, List, Optional, Tuple
 
 import requests
 
-# Import logger from ui_manager for consistent logging
-from ui_manager import logger as ui_logger
+import logging
+logger = logging.getLogger(__name__)
 
 
 # Constants
@@ -672,7 +672,7 @@ def delete_existing_installation() -> None:
     try:
         if LLAMA_CPP_DIR.exists():
             shutil.rmtree(LLAMA_CPP_DIR)
-            ui_logger.debug(f"Deleted existing llama-cpp folder: {LLAMA_CPP_DIR}")
+            logger.debug(f"Deleted existing llama-cpp folder: {LLAMA_CPP_DIR}")
     except Exception as e:
         raise LlamaUpdaterError(f"Failed to delete existing llama-cpp folder: {e}")
 
@@ -754,7 +754,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     
     # Check UI mode before render_confirmation
     if not ui._using_curses or not ui._screen:
-        ui_logger.warning("UI manager not using curses, falling back to console for confirmation")
+        logger.warning("UI manager not using curses, falling back to console for confirmation")
     
     # Confirmation prompt
     release_info = f"{release_tag} ({asset_name})"
@@ -764,7 +764,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         ui.render_error("Installation cancelled.")
         return
     
-    ui_logger.debug(f"User confirmed installation of {release_tag} - {asset_name}")
+    logger.debug(f"User confirmed installation of {release_tag} - {asset_name}")
 
     # Download
     ui.print_message(f"\nDownloading {asset_name}...")
@@ -839,13 +839,13 @@ class LlamaUpdater:
         # Create UI manager for error display if not provided
         ui = ui_manager if ui_manager is not None else UIManager("Update llama.cpp")
         
-        ui_logger.debug("Fetching latest llama.cpp release...")
+        logger.debug("Fetching latest llama.cpp release...")
         try:
             release = get_latest_release()
             release_tag = release["tag_name"]
             
-            ui_logger.debug(f"Latest release: {release_tag} ({release['name']})")
-            ui_logger.debug(f"Published: {release['published_at']}")
+            logger.debug(f"Latest release: {release_tag} ({release['name']})")
+            logger.debug(f"Published: {release['published_at']}")
         except RateLimitError as e:
             ui.render_error(
                 f"GitHub API rate limit exceeded.\n"

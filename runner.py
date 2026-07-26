@@ -122,6 +122,7 @@ class Runner:
             
             self.ui.print_message(f"llama-server started with PID {pid}")
             self.ui.print_message(f"PID file: {self.pid_file}")
+            process.wait()
 
 
         except Exception as e:
