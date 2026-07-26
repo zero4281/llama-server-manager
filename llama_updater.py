@@ -250,12 +250,17 @@ def parse_asset_name(name: str) -> Dict[str, str]:
     # Tag can contain hyphens, so we need a more flexible pattern
     # Also handle optional variant suffix like -vulkan, -cuda, etc.
     # Platform can contain hyphens (e.g., rocky-linux), arch is always x64 or arm64
-    new_pattern = r"^llama-[a-zA-Z0-9_-]+-bin-([a-zA-Z0-9-]+)-(x64|arm64)(?:-(\w+))?$"
+    # Try new format first: llama-{tag}-bin-{platform}-{backend}-{arch}[-variant]
+    # Tag can contain hyphens, so we need a more flexible pattern
+    # Backend is optional, and variant is the optional suffix after architecture
+    # Platform can contain hyphens (e.g., rocky-linux), arch is always x64 or arm64
+    new_pattern = r"^llama-[a-zA-Z0-9_-]+-bin-([a-zA-Z0-9-]+)-(?:([a-zA-Z0-9-]+)-)?(x64|arm64)(?:-(\w+))?$"
     match = re.match(new_pattern, base_name)
     if match:
         platform = match.group(1).lower()
-        arch = match.group(2).lower()
-        variant = match.group(3)  # Capture variant if present (e.g., vulkan, cuda)
+        backend = match.group(2)
+        arch = match.group(3).lower()
+        variant = match.group(4)
         # Convert platform names to standard names
         platform_map = {
             "ubuntu": "Linux",
@@ -294,8 +299,10 @@ def parse_asset_name(name: str) -> Dict[str, str]:
         return {
             "platform": platform_name,
             "arch": arch,
+            "backend": backend,
             "variant": variant if variant else None
         }
+
     
     # Try old format: project-platform-arch
     # e.g., llama-server-linux-arm64
@@ -720,13 +727,115 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             break
     
     # Render platform selection menu
-    selected_platform_idx = ui.render_menu(platform_options, default=default_platform_idx, highlighted=default_platform_idx)
+    selected_platform_idx = ui.render_menu(platform_options, default=default_platform_idx, highlighted=default_platform_idx, title="Select Operating System & Architecture")
     
     if selected_platform_idx == -1:
         ui.render_error("Platform selection cancelled.")
         return
     
     selected_platform_info = available_platforms[selected_platform_idx]
+    
+    # Compute Backend selection
+    # Extract backends from assets
+    backends = set()
+    for asset in selected_platform_info['assets']:
+        parsed = parse_asset_name(asset['name'])
+        if parsed['backend']:
+            backends.add(parsed['backend'])
+    
+    sorted_backends = sorted(list(backends))
+    
+    # If no backend segments were found or only one was found, handle defaults
+    if not sorted_backends:
+        sorted_backends = ['cpu']
+    elif len(sorted_backends) == 1:
+        # Only one backend found, show it as the only option
+        pass
+    
+    # Render Compute Backend selection menu
+    backend_options = []
+    for i, backend in enumerate(sorted_backends, 1):
+        is_default = (i == 1)
+        marker = " (default)" if is_default else ""
+        backend_entry = {
+            'label': backend,
+            'description': marker
+        }
+        backend_options.append(backend_entry)
+    
+    selected_backend_idx = ui.render_menu(backend_options, default=0, title="Select Compute Backend")
+    
+    if selected_backend_idx == -1:
+        ui.render_error("Compute Backend selection cancelled.")
+        return
+    
+    selected_backend = sorted_backends[selected_backend_idx]
+    if not selected_backend:
+        selected_backend = 'cpu'
+    
+    # Filter assets by selected backend
+    # Assets with no backend segment in filename are considered 'cpu'
+    filtered_assets = []
+    for asset in selected_platform_info['assets']:
+        parsed = parse_asset_name(asset['name'])
+        if parsed['backend'] == selected_backend:
+            filtered_assets.append(asset)
+        elif not parsed['backend'] and selected_backend == 'cpu':
+            filtered_assets.append(asset)
+    
+    # Update selected_platform_info with filtered assets for the next step
+    selected_platform_info['assets'] = filtered_assets
+    
+    # Compute Backend selection
+    # Extract backends from assets
+    backends = set()
+    for asset in selected_platform_info['assets']:
+        parsed = parse_asset_name(asset['name'])
+        if parsed['backend']:
+            backends.add(parsed['backend'])
+    
+    sorted_backends = sorted(list(backends))
+    
+    # If no backend segments were found or only one was found, handle defaults
+    if not sorted_backends:
+        sorted_backends = ['cpu']
+    elif len(sorted_backends) == 1:
+        # Only one backend found, show it as the only option
+        pass
+    
+    # Render Compute Backend selection menu
+    backend_options = []
+    for i, backend in enumerate(sorted_backends, 1):
+        is_default = (i == 1)
+        marker = " (default)" if is_default else ""
+        backend_entry = {
+            'label': backend,
+            'description': marker
+        }
+        backend_options.append(backend_entry)
+    
+    selected_backend_idx = ui.render_menu(backend_options, default=0, title="Select Compute Backend")
+    
+    if selected_backend_idx == -1:
+        ui.render_error("Compute Backend selection cancelled.")
+        return
+    
+    selected_backend = sorted_backends[selected_backend_idx]
+    if not selected_backend:
+        selected_backend = 'cpu'
+    
+    # Filter assets by selected backend
+    # Assets with no backend segment in filename are considered 'cpu'
+    filtered_assets = []
+    for asset in selected_platform_info['assets']:
+        parsed = parse_asset_name(asset['name'])
+        if parsed['backend'] == selected_backend:
+            filtered_assets.append(asset)
+        elif not parsed['backend'] and selected_backend == 'cpu':
+            filtered_assets.append(asset)
+    
+    # Update selected_platform_info with filtered assets for the next step
+    selected_platform_info['assets'] = filtered_assets
     
     # Prepare zip file options for menu
     zip_options = []
@@ -740,7 +849,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         zip_options.append(zip_entry)
     
     # Render zip file selection menu
-    selected_zip_idx = ui.render_menu(zip_options, default=0)
+    selected_zip_idx = ui.render_menu(zip_options, default=0, title="Select Archive")
     
     if selected_zip_idx == -1:
         ui.render_error("Zip file selection cancelled.")
@@ -884,7 +993,7 @@ class LlamaUpdater:
         
         # Use UIManager for tag selection
         ui = ui_manager if ui_manager is not None else UIManager("Select a Tag for llama.cpp")
-        selected_tag_idx = ui.render_menu(tag_options, default=1, highlighted=1)
+        selected_tag_idx = ui.render_menu(tag_options, default=1, highlighted=1, title="Select a Release")
         
         if selected_tag_idx == -1:
             ui.render_error("Tag selection cancelled.")

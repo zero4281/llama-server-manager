@@ -1,6 +1,6 @@
 # Llama Server Manager — Software Requirements Document
 
-**Version:** 1.0.7  
+**Version:** 1.0.8  
 **Date:** July 2026  
 **Repository:** https://github.com/zero4281/llama-server-manager
 
@@ -324,12 +324,37 @@ The `assets` array in each release response contains the downloadable files. Eac
 
 ### 7.3 Release selection
 
+Selecting a release to install is a four-screen workflow, in this order: **(1)** Release/tag selection, **(2)** Operating System & Architecture selection, **(3)** Compute Backend selection, **(4)** Confirmation of the resolved zip/archive file. Each screen is a distinct `UIManager` menu with its own title reflecting the items being displayed on that screen (see Section 9.3); the title bar must never be reused verbatim from a different screen.
+
+#### 7.3.0 Naming pattern
+
+Release archive filenames follow this exact template:
+
+```
+[Project]-[Build/Tag]-[Type]-[OS]-[Backend]-[Architecture].[Ext]
+```
+
+For example, `llama-b10107-bin-ubuntu-vulkan-x64.tar.gz` decomposes as:
+
+| Segment | Value | Meaning |
+|---|---|---|
+| Project | `llama` | Always `llama`; not user-selectable. |
+| Build/Tag | `b10107` | The release tag, resolved in Section 7.3.1. |
+| Type | `bin` | Always `bin` (pre-compiled binary); not user-selectable. |
+| OS | `ubuntu` | Resolved together with Architecture in Section 7.3.2. |
+| Backend | `vulkan` | Compute backend, resolved in Section 7.3.3. Optional — some OS/Architecture combinations ship a single build with no backend segment in the filename. |
+| Architecture | `x64` | Resolved together with OS in Section 7.3.2. |
+
+`LlamaUpdater` must parse each asset filename from the resolved release against this template to drive the OS/Architecture and Compute Backend menus described below, and to reconstruct the final filename for the confirmation screen (Section 7.3.4). A filename that does not match the template (missing or extra segments) must be excluded from all selection menus.
+
 #### 7.3.1 Tag selection prompt
+
+**Title:** `Select a Release`
 
 Present a numbered menu of release tags (rendered via `UIManager`) fetched from the GitHub Releases API. Option `0` allows the user to type a tag manually; options `1`–`5` are the five most recent release tags. Pressing Enter without a selection installs the most recent release (option `1`). Example:
 
 ```
-Select a llama.cpp release to install:
+Select a Release
   0) Enter a tag manually
   1) b8800 (latest)
   2) b8790
@@ -345,28 +370,54 @@ If the user selects option `0`, prompt for the tag string:
 Enter release tag: 
 ```
 
-#### 7.3.2 Asset (zip file) selection prompt
+#### 7.3.2 Operating System & Architecture selection prompt
 
-After a release tag is resolved, fetch its asset list from the GitHub API and present all available zip files as a numbered list via `UIManager`. Auto-detect the current platform and architecture using Python's `platform` module and highlight the recommended asset. The recommended option is also the default if the user presses Enter without a selection. Example:
+**Title:** `Select Operating System & Architecture`
+
+After a release tag is resolved, fetch its asset list from the GitHub API and parse every asset filename per the naming pattern in Section 7.3.0. Build a de-duplicated, numbered list of the distinct **OS / Architecture** pairs present across all assets for that release (the Backend segment is ignored at this stage). Auto-detect the current platform and architecture using Python's `platform` module and highlight the matching pair as the recommended option; the recommended option is also the default if the user presses Enter without a selection. Example:
 
 ```
-Select a zip file to install:
-  1) llama-b8800-bin-ubuntu-x64.zip  ← recommended
-  2) llama-b8800-bin-win-avx2-x64.zip
-  3) llama-b8800-bin-macos-arm64.zip
-  4) llama-b8800-bin-macos-x64.zip
-  ...
+Select Operating System & Architecture
+  1) ubuntu / x64      ← recommended
+  2) win / x64
+  3) macos / arm64
+  4) macos / x64
 Choice [1]:
 ```
 
-If auto-detection fails (platform or architecture cannot be determined), no option is highlighted and no default is pre-selected; the user must choose explicitly.
+If auto-detection fails (platform or architecture cannot be determined, or no asset matches the detected pair), no option is highlighted and no default is pre-selected; the user must choose explicitly.
 
-#### 7.3.3 Confirmation prompt
+#### 7.3.3 Compute Backend selection prompt
 
-After the user selects a release tag and asset, `UIManager` must render a bordered curses window displaying both selections and prompt for confirmation before downloading anything. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with Section 9.4. Example layout:
+**Title:** `Select Compute Backend`
+
+After OS and Architecture are resolved, filter the release's assets down to those matching the selected OS/Architecture pair and parse the remaining Backend segment(s) per Section 7.3.0. Present the distinct backends as a numbered list; the first listed option is the default if the user presses Enter without a selection. There is no auto-detection for Compute Backend, since the correct choice depends on locally installed drivers/hardware that Python's `platform` module cannot report. Example:
+
+```
+Select Compute Backend
+  1) vulkan
+  2) cuda
+  3) cpu
+Choice [1]:
+```
+
+If the selected OS/Architecture pair only has a single matching asset with no Backend segment in its filename (e.g. some macOS builds), skip presenting multiple choices and instead show a single option so the screen remains consistent with the rest of the workflow:
+
+```
+Select Compute Backend
+  1) cpu (default)
+Choice [1]:
+```
+
+Pressing Enter accepts option `1` in either case.
+
+#### 7.3.4 Confirmation prompt
+
+After Release, OS/Architecture, and Compute Backend are all resolved, reconstruct the final archive filename per the template in Section 7.3.0 and use it to locate the matching asset. `UIManager` must render a bordered curses window titled `Confirm Installation` displaying the resolved filename and prompt for confirmation before downloading anything. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with Section 9.4. Example layout:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
+│ Confirm Installation                                     │
 │ Selected release: b8800 (llama-b8800-bin-ubuntu-x64.zip) │
 │ Proceed with installation?                               │
 │                                                          │
@@ -379,8 +430,9 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 ### 7.4 Platform & architecture detection
 
 - Auto-detect the current platform (Linux, Windows, macOS) and architecture (`x86_64`, `arm64`, etc.) using Python's `platform` module.
-- Use the detected platform/architecture to determine and highlight the recommended asset in the selection list (see Section 7.3.2).
-- If detection fails, display all assets without a highlighted recommendation and require the user to select explicitly.
+- Use the detected platform/architecture to determine and highlight the recommended OS/Architecture pair in the selection list (see Section 7.3.2).
+- If detection fails, display all OS/Architecture pairs without a highlighted recommendation and require the user to select explicitly.
+- Auto-detection applies only to OS and Architecture. Compute Backend (Section 7.3.3) is never auto-detected, since the correct backend depends on locally installed drivers/hardware that Python's `platform` module cannot report; the first listed backend is offered as the default instead.
 
 ### 7.5 Download & extraction
 
@@ -469,6 +521,7 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 ### 9.3 Numbered menus
 
 - Render each menu inside a bordered `curses` window.
+- The title line is supplied by the caller on each invocation and must describe the specific items being displayed on that screen (e.g. `Select a Release`, `Select Operating System & Architecture`). `UIManager` must not reuse or hard-code a single generic title across different menus — each call renders its own title text.
 - Display a title line, then one numbered option per row.
 - The currently highlighted option is shown in reverse video; the user navigates with the arrow keys or by typing the option number.
 - Pressing Enter confirms the selection; pressing `q` or `Esc` cancels (equivalent to the user entering `n` at a confirmation prompt).
@@ -546,6 +599,7 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
+| 1.0.8 | July 2026 | zero4281 | Restructured the llama.cpp install/update flow (§7.3) into four distinct screens with per-screen titles: Release selection (§7.3.1), Operating System & Architecture selection (§7.3.2, replacing the old direct zip/asset picker), Compute Backend selection (§7.3.3, new), and a final Confirmation screen (§7.3.4) showing the resolved archive filename. Added §7.3.0 documenting the `[Project]-[Build/Tag]-[Type]-[OS]-[Backend]-[Architecture].[Ext]` naming template used to parse assets and reconstruct the final filename. Clarified in §7.4 that auto-detection applies only to OS/Architecture, not Compute Backend. Updated §9.3 to require menu titles to be supplied per-call and reflect the current screen's content rather than being reused across menus. |
 | 1.0.7 | July 2026 | zero4281 | Added a dedicated Logging Module (`logger.py`, new §6) to clarify where program-logging logic lives. Clarified that all other modules obtain a logger via the standard `logging.getLogger(__name__)` idiom rather than dependency injection. Changed the effective behaviour of `logging.file: null`: program logs now default to `llama-server-manager.log` in the project directory instead of stdout, since stdout/stderr output is prohibited while curses is active (§5.1); `enabled: false` remains the way to disable logging entirely. Fixed the `config.json` example in §3.1, which previously showed a stray `options.logfile` key instead of the documented `logging` section. Added §9.7 requiring `UIManager` to mirror every displayed error/warning/success message to the program log at a matching level. Renumbered former §6–§10 to §7–§11 accordingly. |
 | 1.0.6 | July 2026 | zero4281 | Removed §7.4 Daemon mode (the program is not a daemon); moved PID file (`llama-server.pid`) requirement and shell-return behaviour into §7.3 Process execution. Renumbered former §7.5 Logging → §7.4 and former §7.6 Graceful shutdown → §7.5. |
 | 1.0.5 | April 2026 | zero4281 | Clarified that the entire interactive workflow must remain within the curses environment after UIManager initialisation; no stdout/stderr output is permitted post-init. Updated confirmation prompts in §5.3.2 and §6.3.3 to show curses bordered window layout. Updated §5.4 llama-cpp-not-found error, §5.3.3 update failure error, §6.5 success/warning messages, and §6.6 API error messages to use UIManager instead of direct print calls. Strengthened §8.4 and §8.6 to require UIManager to remain active for the full workflow duration. |

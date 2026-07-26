@@ -211,6 +211,7 @@ class Main:
                         if backup_dir.exists():
                             shutil.rmtree(backup_dir)
                         self.ui.render_success("Self-update complete!")
+                        os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve())] + sys.argv[1:])
                     else:
                         self.ui.render_error("Could not find top-level directory in extraction.")
             except Exception as e:
@@ -227,14 +228,14 @@ class Main:
 
     def run(self) -> None:
         """Main execution flow."""
-        LoggerSetup().setup()
-
         # Parse arguments
         self.args = self.parse_args()
-
+        
         # Load config (auto-generate if missing)
         self.config = self.load_config()
-
+        
+        LoggerSetup().setup()
+        
         # Instantiate UI
         self.ui = UIManager("Llama Server Manager")
 

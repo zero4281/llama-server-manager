@@ -490,8 +490,9 @@ class UIManager:
             return False
     
     def render_menu(self, options: List[Dict[str, Any]], 
-                   default: Optional[int] = None,
-                   highlighted: Optional[int] = None) -> int:
+                    default: Optional[int] = None,
+                    highlighted: Optional[int] = None,
+                    title: Optional[str] = None) -> int:
         """
         Render a numbered menu with options.
         
@@ -622,7 +623,8 @@ class UIManager:
                 white_attr = self._get_white_attr()
                 if white_attr is not None:
                     win.attron(white_attr)
-                    win.addstr(0, x_offset, f"{self._title}".center(box_width))
+                    display_title = title if title is not None else self._title
+                    win.addstr(0, x_offset, display_title.center(box_width))
                     win.attroff(white_attr)
                     win.addstr(1, 1, "-" * (menu_width - 2))
                 for i, opt in enumerate(options):
@@ -1044,7 +1046,7 @@ class UIManager:
         response = self._render_console_fallback(message, "Proceed? [Y/n]: ")
         return response in ('y', 'yes') or (response == '' and default)
     
-    def render_confirmation(self, message: str, release_info: str, default: bool = True) -> bool:
+    def render_confirmation(self, message: str, release_info: str, title: str = "Confirm Installation", default: bool = True) -> bool:
         """
         Render a confirmation prompt.
         
@@ -1118,10 +1120,10 @@ class UIManager:
                     
                     # Title - row 0, centered with padding
                     if white_attr is not None:
-                        prompt_win.attron(white_attr)
-                        prompt_win.addstr(0, 3, "Confirm".center(box_width))
-                        prompt_win.attroff(white_attr)
-                        prompt_win.addstr(1, 1, "-" * (menu_width - 2))
+                         prompt_win.attron(white_attr)
+                         prompt_win.addstr(0, 3, title.center(box_width))
+                         prompt_win.attroff(white_attr)
+                         prompt_win.addstr(1, 1, "-" * (menu_width - 2))
                     
                     # Message - row 2, centered with padding
                     truncated_msg = message[:box_width] if len(message) > box_width else message
