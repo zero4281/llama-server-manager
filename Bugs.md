@@ -1,5 +1,5 @@
 ### 🟢 NEW: test_styling fails in test_ui_manager_comprehensive.py
-**Status:** 🔴 **OPEN**  
+**Status:** 🔴 **OBSOLETE**  
 **Priority:** **P3** - Test suite failure  
 **Description:**  
 Running `pytest Tests/test_ui_manager_comprehensive.py::test_styling` results in a `StopIteration` error.
