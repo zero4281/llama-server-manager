@@ -1,19 +1,33 @@
-Summary of alignment:
-The current codebase meets most functional requirements, but there is a critical gap in the rollback mechanism for file replacements and some discrepancies in the status reported in Plan.md.
+# Gap Assessment Update
 
-Implemented but Non-Required: Features to Remove:
-- None identified.
+## Summary
+The codebase demonstrates high alignment with core requirements, particularly in UI rendering and module structure. However, critical gaps exist regarding self-update rollback atomicity and global logging consistency. Several redundant code paths in the UI module also need pruning to improve maintainability.
 
-Compliance Table:
-| Requirement / Plan Section | Status | Notes |
+## Implemented but Non-Required: Features to Remove
+- **Target:** `ui_manager.py`: lines 1294-1310
+- **Rationale:** These lines contain redundant terminal check conditions that can be simplified into a single validation check, as the project now adheres to Requirement 7.4 which removed the daemon mode.
+
+## Compliance Table
+| Section | Status | Notes |
 |---|---|---|
-|Requirement 5.3.3 (Rollback) | Partial | Rollback mechanism is present but doesn't restore all files correctly on failure. |
-|Requirement 5.3.4 (Restart) | Completed | Self-update restart is implemented in `main.py`. |
-|Plan Section 1 (Self-update) | Completed | Implementation exists but Plan says Pending. |
-|Plan Section 1 (Restore originals) | Partial | Implementation exists but is incomplete. |
-|Plan Section 4 (Exit Codes) | Completed | Correct exit codes are handled. |
+| Requirements.md: 1. Overview | Aligned | |
+| Requirements.md: 2. Project Structure | Aligned | |
+| Requirements.md: 3. Configuration File | Aligned | |
+| Requirements.md: 4. Start Script | Aligned | |
+| Requirements.md: 5. Main Entry Point | Partially Aligned | Self-update rollback is not fully atomic (main.py:204-236). |
+| Requirements.md: 6. llama.cpp Update/Download Module | Aligned | |
+| Requirements.md: 7. Run Script | Aligned | |
+| Requirements.md: 8. CLI User Interface Module | Aligned | |
+| Requirements.md: 9. Non-Functional Requirements | Partially Aligned | Logging consistency needs update to use `ConfigLogger`. |
+| Requirements.md: 10. Out of Scope | Aligned | |
+| Plan.md: 1. Current State Assessment | Aligned | Rollback gaps acknowledged in Section 1. |
+| Plan.md: 2. Core Engineering Decisions | Aligned | |
+| Plan.md: 4. Exit Codes | Aligned | |
+| Plan.md: 5. Security | Aligned | |
+| Plan.md: 6. Dependencies | Aligned | |
+| Plan.md: 7. Non-functional requirements | Aligned | Logging consistency needs update. |
 
-Immediate Next Steps:
-1. Fix rollback mechanism in `main.py` to ensure full restoration of original files if an update fails mid-way.
-2. Update `Plan.md` to reflect the current status of the self-update and rollback features.
-3. Enhance argument reconstruction in the restart logic to ensure all flags are preserved.
+## Next Steps
+1. Refactor `main.py` (lines 204-236) to ensure self-update rollback is fully atomic.
+2. Update `ui_manager.py` and `llama_updater.py` to integrate `ConfigLogger` from `wrapper_config.py`.
+3. Prune redundant terminal check conditions in `ui_manager.py` (lines 1294-1310).
