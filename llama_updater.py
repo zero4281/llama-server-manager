@@ -972,24 +972,27 @@ class LlamaUpdater:
 
         # Get list of recent releases for tag selection menu
         releases = list_releases()
-        # Sort by published_at descending and take 5 most recent
-        recent_releases = sorted(releases, key=lambda x: x['published_at'], reverse=True)[:5]
+        # Sort by published_at descending
+        sorted_releases = sorted(releases, key=lambda x: x['published_at'], reverse=True)
+        
+        # Filter out the current release_tag to avoid duplicates
+        unique_recent_releases = []
+        for rel in sorted_releases:
+            if rel['tag_name'] != release_tag and rel['tag_name'] not in [r['tag_name'] for r in unique_recent_releases]:
+                unique_recent_releases.append(rel)
+            if len(unique_recent_releases) == 5:
+                break
         
         # Prepare tag options for menu
         tag_options = [
             {'label': 'Enter a tag manually', 'description': ''}
         ]
-        for i, r in enumerate(recent_releases[1:], 2):
+        for i, r in enumerate(unique_recent_releases, 2):
             tag_options.append({
                 'label': r['tag_name'],
                 'description': 'latest' if r['tag_name'] == release_tag else ''
             })
-        # Add remaining 2 recent releases to make 5 total
-        for r in recent_releases[1:3]:
-            tag_options.append({
-                'label': r['tag_name'],
-                'description': ''
-            })
+
         
         # Use UIManager for tag selection
         ui = ui_manager if ui_manager is not None else UIManager("Select a Tag for llama.cpp")

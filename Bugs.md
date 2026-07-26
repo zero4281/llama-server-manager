@@ -52,8 +52,8 @@ Every screen in the four-screen llama.cpp install workflow (`ui_manager.py`) ren
 
 ---
 
-### 🆕 NEW: Release/tag selection menu shows duplicate entries beyond the required five
-**Status:** 🔴 **OPEN**
+### ✅ RESOLVED: Release/tag selection menu shows duplicate entries beyond the required five
+**Status:** 🟢 **RESOLVED**
 **Priority:** **P3** — Minor data issue
 **Description:**
 The Release/tag selection screen (`llama_updater.py` §7.3.1) displays 7 rows (options 0–6) instead of the 6 specified (option 0 + options 1–5), with options 5 and 6 duplicating the values already shown in options 1 and 2.
@@ -64,6 +64,7 @@ The Release/tag selection screen (`llama_updater.py` §7.3.1) displays 7 rows (o
 4. **Expected Result:** Per `Requirements.md` §7.3.1, only option 0 (manual tag entry) plus options 1–5 (the five most recent release tags, no repeats) should be shown.
 **Analysis:**
 The release-tag fetch/list-building logic in `LlamaUpdater` likely appends tags from more than one source (e.g. two separate API pages or a merge of "latest" + "all releases" results) without de-duplicating or capping the list at 5.
+**Resolution:** Fixed navigation logic in `main.py` to ensure "Previous release" opens the correct menu and removed descriptions from source selection options to fix mangled labels. Refactored `llama_updater.py` to correctly display a "manual entry" plus up to 5 unique recent release tags without duplicates.
 **Affected Components:**
 - `llama_updater.py`
 **Dependencies:**
