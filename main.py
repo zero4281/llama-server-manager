@@ -95,9 +95,9 @@ class Main:
             self.ui.print_message("Performing self-update...")
 
             source_options = [
-                 {"label": "Latest release (recommended)", "description": ""},
-                 {"label": "Previous release", "description": ""},
-                 {"label": "Repository HEAD", "description": ""},
+                {"label": "Latest release (recommended)", "description": "Most recent official release"},
+                {"label": "Previous release", "description": "Select from available releases"},
+                {"label": "Repository HEAD", "description": "Main branch latest commit"},
              ]
 
             default_source = 0
