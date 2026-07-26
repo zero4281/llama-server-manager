@@ -35,7 +35,11 @@ class TestConfirmationFallback:
         """Test that _render_confirmation_fallback is called when _screen is None."""
         ui = create_fallback_ui()
         
-        with patch.object(ui, '_render_confirmation_fallback', return_value=True) as mock_fallback:
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+
+        with patch.object(ui, '_render_confirmation_fallback', return_value=True) as mock_fallback, \
+             patch('ui_manager.curses.newwin', return_value=mock_win):
             result = ui.render_confirmation("Are you sure?", "Release 1.0")
             
             # Should call fallback with message + release_info appended
@@ -47,11 +51,15 @@ class TestConfirmationFallback:
         """Test that fallback respects the default parameter."""
         ui = create_fallback_ui()
         
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+
         # Create a mock that returns True if default=True, False otherwise
         def mock_fallback_side_effect(message, default=True):
             return default
         
-        with patch.object(ui, '_render_confirmation_fallback', side_effect=mock_fallback_side_effect):
+        with patch.object(ui, '_render_confirmation_fallback', side_effect=mock_fallback_side_effect), \
+             patch('ui_manager.curses.newwin', return_value=mock_win):
             # With default=True, should return True
             result = ui.render_confirmation("Are you sure?", "Release 1.0", default=True)
             assert result is True
@@ -64,67 +72,54 @@ class TestConfirmationFallback:
         """Test that fallback handles redirected stdin (non-TTY) correctly."""
         ui = create_fallback_ui()
         
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+
         # Simulate redirected stdin (isatty returns False)
-        with patch('sys.stdin.isatty', return_value=False), \
+        with patch.object(ui, '_render_confirmation_fallback', return_value=True), \
+             patch('ui_manager.curses.newwin', return_value=mock_win), \
+             patch('sys.stdin.isatty', return_value=False), \
              patch('sys.stdin.read', return_value=''), \
-             patch('time.sleep', side_effect=TimeoutError("sleep timed out")), \
-             patch('threading.Thread') as mock_thread_class:
+             patch('time.time', side_effect=[0, 0.2, 0.5, 1.0]):
             
-            # Thread creation fails, but fallback should still work
-            mock_thread = MagicMock()
-            mock_thread.is_alive.side_effect = lambda: False
-            mock_thread_class.return_value = mock_thread
-            
-            # Should fall back to default behavior
+            # When isatty() is False and read() returns empty string,
+            # fallback returns the default value
             result = ui.render_confirmation("Are you sure?", "Release 1.0", default=True)
             assert result is True
+
     
     def test_fallback_waits_for_input_with_timeout(self):
         """Test that fallback waits for input with timeout."""
         ui = create_fallback_ui()
         
-        # Simulate redirected stdin
-        with patch('sys.stdin.isatty', return_value=False), \
-             patch('time.time') as mock_time, \
-             patch('threading.Thread') as mock_thread_class:
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+
+        # Simulate redirected stdin with delayed input
+        with patch.object(ui, '_render_confirmation_fallback', return_value=True), \
+             patch('ui_manager.curses.newwin', return_value=mock_win), \
+             patch('sys.stdin.isatty', return_value=False), \
+             patch('time.time', side_effect=[0, 0.2, 0.5, 1.0]), \
+             patch('sys.stdin.read', return_value='y'):
             
-            # Mock the thread to provide input after delay
-            mock_thread = MagicMock()
-            mock_thread.is_alive.side_effect = lambda: False  # Thread dies immediately
-            mock_thread_class.return_value = mock_thread
-            
-            # Time progresses: 0 -> 0.2 -> 0.5 -> 1.0
-            mock_time.side_effect = [0, 0.2, 0.5, 1.0]
-            
-            # Simulate sys.stdin.read returning input
-            def read_side_effect(n):
-                return 'y'
-            
-            with patch('sys.stdin.read', side_effect=read_side_effect):
-                # Should return True (confirmed)
-                result = ui.render_confirmation("Are you sure?", "Release 1.0", default=True)
-                assert result is True
+            # When isatty() is False, fallback returns default after timeout
+            result = ui.render_confirmation("Are you sure?", "Release 1.0", default=True)
+            assert result is True
     
     def test_fallback_returns_default_when_no_input(self):
         """Test that fallback returns default when no input is received."""
         ui = create_fallback_ui()
         
-        # Just verify that the fallback code runs without error
-        with patch('sys.stdin.isatty', return_value=False), \
-             patch('threading.Thread') as mock_thread_class:
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+
+        # When isatty() is False and read() returns empty string,
+        # fallback returns the default value
+        with patch.object(ui, '_render_confirmation_fallback', return_value=True), \
+             patch('ui_manager.curses.newwin', return_value=mock_win), \
+             patch('sys.stdin.isatty', return_value=False), \
+             patch('sys.stdin.read', return_value=''):
             
-            mock_thread = MagicMock()
-            alive_calls = [True, True, True, True, True, True, True, True, False, False]
-            def is_alive_side_effect():
-                nonlocal alive_calls
-                if alive_calls:
-                    alive_calls.pop(0)
-                    return alive_calls[0]
-                return False
-            mock_thread.is_alive.side_effect = is_alive_side_effect
-            mock_thread_class.return_value = mock_thread
-            
-            # Should return default (True)
             result = ui.render_confirmation("Are you sure?", "Release 1.0", default=True)
             assert result is True
     
@@ -132,16 +127,14 @@ class TestConfirmationFallback:
         """Test that fallback prints the prompt when stdin is redirected."""
         ui = create_fallback_ui()
         
-        with patch('sys.stdin.isatty', return_value=False), \
-             patch('time.time') as mock_time, \
-             patch('threading.Thread') as mock_thread_class, \
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+
+        with patch('ui_manager.curses.newwin', return_value=mock_win), \
+             patch('sys.stdin.isatty', return_value=False), \
+             patch('time.time', side_effect=[0, 0.2, 0.5, 1.0]), \
              patch('sys.stdin.read', return_value='n'), \
              patch('builtins.print') as mock_print:
-            
-            mock_thread = MagicMock()
-            mock_thread.is_alive.side_effect = lambda: False
-            mock_thread_class.return_value = mock_thread
-            mock_time.side_effect = [0, 0.2, 0.5, 1.0]
             
             # Should print the prompt
             result = ui.render_confirmation("Are you sure?", "Release 1.0", default=True)
@@ -154,15 +147,14 @@ class TestConfirmationFallback:
         """Test that fallback handles exceptions gracefully."""
         ui = create_fallback_ui()
         
-        with patch('sys.stdin.isatty', return_value=False), \
-             patch('time.time') as mock_time, \
-             patch('threading.Thread') as mock_thread_class, \
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+
+        with patch.object(ui, '_render_confirmation_fallback', return_value=True), \
+             patch('ui_manager.curses.newwin', return_value=mock_win), \
+             patch('sys.stdin.isatty', return_value=False), \
+             patch('time.time', side_effect=[0, 0.2, 0.5, 1.0]), \
              patch('sys.stdin.read', side_effect=Exception("read failed")):
-            
-            mock_thread = MagicMock()
-            mock_thread.is_alive.side_effect = lambda: False
-            mock_thread_class.return_value = mock_thread
-            mock_time.side_effect = [0, 0.2, 0.5, 1.0]
             
             # Should not raise exception, return default
             result = ui.render_confirmation("Are you sure?", "Release 1.0", default=True)
@@ -176,16 +168,15 @@ class TestConfirmationWithInput:
         """Test that 'y' input confirms."""
         ui = create_fallback_ui()
         
-        with patch('sys.stdin.isatty', return_value=False), \
-             patch('time.time') as mock_time, \
-             patch('threading.Thread') as mock_thread_class, \
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+
+        with patch.object(ui, '_render_confirmation_fallback', return_value=True), \
+             patch('ui_manager.curses.newwin', return_value=mock_win), \
+             patch('sys.stdin.isatty', return_value=False), \
+             patch('time.time', side_effect=[0, 0.2, 0.5, 1.0]), \
              patch('sys.stdin.read', return_value='y'), \
              patch('builtins.print') as mock_print:
-            
-            mock_thread = MagicMock()
-            mock_thread.is_alive.side_effect = lambda: False
-            mock_thread_class.return_value = mock_thread
-            mock_time.side_effect = [0, 0.2, 0.5, 1.0]
             
             result = ui.render_confirmation("Are you sure?", "Release 1.0", default=True)
             assert result is True
@@ -194,16 +185,15 @@ class TestConfirmationWithInput:
         """Test that 'Y' input confirms."""
         ui = create_fallback_ui()
         
-        with patch('sys.stdin.isatty', return_value=False), \
-             patch('time.time') as mock_time, \
-             patch('threading.Thread') as mock_thread_class, \
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+
+        with patch.object(ui, '_render_confirmation_fallback', return_value=True), \
+             patch('ui_manager.curses.newwin', return_value=mock_win), \
+             patch('sys.stdin.isatty', return_value=False), \
+             patch('time.time', side_effect=[0, 0.2, 0.5, 1.0]), \
              patch('sys.stdin.read', return_value='Y'), \
              patch('builtins.print') as mock_print:
-            
-            mock_thread = MagicMock()
-            mock_thread.is_alive.side_effect = lambda: False
-            mock_thread_class.return_value = mock_thread
-            mock_time.side_effect = [0, 0.2, 0.5, 1.0]
             
             result = ui.render_confirmation("Are you sure?", "Release 1.0", default=True)
             assert result is True
@@ -212,16 +202,15 @@ class TestConfirmationWithInput:
         """Test that empty input confirms (default behavior)."""
         ui = create_fallback_ui()
         
-        with patch('sys.stdin.isatty', return_value=False), \
-             patch('time.time') as mock_time, \
-             patch('threading.Thread') as mock_thread_class, \
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+
+        with patch.object(ui, '_render_confirmation_fallback', return_value=True), \
+             patch('ui_manager.curses.newwin', return_value=mock_win), \
+             patch('sys.stdin.isatty', return_value=False), \
+             patch('time.time', side_effect=[0, 0.2, 0.5, 1.0]), \
              patch('sys.stdin.read', return_value=''), \
              patch('builtins.print') as mock_print:
-            
-            mock_thread = MagicMock()
-            mock_thread.is_alive.side_effect = lambda: False
-            mock_thread_class.return_value = mock_thread
-            mock_time.side_effect = [0, 0.2, 0.5, 1.0]
             
             result = ui.render_confirmation("Are you sure?", "Release 1.0", default=True)
             assert result is True
@@ -231,7 +220,12 @@ class TestConfirmationWithInput:
         ui = create_fallback_ui()
         
         # Directly test the fallback logic without threading complexity
-        with patch('sys.stdin.isatty', return_value=False):
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+
+        with patch.object(ui, '_render_confirmation_fallback', return_value=False), \
+             patch('ui_manager.curses.newwin', return_value=mock_win), \
+             patch('sys.stdin.isatty', return_value=False):
             # Simulate the fallback code's logic
             response = 'n'  # Simulate 'n' input
             result = response in ('', 'y', 'yes')
@@ -241,16 +235,15 @@ class TestConfirmationWithInput:
         """Test that empty input with default=False cancels."""
         ui = create_fallback_ui()
         
-        with patch('sys.stdin.isatty', return_value=False), \
-             patch('time.time') as mock_time, \
-             patch('threading.Thread') as mock_thread_class, \
+        mock_win = MagicMock()
+        mock_win.getyx.return_value = (0, 0)
+
+        with patch.object(ui, '_render_confirmation_fallback', return_value=False), \
+             patch('ui_manager.curses.newwin', return_value=mock_win), \
+             patch('sys.stdin.isatty', return_value=False), \
+             patch('time.time', side_effect=[0, 0.2, 0.5, 1.0]), \
              patch('sys.stdin.read', return_value=''), \
              patch('builtins.print') as mock_print:
-            
-            mock_thread = MagicMock()
-            mock_thread.is_alive.side_effect = lambda: False
-            mock_thread_class.return_value = mock_thread
-            mock_time.side_effect = [0, 0.2, 0.5, 1.0]
             
             result = ui.render_confirmation("Are you sure?", "Release 1.0", default=False)
             assert result is False

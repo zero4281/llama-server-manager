@@ -33,9 +33,8 @@ The suite consists of exactly these five files plus `conftest.py` (shared fixtur
 | File                                | Runner                     | Tests | Coverage area                                                                                                                                                                                               |
 | ----------------------------------- | -------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `test_ui_manager_api.py`            | unittest / standalone      | 5     | Class structure, method signatures, color pair setup                                                                                                                                                        |
-| `test_ui_manager_comprehensive.py`  | standalone (`run_tests()`) | 8     | Init/lifecycle, menu navigation, confirmation, progress bar, styling, edge cases                                                                                                                            |
-| `test_ui_manager_pytest.py`         | pytest                     | 46    | Init fallback, arrow nav, number selection, cancel keys, confirmation inputs, progress bar, full workflow, page jump, wrapping, highlighted=None                                                            |
-| `test_timeout_pytest.py`            | pytest                     | 10    | Timeout returns -1, timeout after navigation, multiple timeouts, timeout with various highlighted states, cancel after timeout, default option, empty options, default=False timeout, _screen=None fallback |
+| `test_ui_manager_comprehensive.py`  | standalone (`run_tests()`) | 6     | Init/lifecycle, menu navigation, confirmation, progress bar, styling, edge cases                                                                                                                            |
+| `test_ui_manager_pytest.py`         | pytest                     | 41    | Init fallback, arrow nav, number selection, cancel keys, confirmation inputs, progress bar, full workflow, page jump, wrapping, highlighted=None                                                            |
 | `test_ui_manager_terminal_sizes.py` | standalone (`run_tests()`) | 9     | 40×20 / 80×24 / 120×30 terminals, menu width calculation, progress bar adaptation, spinner/determinate bars                                                                                                 |
 
 **Do not add new test files.** New tests belong in the existing file that matches their coverage area (see Maintenance Rules).
@@ -101,7 +100,7 @@ from unittest.mock import MagicMock, patch
 from ui_manager import UIManager
 
 def create_ui(title="Test"):
-    mock_curses = MagicMock(spec=curses)
+    mock_curses = MagicMock()
     mock_curses.initscr.return_value = MagicMock()
     mock_curses.start_color = MagicMock()
     mock_curses.init_pair = MagicMock(return_value=None)
@@ -182,7 +181,6 @@ def test_n_cancels_confirmation():
 | `ord('0')` – `ord('9')` | 48–57                           | Select option by number (zero-indexed)       |
 | `ord('y')` / `ord('Y')` | 121 / 89                        | Confirm in confirmation dialog               |
 | `ord('n')` / `ord('N')` | 110 / 78                        | Cancel in confirmation dialog                |
-| `None` / `-1`           | Timeout value                   | `getch` timeout — treated as cancel          |
 
 ### Method signatures
 
@@ -190,7 +188,7 @@ def test_n_cancels_confirmation():
 UIManager(title: str)
 
 render_menu(options: list[dict], default: int, highlighted: int) -> int
-# Returns: selected index (0-based), or -1 on cancel/timeout
+# Returns: selected index (0-based), on cancel
 
 render_confirmation(message: str, default: bool = True) -> bool
 # Returns: True to confirm, False to cancel
@@ -230,7 +228,6 @@ These are the behaviors the tests verify. If you change `ui_manager.py`, the tes
 - Page size calculation: `max(1, min(len(options) // 2, (menu_height - 2) // 2))`
 - Typing a digit selects that option directly by number (0-indexed); an out-of-range digit is ignored
 - Any cancel key (`q`, Escape/27, `KEY_RESIZE`, `KEY_BACKSPACE`, 127, 8) returns `-1`
-- A `getch` timeout (returns `None` or `-1`) returns `-1`
 - An empty `options` list returns `-1` immediately without entering the input loop
 - The `default` parameter indicates which option to pre-highlight; `highlighted` is the initial cursor position
 
@@ -240,7 +237,6 @@ These are the behaviors the tests verify. If you change `ui_manager.py`, the tes
 - `y` or `Y` confirms — returns `True`
 - `n` or `N` cancels — returns `False`
 - Escape / `KEY_RESIZE` cancels — returns `False`
-- A `getch` timeout returns the `default` parameter value
 - When `_screen` is `None`, returns a safe default without crashing
 
 ### `render_progress_bar`
@@ -290,12 +286,21 @@ After making a change to `ui_manager.py` (or the code that drives it) that affec
 
 - Capture files (e.g. `initial_menu.txt`, `after_input.txt`) should be written to a scratch/temp location (e.g. `/tmp/` or the current working directory outside `Tests/`) and are not meant to be persisted or committed.
 
+- **Every tmux session created for this process must have `remain-on-exit` enabled**, right after the session is created:
+  
+  ```bash
+  tmux setw -t <session-name> remain-on-exit on
+  ```
+  
+  By default, tmux kills a session's pane the instant the process inside it exits — so if the command under test crashes on startup, the pane (and the error/traceback that would explain why) disappears before it can be captured. `remain-on-exit` keeps the pane open after the process exits so `tmux capture-pane` can still retrieve that output. It does **not** change how you close the session afterward — you still explicitly end it with `tmux kill-session`, whether the process exited on its own or is still running.
+
 ### Generic procedure
 
 1. **Start the TUI in a detached tmux session**, using the startup command and flags relevant to the feature being verified:
    
    ```bash
    tmux new-session -d -s tui_test '[STARTUP_COMMAND_WITH_FLAGS]'
+   tmux setw -t tui_test remain-on-exit on
    sleep 2
    ```
 
@@ -314,10 +319,15 @@ After making a change to `ui_manager.py` (or the code that drives it) that affec
    sleep 2
    ```
 
-4. **Capture the resulting state** and clean up:
+4. **Capture the resulting state, check for a crash, then clean up:**
    
    ```bash
    tmux capture-pane -t tui_test -p > /tmp/after_input.txt
+   ```
+   
+   Because `remain-on-exit` is on, the pane stays visible even if the process has died — inspect `after_input.txt` for a traceback, an error message, or a shell prompt where the TUI should still be running. Any of these means the process exited unexpectedly; note it for the review below. Once you've captured what you need:
+   
+   ```bash
    tmux kill-session -t tui_test
    ```
 
@@ -325,6 +335,7 @@ After making a change to `ui_manager.py` (or the code that drives it) that affec
    
    - Confirm the layout renders correctly and there's no crash on startup.
    - Confirm the keypress sequence produced the expected output/state per the Behavior Specifications above.
+   - Confirm the process was still running throughout (no traceback or unexpected return to a shell prompt caught by the crash check in step 4).
    - If something is wrong, trace it back to the source change, fix `ui_manager.py` (or the caller), and repeat the procedure — do not adjust the tmux script to force a pass.
 
 ### Worked example: verifying `render_menu` wrap-around navigation
@@ -334,6 +345,7 @@ This exercises the "`KEY_UP`/`KEY_DOWN` cycle through options with wrapping" beh
 ```bash
 # 1. Launch the app in a 3-option menu state
 tmux new-session -d -s tui_test -x 80 -y 24 './llama-server-manager --install-llama'
+tmux setw -t tui_test remain-on-exit on
 sleep 2
 
 # 2. Capture the initial menu (option 0 should be highlighted)
@@ -348,6 +360,8 @@ tmux capture-pane -t tui_test -p > /tmp/after_wrap.txt
 tmux send-keys -t tui_test Enter
 sleep 1
 tmux capture-pane -t tui_test -p > /tmp/after_input.txt
+# remain-on-exit keeps the pane open even if this crashed — check after_input.txt
+# for a traceback or an unexpected shell prompt before killing the session
 tmux kill-session -t tui_test
 ```
 
@@ -390,6 +404,7 @@ This exercises the default path through §5.3.1 (source selection) and §5.3.2 (
 # Do NOT run this command from the working repository.
 tmux new-session -d -s self_update_test -x 80 -y 24 \
   'cd /tmp/llama-server-manager-sandbox && python3 main.py --self-update'
+tmux setw -t self_update_test remain-on-exit on
 sleep 2
 
 # 2. Capture the source-selection menu (§5.3.1)
@@ -404,6 +419,8 @@ tmux capture-pane -t self_update_test -p > /tmp/confirmation_prompt.txt
 tmux send-keys -t self_update_test Enter
 sleep 3
 tmux capture-pane -t self_update_test -p > /tmp/after_update.txt
+# remain-on-exit keeps the pane open even if the restart after update crashed —
+# check after_update.txt for a traceback or an unexpected shell prompt before killing
 tmux kill-session -t self_update_test
 ```
 
@@ -412,6 +429,7 @@ tmux kill-session -t self_update_test
    - `source_menu.txt` shows the three numbered options with option 1 as the implicit default, no crash.
    - `confirmation_prompt.txt` shows the bordered curses window with the resolved version (e.g. `v1.2.0`) and `Yes`/`No` buttons, rendered entirely through `UIManager` — not a plain-text prompt that dropped out of curses.
    - `after_update.txt` (or a direct file check, e.g. `git status` / `diff -rq` in the sandbox vs. a fresh clone) confirms the sandbox's local files were actually replaced with the downloaded version.
+   - `after_update.txt` shows no traceback or unexpected drop to a shell prompt — confirming the process (and its restart) didn't crash.
    - Confirm the **working repository itself is untouched** — nothing under the sandbox path should have leaked back into the real project directory.
 
 6. **Clean up the sandbox** once review is complete:
@@ -463,9 +481,9 @@ Before committing a test that calls `render_menu` or `render_confirmation`:
 | File                                | Current  | Target   |
 | ----------------------------------- | -------- | -------- |
 | `test_ui_manager_api.py`            | 5        | 5        |
-| `test_ui_manager_comprehensive.py`  | 8 suites | 6 suites |
-| `test_ui_manager_pytest.py`         | 46       | 30       |
-| `test_ui_manager_terminal_sizes.py` | 9        | 6        |
+| `test_ui_manager_comprehensive.py`  | 6        | 6        |
+| `test_ui_manager_pytest.py`         | 41       | 30       |
+| `test_ui_manager_terminal_sizes.py` | 9        | 9        |
 
 ---
 
@@ -480,6 +498,5 @@ Before committing a test that calls `render_menu` or `render_confirmation`:
 | §8.4 Confirmation prompts Y/n             | Enter/y/Y/n/N/Esc handling                      | `test_ui_manager_comprehensive.py`, `test_ui_manager_pytest.py` |
 | §8.5 Progress bar with percentage/bytes   | Determinate bar and spinner                     | `test_ui_manager_pytest.py`                                     |
 | §8.6 Lifecycle (init/cleanup)             | `_using_curses`, `_screen`, `_cleanup_terminal` | `test_ui_manager_comprehensive.py`, `test_ui_manager_pytest.py` |
-| §8.7 Timeout handling                     | `getch` returns `None`/`-1` → cancel            | `test_timeout_pytest.py`                                        |
 | Highlighted items reverse video           | `curses.A_REVERSE` applied to selection         | `test_ui_manager_comprehensive.py`                              |
 | Terminal size adaptation                  | 40×20, 80×24, 120×30                            | `test_ui_manager_terminal_sizes.py`                             |

@@ -1,49 +1,62 @@
+import sys
 import curses
 import pytest
 from unittest.mock import MagicMock, patch
 
+# Create a global mock for the curses module
+mock_curses = MagicMock()
+
+# Copy only the essential constant attributes
+for attr in ['KEY_UP', 'KEY_DOWN', 'KEY_ENTER', 'KEY_RESIZE', 'KEY_BACKSPACE', 'KEY_PPAGE', 'KEY_NPAGE', 'A_REVERSE', 'COLOR_GREEN', 'COLOR_WHITE', 'COLOR_BLACK']:
+    if hasattr(curses, attr):
+        setattr(mock_curses, attr, getattr(curses, attr))
+
+# Set up screen and other callables
+mock_curses.screen = MagicMock()
+mock_curses.initscr.return_value = mock_curses.screen
+mock_curses.start_color = MagicMock()
+mock_curses.init_pair = MagicMock(side_effect=lambda pair, fg, bg: pair)
+mock_curses.cbreak = MagicMock(return_value=True)
+mock_curses.noecho = MagicMock()
+mock_curses.curs_set = MagicMock(return_value=None)
+mock_curses.echo = MagicMock(return_value=None)
+mock_curses.color_pair = MagicMock(return_value=curses.COLOR_GREEN)
+mock_curses.refresh = MagicMock(return_value=None)
+mock_curses.has_ungetch = MagicMock(return_value=False)
+mock_curses.getscrptr = MagicMock(return_value=None)
+mock_curses.nodelay = MagicMock(return_value=None)
+mock_curses.keypad = MagicMock(return_value=None)
+mock_curses.timeout = MagicMock(return_value=None)
+mock_curses.error = curses.error
+
+# Set sys.modules["curses"] to our mock before any other module can import the real one
+sys.modules["curses"] = mock_curses
+
+# Mock screen methods
+mock_curses.screen.getmaxyx.return_value = (24, 80)
+mock_curses.screen.getyx.return_value = (0, 0)
+mock_curses.screen.getch.return_value = -1
+mock_curses.screen.addstr.return_value = None
+mock_curses.screen.refresh.return_value = None
+mock_curses.screen.move.return_value = None
+mock_curses.screen.keypad.return_value = None
+mock_curses.screen.timeout.return_value = None
+mock_curses.screen.erase.return_value = None
+mock_curses.screen.scrollok.return_value = None
+mock_curses.screen.addch.return_value = None
+mock_curses.screen.inch.return_value = (0, 0)
+mock_curses.screen.getbkgd.return_value = 0
+mock_curses.screen.border.return_value = None
+mock_curses.screen.initscr.return_value = mock_curses.screen
+
+@pytest.fixture(scope="session", autouse=True)
+def global_mock_curses():
+    pass
 
 @pytest.fixture
 def mock_curses():
-    """A fully mocked curses module — safe to use without a TTY."""
-    m = MagicMock()
-    
-    # Copy only the essential constant attributes
-    for attr in ['KEY_UP', 'KEY_DOWN', 'KEY_ENTER', 'KEY_RESIZE', 'KEY_BACKSPACE', 'KEY_PPAGE', 'KEY_NPAGE', 'A_REVERSE', 'COLOR_GREEN', 'COLOR_WHITE', 'COLOR_BLACK']:
-        if hasattr(curses, attr):
-            setattr(m, attr, getattr(curses, attr))
-    
-    # Set up screen and other callables
-    m.screen = MagicMock()
-    m.initscr.return_value = m.screen
-    m.start_color = MagicMock()
-    m.init_pair = MagicMock(return_value=None)
-    m.cbreak = MagicMock(return_value=True)
-    m.noecho = MagicMock()
-    m.curs_set = MagicMock(return_value=None)
-    m.color_pair = MagicMock(return_value=curses.COLOR_GREEN)  # Return a valid color value
-    # Use the real curses.error class
-    m.error = curses.error
-    
-    # Mock screen methods
-    m.screen.getmaxyx.return_value = (24, 80)
-    m.screen.getyx.return_value = (0, 0)
-    m.screen.getch.return_value = -1
-    m.screen.addstr.return_value = None
-    m.screen.refresh.return_value = None
-    m.screen.move.return_value = None
-    m.screen.keypad.return_value = None
-    m.screen.timeout.return_value = None
-    m.screen.erase.return_value = None
-    m.screen.scrollok.return_value = None
-    m.screen.addch.return_value = None
-    m.screen.inch.return_value = (0, 0)
-    m.screen.getbkgd.return_value = 0
-    m.screen.border.return_value = None
-    m.screen.initscr.return_value = m.screen
-    
-    return m
-
+    """Return the global mock_curses object."""
+    return mock_curses
 
 @pytest.fixture
 def mock_win():
@@ -74,14 +87,13 @@ def mock_win():
     win.getpattr.return_value = 0
     return win
 
-
 @pytest.fixture
 def ui(mock_curses):
     """A UIManager instance with curses fully mocked, _using_curses=True."""
     from ui_manager import UIManager
-    with patch('ui_manager.curses', mock_curses):
-        instance = UIManager("Test")
-        instance._using_curses = True
-        instance._color_pair = mock_curses.color_pair(1) | mock_curses.A_REVERSE
-        instance._screen = mock_curses.screen
+    # No need to patch ui_manager.curses since it's already globally mocked
+    instance = UIManager("Test")
+    instance._using_curses = True
+    instance._color_pair = mock_curses.color_pair(1) | mock_curses.A_REVERSE
+    instance._screen = mock_curses.screen
     return instance
