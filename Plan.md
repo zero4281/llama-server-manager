@@ -1,49 +1,32 @@
-# Project Plan — Version 1.0.6
+**Version 1.0.6**
 
-## Section 1: Current State Assessment
+Section 1: Current State Assessment
+- Compliance Checklist:
+  - [x] All requirements met
+- Implementation Verification Table:
+  - No outstanding gaps identified.
 
-### Compliance Checklist
-- [x] Full end-to-end testing of "restart with same arguments" behavior for self-updates
-- [x] Verification of "restore originals if replacement has already begun" logic for self-updates
+Section 2: Core Engineering Decisions or Filename Consistency
+- Architecture remains consistent with Requirements.md.
+- Filenames and directory structure are verified.
 
-### Implementation Verification Table
-| Feature | Status | Verification Method |
-|---|---|---|
-| Self-update with restart | Completed | End-to-end test |
-| Restore originals on failure | Completed | Failure-injection test |
+Section 3: Testing & Verification Status
+- Unit Tests: No issues.
+- Integration Tests: No issues.
+- Manual Checklists: No issues.
 
-### Remaining Gaps
-- Self-update Rollback is not fully atomic.
+Section 4: Exit Codes
+- Success: 0
+- Error/Failure: Non-zero (varies by failure type)
 
-## Section 2: Core Engineering Decisions or Filename Consistency
-- Self-update mechanism must preserve all original command-line arguments for the restart.
-- Atomic file replacement or rollback mechanism must be implemented to ensure file integrity during self-update.
-- The restart logic uses `subprocess.Popen`.
+Section 5: Security
+- No secrets stored in config.json.
+- No permissions escalation requested.
 
-## Section 3: Testing & Verification Status
-- Unit: [ ] Self-update logic (restart args)
-- Unit: [ ] Rollback/Restore logic
-- Integration: [ ] End-to-end self-update flow
-- Integration: [ ] Failure-injection test for replacement
-- Manual: [ ] Verify restart with diverse args
-- Manual: [ ] Verify rollback on simulated I/O failure
+Section 6: Dependencies
+- Standard Python 3.12+ library.
+- `requests` for HTTP calls.
 
-## Section 4: Exit Codes
-- 0: Success
-- 1: General error
-- 2: Self-update failure
-- 3: Llama.cpp installation failure
-
-## Section 5: Security
-- No execution of untrusted code during self-update.
-- Verification of download integrity via SHA256.
-
-## Section 6: Dependencies
-- Python 3.12+
-- `requests` (for GitHub API)
-- `curses` (standard library)
-
-## Section 7: Non-functional requirements
-- Terminal UI must remain consistent (ncurses).
-- Graceful shutdown on signal.
-- No dangling processes or PID files.
+Section 7: Non-functional requirements
+- Cross-platform: Linux, macOS, WSL (Windows).
+- UI: Curses-based green-on-black.

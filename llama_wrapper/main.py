@@ -1,5 +1,5 @@
 """
-main.py — Main entry point for llama-server-manager.
+llama_wrapper.main — Main entry point for llama-server-manager.
 
 This is the central CLI tool that orchestrates all operations:
 - Self-update
@@ -211,7 +211,7 @@ class Main:
                                     rel_path = file_path.relative_to(top_level_dir)
                                     if rel_path.name.endswith('.md') or 'tests' in rel_path.parts:
                                         continue
-                                    
+                                        
                                     target = project_root / rel_path
                                     if target.exists():
                                         backup_path = backup_dir / rel_path
@@ -222,7 +222,7 @@ class Main:
                                     else:
                                         target.parent.mkdir(parents=True, exist_ok=True)
                                         shutil.move(str(file_path), str(target))
-                                    
+                                        
                                     self.ui.print_message(f"Updated: {rel_path}")
                             
                             if backup_dir.exists():
@@ -239,7 +239,7 @@ class Main:
                                 self.ui.print_message(f"Removed: {top_level_dir.name}")
 
 
-                        
+                            
             finally:
                 # Clean up temporary zip file
                 if zip_file_path.exists():
@@ -262,15 +262,32 @@ class Main:
             import subprocess
             
             # Execute and replace current process
-            subprocess.Popen([sys.executable, "main.py"] + sys.argv[1:], 
-                             stdout=subprocess.PIPE, 
-                             stderr=subprocess.PIPE, 
-                             text=True)
+            restart_proc = subprocess.Popen(
+                [sys.executable, "main.py"] + sys.argv[1:],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Verify restart was successful by checking process
+            try:
+                # Give the new process a moment to start
+                restart_proc.wait(timeout=5)
+                # If it exited, something went wrong
+                if restart_proc.returncode != 0:
+                    stdout, stderr = restart_proc.communicate()
+                    ui.render_error(f"Restart failed with return code {restart_proc.returncode}")
+                    ui.render_error(f"Stderr: {stderr}")
+                    sys.exit(restart_proc.returncode)
+            except subprocess.TimeoutExpired:
+                # Process is still running, which is expected
+                ui.print_message("New process started successfully")
+            
             sys.exit(0)
             
         except Exception as e:
             ui.render_error(f"Self-update failed: {e}")
-            sys.exit(2)
+            sys.exit(3)
 
     def run(self) -> None:
         """Main execution flow."""
@@ -311,7 +328,7 @@ class Main:
                                   PlatformNotFoundError, LlamaUpdaterError)):
                     raise
                 self.ui.render_error(f"Error: {e}")
-                sys.exit(1)
+                sys.exit(3)
             return
         
         if self.args.update_llama:
@@ -330,7 +347,7 @@ class Main:
                                   PlatformNotFoundError, LlamaUpdaterError)):
                     raise
                 self.ui.render_error(f"Error: {e}")
-                sys.exit(1)
+                sys.exit(3)
             return
         
         if self.args.stop_server:
@@ -344,10 +361,12 @@ class Main:
         # Check if llama-cpp is installed
         llama_cpp_path = Path.cwd() / "llama-cpp" / "llama-server"
         if not llama_cpp_path.exists():
-            self.ui.render_error("Error: llama-cpp is not installed. Please run with --install-llama first.\n\nUsage: ./llama-server-manager --install-llama")
-            sys.exit(1)
+            self.ui.render_error("Error: llama-cpp is not installed. Please run with --install-llama first.")
+            self.ui.print_message("\nUsage: ./llama-server-manager --install-llama")
+            sys.exit(3)
         
         runner.run()
+
 
 
 

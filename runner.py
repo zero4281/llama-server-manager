@@ -97,6 +97,10 @@ class Runner:
         # Add merged args
         cmd.extend(merged_args)
         
+        # Add default log-file if not already specified
+        if "--log-file" not in merged_args:
+            cmd.extend(["--log-file", "llama-server.log"])
+        
         return cmd
 
     def _run_background(self, command: list, merged_args: list) -> None:
