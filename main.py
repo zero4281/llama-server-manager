@@ -98,7 +98,7 @@ class Main:
                 {"label": "Latest release (recommended)", "description": "Most recent official release"},
                 {"label": "Previous release", "description": "Select from available releases"},
                 {"label": "Repository HEAD", "description": "Main branch latest commit"},
-             ]
+            ]
 
             default_source = 0
             selected_source = self.ui.render_menu(source_options, default=default_source)
