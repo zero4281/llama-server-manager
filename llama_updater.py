@@ -823,7 +823,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     
     # Prepare zip file options for menu
     zip_options = []
-    for i, asset in enumerate(selected_platform_info['assets'], 1):
+    for i, asset in enumerate(filtered_assets, 1):
         is_default = (i == 1)
         marker = " (default)" if is_default else ""
         zip_entry = {

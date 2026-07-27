@@ -150,8 +150,8 @@ The §7.3.0 asset-filename parser is very likely not stopping at the OS segment 
 
 ---
 
-### 🆕 NEW: Compute Backend selection doesn't filter by chosen OS/Architecture, and re-renders itself instead of advancing
-**Status:** 🔴 **OPEN**
+### ✅ RESOLVED: Compute Backend selection doesn't filter by chosen OS/Architecture, and re-renders itself instead of advancing
+**Status:** 🟢 **RESOLVED**
 **Priority:** **P1** — Core workflow broken
 **Description:**
 The "Select Compute Backend" screen (§7.3.3) always shows a single `0. cpu (default)` option (with a stray duplicate `(default)` line) regardless of which OS/Architecture pair was selected, instead of listing the distinct backends actually available for that pair. Pressing Enter re-renders an identical copy of the same screen rather than advancing to Confirmation.
@@ -171,6 +171,9 @@ Likely the same root-cause parser issue as the OS/Architecture bug above: the Ba
 - None currently; needs tests asserting (a) the Backend list reflects only backends present for the selected OS/Architecture pair, and (b) confirming a selection advances to the Confirmation screen rather than re-rendering the Backend screen.
 **Verification:**
 - ✅ Confirmed via manual walkthrough — identical screen shown twice in a row after pressing Enter.
+
+**Resolution:**
+Modified llama_updater.py to use filtered_assets instead of selected_platform_info['assets'] when preparing archive options for the menu. This ensures only assets matching the selected Compute Backend (or default CPU backend) are displayed on the final selection screen.
 
 ---
 
