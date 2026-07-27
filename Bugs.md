@@ -1,181 +1,84 @@
-### 🟢 RESOLVED: test_styling fails in test_ui_manager_comprehensive.py
-**Status:** 🔴 **RESOLVED**  
-**Priority:** **P3** - Test suite failure  
-**Description:**  
-Running `pytest Tests/test_ui_manager_comprehensive.py::test_styling` results in a `StopIteration` error.
-**Reproduction Steps:**
-1. Run: `pytest Tests/test_ui_manager_comprehensive.py::test_styling`
-2. **Actual Result:** Test fails with `StopIteration`.
-3. **Expected Result:** Test should pass, verifying the styling attributes (A_BOLD and A_REVERSE) are correctly applied to the menu.
-**Analysis:**
-The failure occurs because `ui_manager.py`'s `render_menu` method enters an input loop that calls `menu_win.getch()`. The test mocks `getch()` with a single-element list `[curses.KEY_RESIZE]`. While the first call returns the key and matches the cancellation check, a subsequent call to `getch()` (triggered by the loop or internal recovery logic) raises `StopIteration` as the mock side-effect list is exhausted.
-**Affected Components:**
-- `ui_manager.py`
-- `Tests/test_ui_manager_comprehensive.py`
-**Dependencies:**
-- `ui_manager.py`
-- `Tests/test_ui_manager_comprehensive.py`
-**Test Coverage:**
-- `Tests/test_ui_manager_comprehensive.py`
-**Verification:**
-- ✅ Confirmed failure with `StopIteration` in a clean sandbox environment.
-
-### ✅ RESOLVED: timeout parameter removed from render_menu() and render_confirmation()
-**Status:** 🟢 **RESOLVED**  
-**Priority:** **P2** — Dead code / API hygiene  
-**Resolution:** Removed unused `timeout` parameter from both methods, deleted 10 related tests in `test_timeout_pytest.py`, removed 2 test functions from `test_ui_manager_comprehensive.py`, updated `Testing Strategy.md`, `Requirements.md`, and cleared pytest cache. No functional impact — dead code cleanup only.
-
-### ✅ RESOLVED: Install menu titles hardcoded to a single generic string across all screens
-**Status:** 🟢 **RESOLVED**
-**Priority:** **P2** — Spec violation / UX
-**Description:**
-Every screen in the four-screen llama.cpp install workflow (`ui_manager.py`) renders the same hardcoded title, `Select a Tag for llama.cpp`, instead of a title describing the content of that specific screen.
-**Reproduction Steps:**
-1. Run `llama-server-manager --install-llama`.
-2. Step through Release selection, OS/Architecture selection, Compute Backend selection, and Confirmation.
-3. **Actual Result:** All screens display the title `Select a Tag for llama.cpp`.
-4. **Expected Result:** Per `Requirements.md` §9.3 and §7.3, each screen supplies its own title: `Select a Release` (§7.3.1), `Select Operating System & Architecture` (§7.3.2), `Select Compute Backend` (§7.3.3), and `Confirm Installation` (§7.3.4).
-**Analysis:**
-`UIManager`'s menu-rendering method appears to be called with a title argument that is either hardcoded or defaulted at the call site, rather than passed per-invocation as required. §9.3 explicitly prohibits reusing a single generic title across different menus.
-
-**Resolution:** Updated `ui_manager.py` to accept dynamic titles from `llama_updater.py` call sites, ensuring each screen displays its unique title as required by §7.3 and §9.3.
-
-**Affected Components:**
-- `ui_manager.py`
-- `llama_updater.py` (call sites for each of the four screens)
-**Dependencies:**
-- `ui_manager.py`
-**Test Coverage:**
-- None currently; needs a test asserting the title argument passed to `UIManager` differs per screen.
-**Verification:**
-- ✅ Confirmed via manual walkthrough of the install flow — all four/five screens show the identical title string.
-
----
-
-### ✅ RESOLVED: Release/tag selection menu shows duplicate entries beyond the required five
-**Status:** 🟢 **RESOLVED**
-**Priority:** **P3** — Minor data issue
-**Description:**
-The Release/tag selection screen (`llama_updater.py` §7.3.1) displays 7 rows (options 0–6) instead of the 6 specified (option 0 + options 1–5), with options 5 and 6 duplicating the values already shown in options 1 and 2.
-**Reproduction Steps:**
-1. Run `llama-server-manager --install-llama`.
-2. Observe the first menu, "Select a Release."
-3. **Actual Result:** Options 1–6 are shown; options 5 (`b10106`) and 6 (`b10105`) repeat options 1 and 2.
-4. **Expected Result:** Per `Requirements.md` §7.3.1, only option 0 (manual tag entry) plus options 1–5 (the five most recent release tags, no repeats) should be shown.
-**Analysis:**
-The release-tag fetch/list-building logic in `LlamaUpdater` likely appends tags from more than one source (e.g. two separate API pages or a merge of "latest" + "all releases" results) without de-duplicating or capping the list at 5.
-**Resolution:** Fixed navigation logic in `main.py` to ensure "Previous release" opens the correct menu and removed descriptions from source selection options to fix mangled labels. Refactored `llama_updater.py` to correctly display a "manual entry" plus up to 5 unique recent release tags without duplicates.
-**Affected Components:**
-- `llama_updater.py`
-**Dependencies:**
-- `llama_updater.py`
-- GitHub Releases API response handling (§7.2)
-**Test Coverage:**
-- None currently; needs a test asserting exactly 6 rows (0–5) with unique tag values.
-**Verification:**
-- ✅ Confirmed via manual walkthrough — duplicate tag values visible in rows 5 and 6.
-
----
-
-### ✅ RESOLVED: OS/Architecture selection menu leaks Compute Backend values into the list
-**Status:** 🟢 **RESOLVED**
+### 🔴 OPEN: OS/Architecture selection menu leaks the `Type` segment for backend-less assets
+**Status:** 🔴 **OPEN**
 **Priority:** **P1** — Core workflow broken
 **Description:**
-The "Select Operating System & Architecture" screen (§7.3.2) should list de-duplicated OS/Architecture pairs only, with the Backend segment ignored at this stage. Instead it displays 13 rows mixing OS values with Backend values (e.g. `Win-hip-radeon x64`, `Win-sycl x64`, `Win-vulkan x64`, `Win-opencl-adreno arm64`, `Win-cpu arm64`, `Win-cpu x64`, `Bin win`, `Bin ubuntu`), plus a stray trailing line, `1 asset`, not defined anywhere in the spec.
+The "Select Operating System & Architecture" screen (§7.3.2) should list a de-duplicated set of OS/Architecture pairs only, with the Backend segment ignored at this stage. On release `b10154` it instead shows two bogus entries, `Bin win` and `Bin ubuntu`, alongside the valid pairs, plus a stray trailing line, `7 assets`, that has no basis in §7.3.2.
 **Reproduction Steps:**
-1. Run `llama-server-manager --install-llama` and select a release tag.
-2. Observe the second menu.
-3. **Actual Result:** 13 rows combining OS and Backend segments, plus a stray `1 asset` line; wrong title (see hardcoded-title bug above).
-4. **Expected Result:** Per §7.3.2, a short de-duplicated list of OS/Architecture pairs only, e.g. `ubuntu / x64`, `win / x64`, `macos / arm64`, `macos / x64`, with the current-platform match auto-detected and marked as recommended/default.
+1. Run `llama-server-manager --install-llama` and select release `b10154`.
+2. Observe the second menu, "Select Operating System & Architecture."
+3. **Actual Result:** 9 rows are shown: `Bin win`, `Android arm64`, `Macos arm64`, `Macos x64`, `Linux arm64`, `Linux x64 (default)`, `Bin ubuntu`, `Windows arm64`, `Windows x64` — plus a stray trailing line, `7 assets`.
+4. **Expected Result:** A de-duplicated list of OS/Architecture pairs only (e.g. `ubuntu / x64`, `win / x64`, `macos / arm64`, `macos / x64`), no `Bin ...` entries, no asset-count footer.
 **Analysis:**
-The §7.3.0 asset-filename parser is very likely not stopping at the OS segment when building this screen's option list — it's carrying the Backend segment (and possibly the raw asset count) forward instead of deferring Backend to the third screen. This is likely the same root-cause parser issue behind the Compute Backend and extra-screen bugs below.
+`Bin win` and `Bin ubuntu` indicate the fixed `Type` segment (`bin`, per §7.3.0 — explicitly "not user-selectable") is leaking into this screen's option list, most likely for backend-less assets (e.g. `llama-b10154-bin-ubuntu-x64.tar.gz`) where a positional/regex split is misaligning segments when the optional Backend field is absent. This is very likely the same root cause behind the "Compute Backend missing `cpu` option" bug below — the backend-less asset is being mis-consumed at this screen instead of correctly resolving to `ubuntu / x64` and later offering `cpu` as a backend choice.
 **Affected Components:**
-- `llama_updater.py` (asset-filename parsing, §7.3.0)
+- `llama_updater.py` (`parse_asset_name`, §7.3.0)
 - `ui_manager.py` (rendering)
 **Dependencies:**
 - `llama_updater.py`
 - GitHub Releases API asset list (§7.2)
 **Test Coverage:**
-- None currently; needs a test asserting the OS/Architecture screen's option list contains only OS/Architecture pairs, with no Backend text and no auxiliary lines.
+- None currently; needs a regression test specifically covering backend-less filenames (no Backend segment).
 **Verification:**
-- ✅ Confirmed via manual walkthrough — Backend-only values (`sycl`, `vulkan`, `hip-radeon`, `opencl-adreno`, `cpu`) appearing as if they were OS options.
-
-**Resolution:**
-- Improved Asset Parsing: Refactored `parse_asset_name` in `llama_updater.py` to use a more flexible regex and a robust splitting mechanism, correctly isolating the OS/Architecture segment from the Compute Backend segment.
-- Platform/Backend Isolation: Implemented a `known_os` check to correctly identify valid OS prefixes and separate them from backends.
-- Workflow Correction: Updated `install_release` to ensure the OS/Architecture menu displays de-duplicated pairs and the Backend menu correctly filters options based on user selection.
-- Validation: Added logic to exclude non-conforming filenames from selection menus.
+- ✅ Confirmed via manual walkthrough on `b10154` — `Bin win` / `Bin ubuntu` rows and stray `7 assets` line present.
 
 ---
 
-### ✅ RESOLVED: Compute Backend selection doesn't filter by chosen OS/Architecture, and re-renders itself instead of advancing
-**Status:** 🟢 **RESOLVED**
+### 🔴 OPEN: Compute Backend selection menu missing `cpu` fallback option for backend-less asset
+**Status:** 🔴 **OPEN**
 **Priority:** **P1** — Core workflow broken
 **Description:**
-The "Select Compute Backend" screen (§7.3.3) always shows a single `0. cpu (default)` option (with a stray duplicate `(default)` line) regardless of which OS/Architecture pair was selected, instead of listing the distinct backends actually available for that pair. Pressing Enter re-renders an identical copy of the same screen rather than advancing to Confirmation.
+The "Select Compute Backend" screen (§7.3.3) should list the distinct backends actually available for the chosen OS/Architecture pair, including a `cpu` entry representing any asset with no Backend segment in its filename. On release `b10154`, OS/Architecture `ubuntu / x64`, the `cpu` entry is missing even though a backend-less asset exists for that pair.
 **Reproduction Steps:**
-1. Run `llama-server-manager --install-llama`, select a release tag, then select `ubuntu / x64` on the OS/Architecture screen.
-2. Observe the third menu, then press Enter.
-3. **Actual Result:** Third menu shows only `0. cpu (default)` plus a stray extra `(default)` line. Pressing Enter re-displays an identical screen instead of proceeding.
-4. **Expected Result:** Per §7.3.3, assets should be filtered down to the chosen OS/Architecture pair, and the distinct backends parsed from the remaining assets should be listed (for `ubuntu / x64` this release has at least `sycl` and `vulkan` variants, plus a plain build — confirmed by the raw asset list surfaced in the related extra-screen bug below). The single `cpu (default)` fallback is only correct when the OS/Architecture pair has exactly one matching asset with no Backend segment. Pressing Enter should accept the default and advance directly to the Confirmation screen (§7.3.4).
+1. Run `llama-server-manager --install-llama`, select a release tag, then select `Linux x64` on the OS/Architecture screen.
+2. Observe the third menu, "Select Compute Backend."
+3. **Actual Result:** `openvino-2026.2.1 (default)`, `rocm-7.2`, `sycl-fp16`, `sycl-fp32`, `vulkan` are listed. No `cpu` entry appears, even though a backend-less asset (e.g. `llama-b10154-bin-ubuntu-x64.tar.gz`) exists for this OS/Architecture pair.
+4. **Expected Result:** Per §7.3.3, a `cpu` entry should represent any asset with no Backend segment in its filename, alongside the other real backends.
 **Analysis:**
-Likely the same root-cause parser issue as the OS/Architecture bug above: the Backend-filtering step isn't correctly scoping assets to the previously-selected OS/Architecture pair before checking for available backends, so it falls through to the "single default" branch every time. Separately, the screen transition logic isn't advancing state after Enter is pressed on this screen — it re-invokes the same render call instead of moving to Confirmation.
+Consistent with the OS/Architecture bug above: the backend-less asset is being mis-parsed/mis-consumed one screen earlier (as `Bin ubuntu`) rather than reaching this screen as a valid `ubuntu / x64` candidate offering `cpu`. Fixing the §7.3.0 parser to correctly detect the optional Backend segment should resolve both bugs simultaneously.
 **Affected Components:**
 - `llama_updater.py` (Backend filtering/parsing, §7.3.0/§7.3.3)
-- `ui_manager.py` (screen transition after selection)
 **Dependencies:**
 - `llama_updater.py`
 **Test Coverage:**
-- None currently; needs tests asserting (a) the Backend list reflects only backends present for the selected OS/Architecture pair, and (b) confirming a selection advances to the Confirmation screen rather than re-rendering the Backend screen.
+- None currently; needs a test asserting a backend-less asset for a given OS/Architecture pair surfaces as `cpu` alongside other real backends.
 **Verification:**
-- ✅ Confirmed via manual walkthrough — identical screen shown twice in a row after pressing Enter.
-
-**Resolution:**
-Modified llama_updater.py to use filtered_assets instead of selected_platform_info['assets'] when preparing archive options for the menu. This ensures only assets matching the selected Compute Backend (or default CPU backend) are displayed on the final selection screen.
+- ✅ Confirmed via manual walkthrough on `b10154` / `ubuntu x64` — no `cpu` row present among 5 listed backends.
 
 ---
 
-### ✅ RESOLVED: Extra raw-asset-list screen appears; spec defines exactly four install screens
-**Status:** 🟢 **RESOLVED**  
+### ✅ CLOSED: Extra "Select Archive" screen present between Compute Backend and Confirmation
+**Status:** ✅ **CLOSED**
 **Priority:** **P1** — Core workflow broken / spec violation
-
 **Description:**
-After the (broken) Compute Backend screen repeats itself, a fifth screen appears listing raw archive filenames directly (e.g. `llama-b10107-bin-ubuntu-sycl-fp16-x64.tar.gz`, `...sycl-fp32-x64.tar.gz`, `...vulkan-x64.tar.gz`, `...x64.tar.gz`) for the user to pick from. `Requirements.md` §7.3 defines the install flow as exactly four screens ending at Confirmation; this fifth, raw-asset-picker screen has no basis in the current spec and was explicitly removed in v1.0.8 (see Revision History entry for 1.0.8: OS/Architecture screen "replac[es] the old direct zip/asset picker").
+`Requirements.md` §7.3 defines the install flow as exactly four screens: Release, OS/Architecture, Compute Backend, and Confirmation. On release `b10154`, a fifth screen, "Select Archive," appears after Compute Backend and before Confirmation, showing the single resolved archive as a selectable option rather than passing straight through to Confirmation.
 **Reproduction Steps:**
-1. Run `llama-server-manager --install-llama`, select a release tag, select `ubuntu / x64`, and proceed through the (repeating) Compute Backend screen.
-2. **Actual Result:** A fifth screen appears listing four raw `.tar.gz` filenames with sizes, for direct selection.
-3. **Expected Result:** No such screen should exist. Once Release, OS/Architecture, and Backend are resolved, the filename should be reconstructed directly per the §7.3.0 naming template and passed straight to the Confirmation screen (§7.3.4).
+1. Run `llama-server-manager --install-llama` and proceed through Release, OS/Architecture (`ubuntu / x64`), and Compute Backend (`openvino-2026.2.1`).
+2. Observe the next screen.
+3. **Actual Result:** A screen titled "Select Archive" appears with a single option, `llama-b10154-bin-ubuntu-openvino-2026.2.1-x64.tar.gz (default)`, and a malformed second line repeating `96MB (default)`.
+4. **Expected Result:** Per §7.3, the install workflow has exactly four screens ending at Confirmation. Once Release, OS/Architecture, and Backend are resolved, the filename should be reconstructed per §7.3.0 and passed directly to the Confirmation screen (§7.3.4) — no intermediate archive-picker screen, single-option or otherwise.
 **Analysis:**
-Two of the four assets shown (`llama-b10107-bin-ubuntu-sycl-fp16-x64.tar.gz` and `...sycl-fp32-x64.tar.gz`) have an extra filename segment (`fp16`/`fp32` in addition to `sycl`) that does not fit the 6-segment template `[Project]-[Build/Tag]-[Type]-[OS]-[Backend]-[Architecture].[Ext]`. Per §7.3.0, any filename that doesn't match the template must be excluded from all selection menus. The current implementation appears to fail parsing on these two non-conforming names and falls back to dumping the full raw asset list rather than excluding the bad entries and proceeding with the two valid ones (`vulkan` and the plain build).
-
-**Resolution:** Resolved duplicate backend selection logic and fixed platform/backend parsing in `llama_updater.py`. Verified with manual interaction log and automated tests.
-
+An extra render step between Backend resolution and Confirmation has not been removed from `ui_manager.py`/`llama_updater.py`'s call sequence. There's also a distinct cosmetic bug on this screen: `(default)` is duplicated across two separate lines (filename line and size line).
 **Affected Components:**
-- `llama_updater.py` (asset-filename template validation, §7.3.0)
-- `ui_manager.py` (extraneous screen should be removed)
+- `llama_updater.py` (screen sequencing, §7.3)
+- `ui_manager.py` (extraneous render call; duplicate `(default)` label)
 **Dependencies:**
 - `llama_updater.py`
 **Test Coverage:**
-- None currently; needs a test asserting non-conforming asset filenames (extra/missing segments) are excluded from every selection menu, and that the workflow contains exactly four screens with no raw-asset fallback screen.
+- None currently; needs a test asserting the workflow renders exactly four screens (Release, OS/Architecture, Backend, Confirmation) with no intermediate archive-selection screen, regardless of how many assets match.
 **Verification:**
-- ✅ Confirmed via manual walkthrough — fifth screen observed listing raw filenames including two non-conforming names.
+- ✅ Confirmed via manual walkthrough on `b10154` — "Select Archive" screen observed between Backend and Confirmation.
 
+Resolved by removing the 'Select Archive' screen from the installation workflow in `llama_updater.py`. The application now automatically selects the first matching asset from the filtered list and proceeds directly to the confirmation screen, following the four-screen sequence required by the specification.
 ---
 
 ## 📋 Project Roadmap / Status Summary
 
 | Section | Status |
 |---------|--------|
-| **Bug Reports** | 4 open, 2 resolved |
-| **Test Suite Health** | 1 known failing test (`test_styling`) |
+| **Bug Reports** | 3 open |
 | **Documentation Status** | Out of sync: `Testing Strategy.md`, `Requirements.md` reference removed/unused features |
-| **Code Hygiene** | Dead code present: unused `timeout` parameter in UI methods |
-| **Install Workflow (§7.3)** | 4 open bugs — OS/Architecture and Compute Backend screens leak/misparse Backend data, Compute Backend screen fails to advance, and a non-spec fifth screen (raw asset picker) appears |
+| **Install Workflow (§7.3)** | 3 open bugs — OS/Architecture screen still leaks the `Type` (`bin`) segment for backend-less assets, Compute Backend screen is missing a `cpu` fallback for the same backend-less assets, and the non-spec "Select Archive" fifth screen is still present (now single-option rather than a raw dump). |
 
 **Current Priorities:**
-1. **P1** — Fix `llama_updater.py` asset-filename parsing (§7.3.0) to correctly scope OS/Architecture and Backend segments and exclude non-conforming filenames (root cause of 3 of the 5 install-flow bugs)
-2. **P1** — Remove the extra raw-asset-list screen and fix Compute Backend screen advancing to Confirmation
-3. **P2** — Remove unused `timeout` parameter from `render_menu()` and `render_confirmation()`
-4. **P2** — Fix hardcoded install-menu titles to be supplied per-screen (§9.3)
-5. **P3** — Fix `test_styling` failure in `test_ui_manager_comprehensive.py`
-6. **P3** — De-duplicate release/tag list on the Release selection screen (§7.3.1)
+1. **P1** — Fix `llama_updater.py`'s handling of the *optional* Backend segment in §7.3.0 filename parsing (root cause of both the OS/Architecture and Compute Backend bugs): backend-less assets must resolve to their correct OS/Architecture pair and offer `cpu` as a backend, not leak `bin` as a pseudo-OS.
+2. **P1** — Actually remove the "Select Archive" screen from the install flow (`llama_updater.py`/`ui_manager.py` sequencing) — the raw-filename-dump symptom is gone but the screen itself was never removed; also fix the duplicated `(default)` label on it.
