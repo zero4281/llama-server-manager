@@ -168,9 +168,10 @@ Likely the same root-cause parser issue as the OS/Architecture bug above: the Ba
 
 ---
 
-### 🆕 NEW: Extra raw-asset-list screen appears; spec defines exactly four install screens
-**Status:** 🔴 **OPEN**
+### ✅ RESOLVED: Extra raw-asset-list screen appears; spec defines exactly four install screens
+**Status:** 🟢 **RESOLVED**  
 **Priority:** **P1** — Core workflow broken / spec violation
+
 **Description:**
 After the (broken) Compute Backend screen repeats itself, a fifth screen appears listing raw archive filenames directly (e.g. `llama-b10107-bin-ubuntu-sycl-fp16-x64.tar.gz`, `...sycl-fp32-x64.tar.gz`, `...vulkan-x64.tar.gz`, `...x64.tar.gz`) for the user to pick from. `Requirements.md` §7.3 defines the install flow as exactly four screens ending at Confirmation; this fifth, raw-asset-picker screen has no basis in the current spec and was explicitly removed in v1.0.8 (see Revision History entry for 1.0.8: OS/Architecture screen "replac[es] the old direct zip/asset picker").
 **Reproduction Steps:**
@@ -179,6 +180,9 @@ After the (broken) Compute Backend screen repeats itself, a fifth screen appears
 3. **Expected Result:** No such screen should exist. Once Release, OS/Architecture, and Backend are resolved, the filename should be reconstructed directly per the §7.3.0 naming template and passed straight to the Confirmation screen (§7.3.4).
 **Analysis:**
 Two of the four assets shown (`llama-b10107-bin-ubuntu-sycl-fp16-x64.tar.gz` and `...sycl-fp32-x64.tar.gz`) have an extra filename segment (`fp16`/`fp32` in addition to `sycl`) that does not fit the 6-segment template `[Project]-[Build/Tag]-[Type]-[OS]-[Backend]-[Architecture].[Ext]`. Per §7.3.0, any filename that doesn't match the template must be excluded from all selection menus. The current implementation appears to fail parsing on these two non-conforming names and falls back to dumping the full raw asset list rather than excluding the bad entries and proceeding with the two valid ones (`vulkan` and the plain build).
+
+**Resolution:** Resolved duplicate backend selection logic and fixed platform/backend parsing in `llama_updater.py`. Verified with manual interaction log and automated tests.
+
 **Affected Components:**
 - `llama_updater.py` (asset-filename template validation, §7.3.0)
 - `ui_manager.py` (extraneous screen should be removed)

@@ -254,13 +254,47 @@ def parse_asset_name(name: str) -> Dict[str, str]:
     # Tag can contain hyphens, so we need a more flexible pattern
     # Backend is optional, and variant is the optional suffix after architecture
     # Platform can contain hyphens (e.g., rocky-linux), arch is always x64 or arm64
-    new_pattern = r"^llama-[a-zA-Z0-9_-]+-bin-([a-zA-Z0-9-]+)-(?:([a-zA-Z0-9-]+)-)?(x64|arm64)(?:-(\w+))?$"
+    new_pattern = r"^llama-[a-zA-Z0-9_-]+-bin-(.*)-(x64|arm64)(?:-(\w+))?$"
     match = re.match(new_pattern, base_name)
     if match:
-        platform = match.group(1).lower()
-        backend = match.group(2)
-        arch = match.group(3).lower()
-        variant = match.group(4)
+        full_platform_backend = match.group(1)
+        arch = match.group(2)
+        variant = match.group(3)
+        
+        # The platform/backend part contains everything between "-bin-" and the architecture.
+        # The OS is the first part, the Architecture is the last part,
+        # and everything in between is the Backend.
+        parts = full_platform_backend.split('-')
+        
+        known_os = ["linux", "windows", "darwin", "ubuntu", "debian", "centos", "rocky", "alpine", "fedora", "rhel", "amazon", "oracle", "suse", "opensuse", "gentoo", "manjaro", "elementary", "pop", "zorin", "linuxmint", "deepin", "kali", "parrot"]
+        
+        if len(parts) == 1:
+            platform_name = parts[0].capitalize()
+            backend = None
+        elif len(parts) == 2:
+            if parts[0] in known_os and parts[1] in known_os:
+                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+                backend = None
+            elif parts[0] in known_os:
+                platform_name = parts[0].capitalize()
+                backend = parts[1]
+            else:
+                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+                backend = None
+        else:
+            if parts[0] == "rocky" and parts[1] == "linux":
+                platform_name = "Linux"
+                backend = "-".join(parts[2:])
+            elif parts[0] in known_os and parts[1] in known_os:
+                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+                backend = "-".join(parts[2:])
+            elif parts[0] in known_os:
+                platform_name = parts[0].capitalize()
+                backend = "-".join(parts[1:])
+            else:
+                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+                backend = "-".join(parts[2:])
+        
         # Convert platform names to standard names
         platform_map = {
             "ubuntu": "Linux",
@@ -287,17 +321,16 @@ def parse_asset_name(name: str) -> Dict[str, str]:
             "kali": "Linux",
             "parrot": "Linux",
         }
-        # Handle compound names like rocky-linux
-        if platform in platform_map:
-            platform_name = platform_map[platform]
-        elif '-' in platform and platform.split('-')[0] in platform_map:
-            platform_name = platform_map[platform.split('-')[0]]
-        else:
-            platform_name = platform
-        # Capitalize first letter for consistency with test expectations
-        platform_name = platform_name.capitalize()
+        
+        # Final platform name normalization
+        final_platform = platform_name
+        if final_platform not in platform_map and final_platform.lower() in platform_map:
+            final_platform = platform_map[final_platform.lower()]
+        elif final_platform.lower() in platform_map:
+            final_platform = platform_map[final_platform.lower()]
+            
         return {
-            "platform": platform_name,
+            "platform": final_platform,
             "arch": arch,
             "backend": backend,
             "variant": variant if variant else None
@@ -784,58 +817,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             filtered_assets.append(asset)
     
     # Update selected_platform_info with filtered assets for the next step
-    selected_platform_info['assets'] = filtered_assets
-    
-    # Compute Backend selection
-    # Extract backends from assets
-    backends = set()
-    for asset in selected_platform_info['assets']:
-        parsed = parse_asset_name(asset['name'])
-        if parsed['backend']:
-            backends.add(parsed['backend'])
-    
-    sorted_backends = sorted(list(backends))
-    
-    # If no backend segments were found or only one was found, handle defaults
-    if not sorted_backends:
-        sorted_backends = ['cpu']
-    elif len(sorted_backends) == 1:
-        # Only one backend found, show it as the only option
-        pass
-    
-    # Render Compute Backend selection menu
-    backend_options = []
-    for i, backend in enumerate(sorted_backends, 1):
-        is_default = (i == 1)
-        marker = " (default)" if is_default else ""
-        backend_entry = {
-            'label': backend,
-            'description': marker
-        }
-        backend_options.append(backend_entry)
-    
-    selected_backend_idx = ui.render_menu(backend_options, default=0, title="Select Compute Backend")
-    
-    if selected_backend_idx == -1:
-        ui.render_error("Compute Backend selection cancelled.")
-        return
-    
-    selected_backend = sorted_backends[selected_backend_idx]
-    if not selected_backend:
-        selected_backend = 'cpu'
-    
-    # Filter assets by selected backend
-    # Assets with no backend segment in filename are considered 'cpu'
-    filtered_assets = []
-    for asset in selected_platform_info['assets']:
-        parsed = parse_asset_name(asset['name'])
-        if parsed['backend'] == selected_backend:
-            filtered_assets.append(asset)
-        elif not parsed['backend'] and selected_backend == 'cpu':
-            filtered_assets.append(asset)
-    
-    # Update selected_platform_info with filtered assets for the next step
-    selected_platform_info['assets'] = filtered_assets
+
     
     # Prepare zip file options for menu
     zip_options = []
