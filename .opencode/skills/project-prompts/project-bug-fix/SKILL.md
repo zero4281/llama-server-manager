@@ -19,31 +19,47 @@ description: Use this skill to select, implement, verify via manual dynamic test
 
 Use todowrite to create an initial parsing task and assign it to @general.
 
-> Read `./Bugs.md`, `./Requirements.md`, `./Plan.md`, and `./Testing Strategy.md`.
+> Read `./Bugs.md`.
 > Parse `./Bugs.md` to compile a clean list of all pending, uncompleted bug items (including titles, priorities, and dependencies). Return this list to the orchestrator.
 
 **WAIT:** Once the list is returned, present it to the user via AskUserQuestion and wait for them to explicitly select which bug item to resolve.
 
 ---
 
-## Phase 2 — Targeted Delegation & Fix
+## Phase 2 — Targeted Delegation, Fix & Self-Verification
 
 Print the message: "Starting work on [Selected Bug Title]." Immediately follow this by using todowrite to create the implementation task and assign it to @general.
 
-> Ingest the full bug description, reproduction steps, and dependencies from `./Bugs.md` for: [Selected Bug Title].
-> Review the source code files identified as relevant during Phase 1.
-> 
-> Implement the precise source code modification required to resolve the bug, adhering to the expected outcomes and behaviors defined in `./Requirements.md` and `./Plan.md`. Do not touch markdown tracking documents or test files yet. Return a written summary of the changes made.
+> 1. **Context & Safety Review:** 
+>    - Ingest the full bug description, reproduction steps, and dependencies from `./Bugs.md` for: **[Selected Bug Title]**.
+>    - Read the **Manual Dynamic Testing** section of `./Testing Strategy.md` to identify any special isolation requirements, safety gates, or environment rules required when working on or verifying this functional area.
+>    - Review the source code files identified as relevant during Phase 1.
+>
+> 2. **Implementation:** Implement the precise source code modification required to resolve the bug, adhering to expected outcomes and behaviors defined in `./Requirements.md` and `./Plan.md`. Do not touch markdown tracking documents or test files yet.
+>
+> 3. **Static & Syntax Self-Verification:** Perform a mandatory self-check on all edited files:
+>    - Run language-appropriate syntax, linting, or basic static checks (e.g., `php -l`, `node --check`, or equivalent compilers/parsers) on modified files to verify no syntax or parse errors were introduced.
+>    - Run `git diff` to carefully review all edits against the expected outcomes in `./Requirements.md` and `./Plan.md` to confirm the fix is complete, correct, and free of unintended modifications.
+>
+> 4. **Phase 2 Repair Loop:** If syntax errors, incomplete edits, or unintended side effects are discovered during self-verification, **immediately fix them** and repeat the self-verification steps. 
+>
+> Once syntax check passes cleanly and `git diff` confirms accurate edits, return a summary detailing the changes made and the files modified.
 
-**WAIT:** Do not proceed until @general reports code modification completion.
+**WAIT:** Do not proceed until @general reports successful completion of code modifications and self-verification.
 
 ---
 
-## Phase 3 — Verification & Regression Testing
+## Phase 3 — Context Re-Ingestion, Verification & Regression Testing
 
-Use todowrite to create the verification task and assign it to @general to perform manual dynamic terminal testing followed by automated regression testing.
+Use todowrite to create the verification task and assign it to @general. **Ensure the task prompt explicitly carries forward the [Selected Bug Title].**
 
-> 1. **Manual Dynamic Testing:** Read the **Manual Dynamic Testing** section of `./Testing Strategy.md`. Formulate the appropriate application startup command and sequential user inputs needed to exercise the fixed functionality.
+> **Context Synchronization:** Before beginning verification:
+> 1. Re-read the target bug entry for **[Selected Bug Title]** directly from `./Bugs.md` to refresh the full bug description, reproduction steps, and criteria.
+> 2. Run `git diff` to review all current pending modifications. Use this diff to identify the exact code paths and surface areas modified in Phase 2.
+>
+> ---
+>
+> 1. **Manual Dynamic Testing:** Read the **Manual Dynamic Testing** section of `./Testing Strategy.md`. Formulate the appropriate application startup command and sequential user inputs needed to exercise the fixed functionality based on the bug details and `git diff`.
 > 
 >    **Session Interaction & Capture Rules:** Enforce the following execution rules strictly during the interactive verification:
 >    - *CRITICAL — Environment Isolation & Safety Gates:* You must parse `./Testing Strategy.md` for any "Special Case" testing requirements or destructive workflows (e.g., self-overwriting flags, file-clobbering operations). If the determined test sequence triggers one of these conditions, you **must** set up the specified isolation environment (such as a temporary sandbox directory) and execute mandatory validation gates (e.g., directory matching or path checks) before launching the execution session. You are explicitly forbidden from running destructive operations directly within the active working repository.

@@ -1,5 +1,5 @@
-### 🟢 OBSOLETE: test_styling fails in test_ui_manager_comprehensive.py
-**Status:** 🔴 **OBSOLETE**  
+### 🟢 RESOLVED: test_styling fails in test_ui_manager_comprehensive.py
+**Status:** 🔴 **RESOLVED**  
 **Priority:** **P3** - Test suite failure  
 **Description:**  
 Running `pytest Tests/test_ui_manager_comprehensive.py::test_styling` results in a `StopIteration` error.
@@ -119,8 +119,8 @@ The release-tag fetch/list-building logic in `LlamaUpdater` likely appends tags 
 <<<<<<< Updated upstream
 ---
 
-### 🆕 NEW: OS/Architecture selection menu leaks Compute Backend values into the list
-**Status:** 🔴 **OPEN**
+### ✅ RESOLVED: OS/Architecture selection menu leaks Compute Backend values into the list
+**Status:** 🟢 **RESOLVED**
 **Priority:** **P1** — Core workflow broken
 **Description:**
 The "Select Operating System & Architecture" screen (§7.3.2) should list de-duplicated OS/Architecture pairs only, with the Backend segment ignored at this stage. Instead it displays 13 rows mixing OS values with Backend values (e.g. `Win-hip-radeon x64`, `Win-sycl x64`, `Win-vulkan x64`, `Win-opencl-adreno arm64`, `Win-cpu arm64`, `Win-cpu x64`, `Bin win`, `Bin ubuntu`), plus a stray trailing line, `1 asset`, not defined anywhere in the spec.
@@ -141,6 +141,12 @@ The §7.3.0 asset-filename parser is very likely not stopping at the OS segment 
 - None currently; needs a test asserting the OS/Architecture screen's option list contains only OS/Architecture pairs, with no Backend text and no auxiliary lines.
 **Verification:**
 - ✅ Confirmed via manual walkthrough — Backend-only values (`sycl`, `vulkan`, `hip-radeon`, `opencl-adreno`, `cpu`) appearing as if they were OS options.
+
+**Resolution:**
+- Improved Asset Parsing: Refactored `parse_asset_name` in `llama_updater.py` to use a more flexible regex and a robust splitting mechanism, correctly isolating the OS/Architecture segment from the Compute Backend segment.
+- Platform/Backend Isolation: Implemented a `known_os` check to correctly identify valid OS prefixes and separate them from backends.
+- Workflow Correction: Updated `install_release` to ensure the OS/Architecture menu displays de-duplicated pairs and the Backend menu correctly filters options based on user selection.
+- Validation: Added logic to exclude non-conforming filenames from selection menus.
 
 ---
 
@@ -199,11 +205,11 @@ Two of the four assets shown (`llama-b10107-bin-ubuntu-sycl-fp16-x64.tar.gz` and
 
 | Section | Status |
 |---------|--------|
-| **Bug Reports** | 5 open, 1 resolved |
+| **Bug Reports** | 4 open, 2 resolved |
 | **Test Suite Health** | 1 known failing test (`test_styling`) |
 | **Documentation Status** | Out of sync: `Testing Strategy.md`, `Requirements.md` reference removed/unused features |
 | **Code Hygiene** | Dead code present: unused `timeout` parameter in UI methods |
-| **Install Workflow (§7.3)** | 5 open bugs — OS/Architecture and Compute Backend screens leak/misparse Backend data, Compute Backend screen fails to advance, and a non-spec fifth screen (raw asset picker) appears |
+| **Install Workflow (§7.3)** | 4 open bugs — OS/Architecture and Compute Backend screens leak/misparse Backend data, Compute Backend screen fails to advance, and a non-spec fifth screen (raw asset picker) appears |
 
 **Current Priorities:**
 1. **P1** — Fix `llama_updater.py` asset-filename parsing (§7.3.0) to correctly scope OS/Architecture and Backend segments and exclude non-conforming filenames (root cause of 3 of the 5 install-flow bugs)

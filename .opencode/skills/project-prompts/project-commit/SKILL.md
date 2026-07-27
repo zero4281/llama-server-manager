@@ -29,10 +29,14 @@ Before attempting any version control actions, use todowrite to create a test ve
 
 Once tests are verified to pass, use todowrite to create a branch assessment task and assign it to @general.
 
-> Read the current version number from `./Plan.md`.[cite: 1]
+> Read the current version number from `./Plan.md`.
 > Inspect the current local repository git state.
 > 1. Identify the current active branch name.
-> 2. If the current branch is `main`, automatically determine an appropriate branch type prefix (`feature/` or `bugfix/`) and construct a new branch using the exact format: `[feature/bugfix]/[Extracted-Version]-[short-description]` (e.g., `feature/v1.0.7-user-confirmation-flows`). Create and switch to this new branch.
+> 2. If the current branch is `main`:
+>    - Execute `git diff HEAD -- Bugs.md` (or check uncommitted/staged diffs for `Bugs.md`).
+>    - Determine the branch type prefix: select `bugfix/` if `Bugs.md` has been modified and any bug entry was marked as completed (e.g., status updated to `RESOLVED`). Otherwise, select `feature/`.
+>    - Construct a new branch using the exact format: `[feature/bugfix]/[Extracted-Version]-[short-description]` (e.g., `bugfix/v1.0.7-fix-install-titles` or `feature/v1.0.7-user-confirmation-flows`).
+>    - Create and switch to this new branch.
 > 3. If the repository is already checked out to a feature or bugfix branch (any branch other than `main`), continue using that active branch without creating a new one.
 > 
 > Return the final confirmed branch name back to the orchestrator.

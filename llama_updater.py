@@ -266,7 +266,7 @@ def parse_asset_name(name: str) -> Dict[str, str]:
         # and everything in between is the Backend.
         parts = full_platform_backend.split('-')
         
-        known_os = ["linux", "windows", "darwin", "ubuntu", "debian", "centos", "rocky", "alpine", "fedora", "rhel", "amazon", "oracle", "suse", "opensuse", "gentoo", "manjaro", "elementary", "pop", "zorin", "linuxmint", "deepin", "kali", "parrot"]
+        known_os = ["linux", "windows", "darwin", "ubuntu", "debian", "centos", "rocky", "alpine", "fedora", "rhel", "amazon", "oracle", "suse", "opensuse", "gentoo", "manjaro", "elementary", "pop", "zorin", "linuxmint", "deepin", "kali", "parrot", "win"]
         
         if len(parts) == 1:
             platform_name = parts[0].capitalize()
@@ -320,6 +320,8 @@ def parse_asset_name(name: str) -> Dict[str, str]:
             "deepin": "Linux",
             "kali": "Linux",
             "parrot": "Linux",
+            "win": "Windows",
+            "darwin": "macOS"
         }
         
         # Final platform name normalization
