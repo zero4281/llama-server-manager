@@ -821,25 +821,8 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     # Update selected_platform_info with filtered assets for the next step
 
     
-    # Prepare zip file options for menu
-    zip_options = []
-    for i, asset in enumerate(filtered_assets, 1):
-        is_default = (i == 1)
-        marker = " (default)" if is_default else ""
-        zip_entry = {
-            'label': asset['name'],
-            'description': f"{asset['size']//1024//1024}MB {marker}"
-        }
-        zip_options.append(zip_entry)
-    
-    # Render zip file selection menu
-    selected_zip_idx = ui.render_menu(zip_options, default=0, title="Select Archive")
-    
-    if selected_zip_idx == -1:
-        ui.render_error("Zip file selection cancelled.")
-        return
-    
-    selected_asset = selected_platform_info['assets'][selected_zip_idx]
+    # Select the first matching asset
+    selected_asset = filtered_assets[0]
     asset_name = selected_asset['name']
     
     # Show selected release info through UIManager
