@@ -28,14 +28,14 @@ python3 Tests/__init__.py
 
 ## Test Files
 
-The suite consists of exactly these five files plus `conftest.py` (shared fixtures) and `__init__.py` (entry point):
+The suite consists of exactly these four files plus `conftest.py` (shared fixtures) and `__init__.py` (entry point):
 
-| File                                | Runner                     | Tests | Coverage area                                                                                                                                                                                               |
-| ----------------------------------- | -------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `test_ui_manager_api.py`            | unittest / standalone      | 5     | Class structure, method signatures, color pair setup                                                                                                                                                        |
-| `test_ui_manager_comprehensive.py`  | standalone (`run_tests()`) | 6     | Init/lifecycle, menu navigation, confirmation, progress bar, styling, edge cases                                                                                                                            |
-| `test_ui_manager_pytest.py`         | pytest                     | 41    | Init fallback, arrow nav, number selection, cancel keys, confirmation inputs, progress bar, full workflow, page jump, wrapping, highlighted=None                                                            |
-| `test_ui_manager_terminal_sizes.py` | standalone (`run_tests()`) | 9     | 40×20 / 80×24 / 120×30 terminals, menu width calculation, progress bar adaptation, spinner/determinate bars                                                                                                 |
+| File                                | Runner                     | Tests | Coverage area                                                                                                                                    |
+| ----------------------------------- | -------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `test_ui_manager_api.py`            | unittest / standalone      | 5     | Class structure, method signatures, color pair setup                                                                                             |
+| `test_ui_manager_comprehensive.py`  | standalone (`run_tests()`) | 6     | Init/lifecycle, menu navigation, confirmation, progress bar, styling, edge cases                                                                 |
+| `test_ui_manager_pytest.py`         | pytest                     | 41    | Init fallback, arrow nav, number selection, cancel keys, confirmation inputs, progress bar, full workflow, page jump, wrapping, highlighted=None |
+| `test_ui_manager_terminal_sizes.py` | standalone (`run_tests()`) | 9     | 40×20 / 80×24 / 120×30 terminals, menu width calculation, progress bar adaptation, spinner/determinate bars                                      |
 
 **Do not add new test files.** New tests belong in the existing file that matches their coverage area (see Maintenance Rules).
 
@@ -268,7 +268,7 @@ Menu width is calculated as `max(terminal_width * 0.6, label_length + 15)`, capp
 
 The automated suite above runs entirely against **mocked curses** — it never touches a real TTY. That's correct for CI, but it can't confirm that the UI actually renders and behaves correctly in a live terminal. Use this section to manually verify a change against the real, unmocked TUI before considering it done.
 
-**This is a separate, uncounted verification layer.** It does not add to the ~33 test target in Maintenance Rules, its scripts do not live in `Tests/`, and its artifacts are not committed — they are scratch output for the person/agent running the check, inspected and then discarded.
+**This is a separate, uncounted verification layer.** It does not add to the ~61 test target in Maintenance Rules, its scripts do not live in `Tests/`, and its artifacts are not committed — they are scratch output for the person/agent running the check, inspected and then discarded.
 
 ### When to use this
 
@@ -476,14 +476,14 @@ Before committing a test that calls `render_menu` or `render_confirmation`:
 4. **No source inspection tests.** Do not write tests that call `inspect.getsource()` or inspect the implementation text.
 5. **Integration tests cover cross-method flows only.** A sequence like menu → selection → confirmation → progress bar belongs in the integration section of `test_ui_manager_comprehensive.py`. Unit behavior belongs in the dedicated files.
 6. **Mark known-failing tests.** Use `@pytest.mark.xfail` with a reason string rather than commenting out or deleting tests that are temporarily broken.
-7. **Target test counts.** The suite currently sits at approximately 33 tests. When expanding coverage (see below), aim for these targets per file:
+7. **Target test counts.** The suite currently sits at approximately 61 tests. When expanding coverage (see below), aim for these targets per file:
 
-| File                                | Current  | Target   |
-| ----------------------------------- | -------- | -------- |
-| `test_ui_manager_api.py`            | 5        | 5        |
-| `test_ui_manager_comprehensive.py`  | 6        | 6        |
-| `test_ui_manager_pytest.py`         | 41       | 30       |
-| `test_ui_manager_terminal_sizes.py` | 9        | 9        |
+| File                                | Current | Target |
+| ----------------------------------- | ------- | ------ |
+| `test_ui_manager_api.py`            | 5       | 5      |
+| `test_ui_manager_comprehensive.py`  | 6       | 6      |
+| `test_ui_manager_pytest.py`         | 41      | 30     |
+| `test_ui_manager_terminal_sizes.py` | 9       | 9      |
 
 ---
 
@@ -493,10 +493,10 @@ Before committing a test that calls `render_menu` or `render_confirmation`:
 
 | Requirement (Requirements.md)             | Behavior tested                                 | Test location                                                   |
 | ----------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------- |
-| §8.2 Black background, green text         | `init_pair(1, COLOR_GREEN, COLOR_BLACK)`        | `test_ui_manager_api.py`                                        |
-| §8.3 Numbered menus, arrow key navigation | Menu rendering, UP/DOWN/number input            | `test_ui_manager_comprehensive.py`, `test_ui_manager_pytest.py` |
-| §8.4 Confirmation prompts Y/n             | Enter/y/Y/n/N/Esc handling                      | `test_ui_manager_comprehensive.py`, `test_ui_manager_pytest.py` |
-| §8.5 Progress bar with percentage/bytes   | Determinate bar and spinner                     | `test_ui_manager_pytest.py`                                     |
-| §8.6 Lifecycle (init/cleanup)             | `_using_curses`, `_screen`, `_cleanup_terminal` | `test_ui_manager_comprehensive.py`, `test_ui_manager_pytest.py` |
+| §9.2 Black background, green text         | `init_pair(1, COLOR_GREEN, COLOR_BLACK)`        | `test_ui_manager_api.py`                                        |
+| §9.3 Numbered menus, arrow key navigation | Menu rendering, UP/DOWN/number input            | `test_ui_manager_comprehensive.py`, `test_ui_manager_pytest.py` |
+| §9.4 Confirmation prompts Y/n             | Enter/y/Y/n/N/Esc handling                      | `test_ui_manager_comprehensive.py`, `test_ui_manager_pytest.py` |
+| §9.5 Progress bar with percentage/bytes   | Determinate bar and spinner                     | `test_ui_manager_pytest.py`                                     |
+| §9.6 Lifecycle (init/cleanup)             | `_using_curses`, `_screen`, `_cleanup_terminal` | `test_ui_manager_comprehensive.py`, `test_ui_manager_pytest.py` |
 | Highlighted items reverse video           | `curses.A_REVERSE` applied to selection         | `test_ui_manager_comprehensive.py`                              |
 | Terminal size adaptation                  | 40×20, 80×24, 120×30                            | `test_ui_manager_terminal_sizes.py`                             |
