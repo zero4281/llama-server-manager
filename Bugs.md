@@ -20,10 +20,22 @@ The failure occurs because `ui_manager.py`'s `render_menu` method enters an inpu
 **Verification:**
 - ✅ Confirmed failure with `StopIteration` in a clean sandbox environment.
 
+<<<<<<< Updated upstream
 ### ✅ RESOLVED: timeout parameter removed from render_menu() and render_confirmation()
 **Status:** 🟢 **RESOLVED**  
 **Priority:** **P2** — Dead code / API hygiene  
 **Resolution:** Removed unused `timeout` parameter from both methods, deleted 10 related tests in `test_timeout_pytest.py`, removed 2 test functions from `test_ui_manager_comprehensive.py`, updated `Testing Strategy.md`, `Requirements.md`, and cleared pytest cache. No functional impact — dead code cleanup only.
+=======
+**Resolution:**
+Fixed the §7.3.0 filename parser in `llama_updater.py` to consistently isolate the Backend segment (including version suffixes). This prevents the Backend segment from being folded into the OS token during the OS/Architecture selection phase and ensures that all backends are correctly identified and surfaced in the subsequent Compute Backend screen.
+
+---
+
+### ✅ COMPLETE: OS/Architecture selection menu displays redundant asset counts in descriptions
+
+**Status:** ✅ **COMPLETE**
+**Severity:** Medium
+>>>>>>> Stashed changes
 
 ### ✅ RESOLVED: Install menu titles hardcoded to a single generic string across all screens
 **Status:** 🟢 **RESOLVED**
@@ -38,7 +50,36 @@ Every screen in the four-screen llama.cpp install workflow (`ui_manager.py`) ren
 **Analysis:**
 `UIManager`'s menu-rendering method appears to be called with a title argument that is either hardcoded or defaulted at the call site, rather than passed per-invocation as required. §9.3 explicitly prohibits reusing a single generic title across different menus.
 
+<<<<<<< Updated upstream
 **Resolution:** Updated `ui_manager.py` to accept dynamic titles from `llama_updater.py` call sites, ensuring each screen displays its unique title as required by §7.3 and §9.3.
+=======
+**Affected Components:**
+- `llama_updater.py` (`install_release` function)
+
+**Dependencies:**
+- None
+
+**Test Coverage:**
+- A new regression test should be added to `test_ui_manager_pytest.py` to verify that the description field for OS/Architecture options does not contain asset counts, but still correctly displays variant information.
+
+**Verification:**
+- Confirmed via manual dynamic testing: The OS/Architecture menu displays "X asset(s)" for every entry, which is not requested in the **Resolution:** Removed redundant asset counts from platform descriptions in `llama_updater.py` to only display variant information (e.g., "(variant: vulkan)"), adhering to §7.3.2 of the requirements.
+
+---
+
+### ✅ COMPLETE: Duplicate "(default)" marker in "Select Compute Backend" menu
+
+**Status:** ✅ **COMPLETE**
+**Severity:** Medium
+**Description:**
+When running `./llama-server-manager --install-llama`, the "Select Compute Backend" menu (the third menu in the installation flow) displays the "(default)" marker twice for the first option. The first occurrence is appended to the option's label (e.g., "0. cpu (default)"), and the second occurrence is rendered on a new line as the option's description.
+
+**Reproduction Steps:**
+1. Run `./llama-server-manager --install-llama`.
+2. Select the first release option (latest).
+3. Select a platform that results in a single compute backend (e.g., Ubuntu x64).
+4. Observe the "Select Compute Backend" menu.
+>>>>>>> Stashed changes
 
 **Affected Components:**
 - `ui_manager.py`
@@ -75,6 +116,7 @@ The release-tag fetch/list-building logic in `LlamaUpdater` likely appends tags 
 **Verification:**
 - ✅ Confirmed via manual walkthrough — duplicate tag values visible in rows 5 and 6.
 
+<<<<<<< Updated upstream
 ---
 
 ### 🆕 NEW: OS/Architecture selection menu leaks Compute Backend values into the list
@@ -166,3 +208,10 @@ Two of the four assets shown (`llama-b10107-bin-ubuntu-sycl-fp16-x64.tar.gz` and
 4. **P2** — Fix hardcoded install-menu titles to be supplied per-screen (§9.3)
 5. **P3** — Fix `test_styling` failure in `test_ui_manager_comprehensive.py`
 6. **P3** — De-duplicate release/tag list on the Release selection screen (§7.3.1)
+=======
+| Section                     | Status |
+| **Bug Reports**             | 0 open |
+| **Install Workflow (§7.3)** | All bugs completed (previously 2 open bugs). |
+
+---
+>>>>>>> Stashed changes

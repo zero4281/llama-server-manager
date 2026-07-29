@@ -715,7 +715,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         variant_suffix = " (variant: " + platform_info['variant'] + ")" if platform_info['variant'] else ""
         platform_entry = {
             'label': f"{platform_info['platform']} {platform_info['arch']}",
-            'description': f"{asset_count} asset{'' if asset_count == 1 else 's'}" + variant_suffix
+            'description': variant_suffix
         }
         platform_options.append(platform_entry)
     
