@@ -764,11 +764,9 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     # Render Compute Backend selection menu
     backend_options = []
     for i, backend in enumerate(sorted_backends, 1):
-        is_default = (i == 1)
-        marker = " (default)" if is_default else ""
         backend_entry = {
             'label': backend,
-            'description': marker
+            'description': ''
         }
         backend_options.append(backend_entry)
     
