@@ -81,11 +81,16 @@ def detect_platform() -> Tuple[str, str]:
     machine = platform.machine().lower()
 
     if system == "Linux":
+        try:
+            distro = platform.freedesktop_os_release().get('NAME', 'Linux')
+        except (AttributeError, OSError):
+            distro = "Linux"
+
         if "aarch64" in machine or "arm64" in machine:
-            return "Linux", "arm64"
+            return distro, "arm64"
         if "x86_64" in machine or "amd64" in machine:
-            return "Linux", "x64"  # Normalize to x64 for matching
-        return "Linux", "aarch64"  # fallback
+            return distro, "x64"  # Normalize to x64 for matching
+        return distro, "aarch64"  # fallback
 
     elif system == "Windows":
         if "aarch64" in machine or "arm64" in machine:
@@ -96,10 +101,10 @@ def detect_platform() -> Tuple[str, str]:
 
     elif system == "Darwin":
         if "aarch64" in machine or "arm64" in machine:
-            return "macOS", "arm64"
+            return "Darwin", "arm64"
         if "x86_64" in machine or "amd64" in machine:
-            return "macOS", "x64"  # Normalize to x64 for matching
-        return "macOS", "x64"  # fallback
+            return "Darwin", "x64"  # Normalize to x64 for matching
+        return "Darwin", "x64"  # fallback
 
     else:
         return system, machine
