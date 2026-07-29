@@ -1,0 +1,18 @@
+Perform verification for the bug 'OS/Architecture selection menu displays redundant asset counts in descriptions' (Bugs.md line 67).
+
+Steps:
+1. Re-read the bug from ./Bugs.md.
+2. Review current changes using git diff.
+3. Perform Manual Dynamic Testing as specified in ./Testing Strategy.md:
+   - Setup a sandbox for --self-update if needed.
+   - Perform Pre-Test Sync (copy files to sandbox).
+   - Run the application and execute the sequence: llama-server-manager --install-llama -> select first release -> observe 'Select Operating System & Architecture' menu.
+   - Capture initial state (/tmp/initial_menu.txt) and state after confirming an option (/tmp/after_input.txt).
+   - Verify that the description does NOT contain asset counts but still shows variant information (e.g., '(variant: vulkan)') and that it correctly renders in the terminal.
+   - Cleanup the session.
+4. If Manual Dynamic Testing passes, run Automated Testing:
+   - Extract the test command from ./Testing Strategy.md.
+   - Run the regression test suite and verify it runs completely green.
+5. Error Handling: If any manual or automated test fails, report the failure and logs to @general for a source code fix, then repeat the verification loop.
+
+Subagent: general
