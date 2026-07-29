@@ -1,6 +1,8 @@
 ## Current Bug Reports
 
-**Title:** Menu items overlap and concatenate in narrow terminals due to lack of wrapped text handling
+### ✅ COMPLETE: Menu items overlap and concatenate in narrow terminals due to lack of wrapped text handling
+
+**Status:** ✅ **COMPLETE**
 **Severity:** Medium
 **Description:**
 When running `./llama-server-manager --self-update` in a narrow terminal, the source selection menu displays concatenated labels. This occurs because the `render_menu` method in `ui_manager.py` uses a fixed vertical offset for each menu item but does not account for the fact that `curses.addstr` will wrap long strings to subsequent lines. Consequently, a wrapped portion of one item's label overlaps with the label of the next item, resulting in concatenated text (e.g., "Previous releaserelease").
@@ -21,6 +23,8 @@ When running `./llama-server-manager --self-update` in a narrow terminal, the so
 
 **Verification:**
 - Confirmed via manual dynamic testing in a 40-column terminal, where "Previous release" and "Repository HEAD" labels were concatenated.
+
+**Resolution:** Fixed by implementing dynamic line count calculation for labels/descriptions, dynamic menu height adjustment, and y-coordinate tracking in the redraw loop.
 
 ---
 ### ✅ COMPLETE: OS/Architecture selection menu leaks the `Backend` segment for multi-backend assets
