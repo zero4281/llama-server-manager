@@ -24,6 +24,32 @@ The failure occurs because `ui_manager.py`'s `render_menu` method enters an inpu
 
 ---
 
+### ✅ COMPLETE: Menu items overlap and concatenate in narrow terminals due to lack of wrapped text handling
+
+**Status:** ✅ **COMPLETE**
+**Severity:** Medium
+**Description:**
+When running `./llama-server-manager --self-update` in a narrow terminal, the source selection menu displays concatenated labels. This occurs because the `render_menu` method in `ui_manager.py` uses a fixed vertical offset for each menu item but does not account for the fact that `curses.addstr` will wrap long strings to subsequent lines. Consequently, a wrapped portion of one item's label overlaps with the label of the next item, resulting in concatenated text (e.g., "Previous releaserelease").
+
+**Reproduction Steps:**
+1. Run: `./llama-server-manager --self-update` in a narrow terminal (e.g., 40 columns).
+2. Observe the "Select update source" menu.
+3. Note how items like "Previous release" wrap and concatenate with the following items.
+
+**Affected Components:**
+- `ui_manager.py` (`render_menu` and `render_confirmation` methods)
+
+**Dependencies:**
+- None
+
+**Test Coverage:**
+- No automated tests currently cover terminal wrapping behavior. A new test case should be added to `test_ui_manager_terminal_sizes.py` to verify correct layout and non-overlapping labels in narrow terminals (e.g., 40x20).
+
+**Verification:**
+- Confirmed via manual dynamic testing in a 40-column terminal, where "Previous release" and "Repository HEAD" labels were concatenated.
+
+---
+
 ### ✅ RESOLVED: timeout parameter removed from render_menu() and render_confirmation()
 **Status:** 🟢 **RESOLVED**  
 **Priority:** **P2** — Dead code / API hygiene  
