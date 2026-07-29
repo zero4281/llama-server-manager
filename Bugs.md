@@ -64,9 +64,9 @@ Fixed the §7.3.0 filename parser in `llama_updater.py` to consistently isolate 
 
 ---
 
-### 📋 [OPEN]: OS/Architecture selection menu displays redundant asset counts in descriptions
+### ✅ COMPLETE: OS/Architecture selection menu displays redundant asset counts in descriptions
 
-**Status:** ❌ **OPEN**
+**Status:** ✅ **COMPLETE**
 **Severity:** Medium
 
 **Description:**
@@ -92,6 +92,8 @@ Requirements.md §7.3.2 specifies that this menu should list the de-duplicated O
 
 **Verification:**
 - Confirmed via manual dynamic testing: The OS/Architecture menu displays "X asset(s)" for every entry, which is not requested in the requirements.
+
+**Resolution:** Updated `llama_updater.py` to remove asset counts from the `description` field of OS/Architecture options while preserving variant information, ensuring compliance with §7.3.2.
 
 ---
 
