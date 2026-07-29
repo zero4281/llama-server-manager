@@ -31,18 +31,20 @@ Use todowrite to create an initial parsing task and assign it to @general.
 Print the message: "Starting work on [Selected Bug Title]." Immediately follow this by using todowrite to create the implementation task and assign it to @general.
 
 > 1. **Context & Safety Review:** 
+>    
 >    - Ingest the full bug description, reproduction steps, and dependencies from `./Bugs.md` for: **[Selected Bug Title]**.
->    - Read the **Manual Dynamic Testing** section of `./Testing Strategy.md` to identify any special isolation requirements, safety gates, or environment rules required when working on or verifying this functional area.
+>    - Read the **Manual Dynamic Testing** section of `./Testing Strategy.md` to identify all setup requirements, safety gates, environment rules, or special isolation protocols required when working on or verifying this functional area.
 >    - Review the source code files identified as relevant during Phase 1.
->
+> 
 > 2. **Implementation:** Implement the precise source code modification required to resolve the bug, adhering to expected outcomes and behaviors defined in `./Requirements.md` and `./Plan.md`. Do not touch markdown tracking documents or test files yet.
->
+> 
 > 3. **Static & Syntax Self-Verification:** Perform a mandatory self-check on all edited files:
+>    
 >    - Run language-appropriate syntax, linting, or basic static checks (e.g., `php -l`, `node --check`, or equivalent compilers/parsers) on modified files to verify no syntax or parse errors were introduced.
 >    - Run `git diff` to carefully review all edits against the expected outcomes in `./Requirements.md` and `./Plan.md` to confirm the fix is complete, correct, and free of unintended modifications.
->
+> 
 > 4. **Phase 2 Repair Loop:** If syntax errors, incomplete edits, or unintended side effects are discovered during self-verification, **immediately fix them** and repeat the self-verification steps. 
->
+> 
 > Once syntax check passes cleanly and `git diff` confirms accurate edits, return a summary detailing the changes made and the files modified.
 
 **WAIT:** Do not proceed until @general reports successful completion of code modifications and self-verification.
@@ -54,21 +56,23 @@ Print the message: "Starting work on [Selected Bug Title]." Immediately follow t
 Use todowrite to create the verification task and assign it to @general. **Ensure the task prompt explicitly carries forward the [Selected Bug Title].**
 
 > **Context Synchronization:** Before beginning verification:
+> 
 > 1. Re-read the target bug entry for **[Selected Bug Title]** directly from `./Bugs.md` to refresh the full bug description, reproduction steps, and criteria.
 > 2. Run `git diff` to review all current pending modifications. Use this diff to identify the exact code paths and surface areas modified in Phase 2.
->
-> ---
->
-> 1. **Manual Dynamic Testing:** Read the **Manual Dynamic Testing** section of `./Testing Strategy.md`. Formulate the appropriate application startup command and sequential user inputs needed to exercise the fixed functionality based on the bug details and `git diff`.
 > 
+> ---
+> 
+> 1. **Manual Dynamic Testing:** Read and execute the **Manual Dynamic Testing** procedure outlined in `./Testing Strategy.md` for all verifications without exception. Formulate the appropriate application startup command and sequential user inputs needed to exercise the fixed functionality based on the bug details and `git diff`.
+>    
 >    **Session Interaction & Capture Rules:** Enforce the following execution rules strictly during the interactive verification:
->    - *CRITICAL — Environment Isolation & Safety Gates:* You must parse `./Testing Strategy.md` for any "Special Case" testing requirements or destructive workflows (e.g., self-overwriting flags, file-clobbering operations). If the determined test sequence triggers one of these conditions, you **must** set up the specified isolation environment (such as a temporary sandbox directory) and execute mandatory validation gates (e.g., directory matching or path checks) before launching the execution session. You are explicitly forbidden from running destructive operations directly within the active working repository.
+>    
+>    - *MANDATORY — Environment Isolation & Safety Gates:* You must parse `./Testing Strategy.md` for environment isolation, sandbox setups, and safety gates. If specified, or if the testing sequence involves destructive workflows (e.g., self-overwriting flags, file-clobbering operations), you **must** set up the specified isolation environment (such as a temporary sandbox directory) and execute mandatory validation gates (e.g., directory matching or path checks) before launching the execution session. You are explicitly forbidden from running destructive operations directly within the active working repository.
 >    - *STATE SYNCHRONIZATION POLICY:* To prevent lost changes or testing stale code when using an isolated environment, you must adhere to a strict directional synchronization lifecycle:
 >      1. **Pre-Test Sync:** Before running the test sequence or spawning the execution session, copy the fresh, edited source files from the active working repository into the sandbox environment.
 >      2. **Post-Failure Sync (If bugs found):** If the verification fails and you discover a bug or regression during the session, any code adjustments or fixes must be applied directly to the **active working repository**, *not* patched inline inside the sandbox. The Pre-Test Sync must then be repeated before the next verification attempt.
 >    - *Scratch Artifacts:* State captures and terminal output dumps must be written strictly to scratch or temporary locations (such as `/tmp/` or the current working directory outside designated test directories). They must **never** be written to automated test directories or committed.
 >    - *Session Cleanup:* The application instance and interactive `tmux` session must be explicitly terminated and cleaned up once the final verification states are captured.
-> 
+>    
 >    **EARLY SHORT-CIRCUIT:** If the manual dynamic testing reveals any regressions, unintended crashes, or improper input handling, **STOP IMMEDIATELY**. Do not proceed to Step 2 (Automated Testing). Log the captured failures and enter the error handling loop to perform the required source code repairs.
 > 
 > 2. **Automated Testing:** ONLY if Manual Dynamic Testing passes completely, proceed to automated testing. Read `./Testing Strategy.md` to extract the project's designated test suite command. Run the regression test suite using the extracted test command.
