@@ -1,3 +1,28 @@
+## Current Bug Reports
+
+**Title:** Menu items overlap and concatenate in narrow terminals due to lack of wrapped text handling
+**Severity:** Medium
+**Description:**
+When running `./llama-server-manager --self-update` in a narrow terminal, the source selection menu displays concatenated labels. This occurs because the `render_menu` method in `ui_manager.py` uses a fixed vertical offset for each menu item but does not account for the fact that `curses.addstr` will wrap long strings to subsequent lines. Consequently, a wrapped portion of one item's label overlaps with the label of the next item, resulting in concatenated text (e.g., "Previous releaserelease").
+
+**Reproduction Steps:**
+1. Run `./llama-server-manager --self-update` in a narrow terminal (e.g., 40 columns).
+2. Observe the "Select update source" menu.
+3. Note how items like "Previous release" wrap and concatenate with the following items.
+
+**Affected Components:**
+- `ui_manager.py` (`render_menu` and `render_confirmation` methods)
+
+**Dependencies:**
+- None
+
+**Test Coverage:**
+- No automated tests currently cover terminal wrapping behavior. A new test case should be added to `test_ui_manager_terminal_sizes.py` to verify correct layout and non-overlapping labels in narrow terminals (e.g., 40x20).
+
+**Verification:**
+- Confirmed via manual dynamic testing in a 40-column terminal, where "Previous release" and "Repository HEAD" labels were concatenated.
+
+---
 ### ✅ COMPLETE: OS/Architecture selection menu leaks the `Backend` segment for multi-backend assets
 
 **Status:** ✅ **COMPLETE** **Priority:** **P1** — Core workflow broken **Description:** The "Select Operating System & Architecture" screen (§7.3.2) should list a de-duplicated set of OS/Architecture pairs only, with the Backend segment ignored at this stage. Observed instead: several entries have the Backend/version segment merged into the OS/Arch label — `Ubuntu-openvino-2026.2.1 x64`, `Ubuntu-rocm-7.2 x64`, `Win-cuda-12.4 x64`, `Win-cuda-13.3 x64`, `Win-openvino-2026.2.1 x64` — inflating a 7-pair list into 12 rows, plus a stray trailing line, `1 asset`, with no basis in §7.3.2. **Reproduction Steps:**
@@ -20,13 +45,44 @@
 
 ---
 
+### ✅ COMPLETE: OS/Architecture selection menu fails to highlight current platform as default
+
+**Status:** ✅ COMPLETE
+**Title:** OS/Architecture selection menu fails to highlight current platform as default
+**Severity:** Medium
+**Description:** 
+When running `./llama-server-manager --install-llama`, the "Select Operating System & Architecture" menu fails to automatically highlight the current platform/architecture as the recommended option. The user is required to manually select the correct entry. This violates Requirements.md §7.3.2, which specifies that the current platform/architecture should be highlighted as the recommended option and act as the default if the user presses Enter without a selection.
+
+**Reproduction Steps:**
+1. Run `./llama-server-manager --install-llama`.
+2. Select a release (e.g., the default option 1).
+3. Observe the "Select Operating System & Architecture" menu.
+4. Note that no option is highlighted as the default, even if it matches the current system (e.g., on Linux x64, "Ubuntu x64" is not highlighted).
+
+**Affected Components:**
+- `llama_updater.py`
+- `ui_manager.py`
+
+**Dependencies:**
+- `llama_updater.py`
+- GitHub Releases API asset list (§7.2)
+
+**Test Coverage:**
+- A new regression test should be added to `test_ui_manager_pytest.py` or `test_ui_manager_comprehensive.py` to verify that the correct OS/Architecture pair is highlighted as the default based on the `platform` module's output.
+
+**Verification:**
+- Confirmed via manual dynamic testing on Linux x64; "Ubuntu x64" was not highlighted as the default in the OS/Architecture selection menu.
+
+**Resolution:** Updated `detect_platform` in `llama_updater.py` to detect specific Linux distributions using `platform.freedesktop_os_release()` and return "Darwin" for Darwin-based systems, ensuring correct platform highlighting in the installation menu.
+---
+
 ## 📋 Project Roadmap / Status Summary
 
 | Section                     | Status                                                                                                                                                                                                                                                                                                                                      |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Bug Reports**             | 0 open                                                                                                                                                                                                                                                                                                                                      |
+| **Bug Reports** | 2 open |
 | **Documentation Status**    | Out of sync: `Testing Strategy.md`, `Requirements.md` reference removed/unused features                                                                                                                                                                                                                      |
-| **Install Workflow (§7.3)** | 0 open bugs. Previously closed bugs (backend-less `Type`/`bin` leak, missing `cpu` fallback, extraneous "Select Archive" screen) remain fixed. |
+| **Install Workflow (§7.3)** | 2 open bugs. Previously closed bugs (backend-less `Type`/`bin` leak, missing `cpu` fallback, extraneous "Select Archive" screen) remain fixed. |
 
 **Current Priorities:**
 
