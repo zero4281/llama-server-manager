@@ -1,20 +1,12 @@
-import json
 import logging
-from pathlib import Path
-from typing import Optional
+from typing import Dict, Any
 
 class LoggerSetup:
     """
-    Configures the root logger based on the logging section of config.json.
+    Configures the root logger based on the logging section of the provided configuration.
     """
-    def __init__(self, config_path: Optional[str] = None):
-        if config_path is None:
-            config_path = Path.cwd() / "config.json"
-        else:
-            config_path = Path(config_path)
-            
-        with open(config_path, "r") as f:
-            self.config = json.load(f)
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
 
     def setup(self) -> None:
         logging_config = self.config.get("logging", {})

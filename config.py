@@ -24,4 +24,7 @@ def load_config() -> dict:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             print("Warning: Could not parse config.json, using default configuration.", file=sys.stderr)
+    else:
+        with open(config_path, "w") as f:
+            json.dump(DEFAULT_CONFIG, f, indent=4)
     return DEFAULT_CONFIG

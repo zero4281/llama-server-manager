@@ -1,59 +1,56 @@
-# Project Plan - Version 1.0.8
+# Version 1.0.9
 
 ## Section 1: Current State Assessment
 
 ### Compliance Checklist
-- [x] `logger.py` is present and functional.
-- [x] 1.0.8 install menus are correctly implemented.
-- [x] `main.py` startup sequence order (requires fix).
-- [x] `wrapper_config.py` and `llama_wrapper/` removed from plan.
+- [ ] Requirement 5.4 (Startup Sequence): LoggerSetup violates single-source-of-truth by reading `config.json` independently.
+- [ ] Requirement 6.3 (Config Auto-generation): `config.py` fails to write `config.json` to disk when missing.
+- [ ] Requirement 9.3 (Run Script - Return Control): `runner.py` blocks execution via `process.wait()`.
 
 ### Implementation Verification Table
-| Feature | Status | Verification Method |
+| Requirement | Status | Finding |
 |---|---|---|
-| Logger Module | Completed | Unit tests for `logger.py` |
-| Install Menus | Completed | Manual verification of flow |
-| Startup Sequence | Completed | Verification of `main.py` execution order |
-| Project Cleanup | Completed | File system check (remove stale items) |
+| 5.4 | Non-Compliant | `logger.py` reads `config.json` directly instead of receiving a config dict. |
+| 6.3 | Non-Compliant | `config.py` does not write `DEFAULT_CONFIG` to `config.json` on first launch. |
+| 9.3 | Non-Compliant | `runner.py` blocks the parent process with `process.wait()`. |
 
 ## Section 2: Core Engineering Decisions or Filename Consistency
-- **Startup Order:** The sequence in `main.py` must be:
-  1. `parse_args()`
-  2. `load_config()`
-  3. `LoggerSetup().setup()`
-- **Module Consistency:** Ensure `logger.py` is the sole source for program-level logging.
-- **Cleanup:** Explicitly remove any references to `wrapper_config.py` and `llama_wrapper/`.
+- Refactor `main.py` to pass the loaded configuration dictionary to `LoggerSetup`.
+- Update `config.py` to write `config.json` to disk if it is missing during `load_config()`.
+- Modify `runner.py` to use non-blocking process execution so it returns control to the shell immediately.
 
 ## Section 3: Testing & Verification Status
+
 ### Unit Tests
-- [ ] Verify `LoggerSetup` correctly reads `config.json`.
-- [ ] Verify `parse_args` handles all flags correctly.
+- [ ] `config_test`: Verify `load_config()` creates `config.json` if missing.
+- [ ] `logger_test`: Verify `LoggerSetup` uses passed dictionary without reading disk.
+- [ ] `runner_test`: Verify `Runner` does not call `.wait()`.
+
 ### Integration Tests
-- [x] Verify `main.py` startup flow initializes logger *after* config is loaded.
+- [ ] `startup_test`: Verify `main.py` initializes logger with config and launches runner.
+- [ ] `flow_test`: Verify shell returns control immediately after `runner.py` starts.
+
 ### Manual Checklists
-- [x] Verify `./llama-cpp/` directory is correctly handled during install.
-- [x] Verify `llama-server.pid` creation/removal.
+- [ ] Check if `config.json` is present after first run.
+- [ ] Confirm `llama-server` starts in background and shell is interactive.
 
 ## Section 4: Exit Codes
-- `0`: Success (including graceful shutdown).
-- `1`: General error.
-- `2`: Configuration error (missing or invalid `config.json`).
-- `3`: Installation/Update failed.
-- `4`: Dependency/Binary not found.
+- 0: Success
+- 1: Config Error
+- 2: Installation Error
+- 3: Runtime Error
+- 4: OS Detection Error
 
 ## Section 5: Security
-- No secrets or keys are hardcoded in `config.json`.
-- File paths are sanitized to prevent directory traversal.
-- `llama-server` is executed in a controlled environment.
+- No secrets in `config.json`.
+- Filesystem operations restricted to project directory.
 
 ## Section 6: Dependencies
 - Python 3.12+
-- `requests` (for GitHub API)
-- `curses` (standard library)
-- `llama.cpp` binaries
+- `requests`
+- `curses` (std library)
 
-## Section 7: Non-functional Requirements
-- **Latency:** Minimal delay in menu transitions.
-- **Robustness:** Graceful handling of network timeouts during download.
-- **Logging:** All program errors must be logged to a file even if the terminal is in curses mode.
-- **UX:** Consistent green-on-black UI across all screens.
+## Section 7: Non-functional requirements
+- Platform: Linux, macOS, Windows (WSL).
+- UI: `curses` based, green-on-black.
+- Performance: Minimal overhead for config loading.
