@@ -1,0 +1,11 @@
+{
+    "options": {},
+    "llama-server": {
+        "options": {}
+    },
+    "logging": {
+        "enabled": true,
+        "level": "INFO",
+        "file": null
+    }
+}

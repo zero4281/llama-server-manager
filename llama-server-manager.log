@@ -1,0 +1,7 @@
+2026-07-30 00:34:49,934 - ui_manager - WARNING - Failed to reset terminal modes: module 'curses' has no attribute 'keypad'
+2026-07-30 00:34:49,934 - ui_manager - WARNING - Failed to reset terminal modes: module 'curses' has no attribute 'keypad'
+2026-07-30 00:34:55,724 - ui_manager - ERROR - Unexpected error during progress bar: '>' not supported between instances of 'NoneType' and 'int'
+2026-07-30 00:34:55,725 - ui_manager - WARNING - Failed to reset terminal modes: module 'curses' has no attribute 'keypad'
+2026-07-30 00:34:55,725 - ui_manager - WARNING - Failed to reset terminal modes: module 'curses' has no attribute 'keypad'
+2026-07-30 00:34:56,613 - ui_manager - WARNING - Failed to reset terminal modes: module 'curses' has no attribute 'keypad'
+2026-07-30 00:34:56,613 - ui_manager - WARNING - Failed to reset terminal modes: module 'curses' has no attribute 'keypad'
