@@ -7,14 +7,8 @@ class LoggerSetup:
     """
     Configures the root logger based on the logging section of config.json.
     """
-    def __init__(self, config_path: Optional[str] = None):
-        if config_path is None:
-            config_path = Path.cwd() / "config.json"
-        else:
-            config_path = Path(config_path)
-            
-        with open(config_path, "r") as f:
-            self.config = json.load(f)
+    def __init__(self, config: dict):
+        self.config = config
 
     def setup(self) -> None:
         logging_config = self.config.get("logging", {})
