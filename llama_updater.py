@@ -25,18 +25,15 @@ import requests
 import logging
 logger = logging.getLogger(__name__)
 
-
 # Constants
 GITHUB_OWNER = "ggml-org"
 GITHUB_REPO = "llama.cpp"
 GITHUB_API_BASE = "https://api.github.com"
 LLAMA_CPP_DIR = Path.cwd() / "llama-cpp"
 
-
 class LlamaUpdaterError(Exception):
     """Base exception for llama_updater errors."""
     pass
-
 
 class RateLimitError(LlamaUpdaterError):
     """Raised when GitHub API rate limit is exceeded."""
@@ -44,28 +41,23 @@ class RateLimitError(LlamaUpdaterError):
         self.reset_time = reset_time
         super().__init__(f"GitHub API rate limit exceeded. Retry after {reset_time}")
 
-
 class GitHubAPIError(LlamaUpdaterError):
     """Raised when GitHub API is unreachable."""
     def __init__(self, message: str, reset_time: str = 'unknown'):
         self.reset_time = reset_time
         super().__init__(f"GitHub API error: {message}")
 
-
 class DownloadError(LlamaUpdaterError):
     """Raised when download fails."""
     pass
-
 
 class ExtractionError(LlamaUpdaterError):
     """Raised when extraction fails."""
     pass
 
-
 class PlatformNotFoundError(LlamaUpdaterError):
     """Raised when no matching platform is found."""
     pass
-
 
 # Headers for GitHub API requests
 _GITHUB_HEADERS = {
@@ -73,11 +65,9 @@ _GITHUB_HEADERS = {
     "X-GitHub-Api-Version": "2022-11-28",
 }
 
-
 def _get_api_headers() -> Dict[str, str]:
     """Get headers for GitHub API requests."""
     return _GITHUB_HEADERS.copy()
-
 
 def detect_platform() -> Tuple[str, str]:
     """
@@ -91,11 +81,16 @@ def detect_platform() -> Tuple[str, str]:
     machine = platform.machine().lower()
 
     if system == "Linux":
+        try:
+            distro = platform.freedesktop_os_release().get('NAME', 'Linux')
+        except (AttributeError, OSError):
+            distro = "Linux"
+
         if "aarch64" in machine or "arm64" in machine:
-            return "Linux", "arm64"
+            return distro, "arm64"
         if "x86_64" in machine or "amd64" in machine:
-            return "Linux", "x64"  # Normalize to x64 for matching
-        return "Linux", "aarch64"  # fallback
+            return distro, "x64"  # Normalize to x64 for matching
+        return distro, "aarch64"  # fallback
 
     elif system == "Windows":
         if "aarch64" in machine or "arm64" in machine:
@@ -106,14 +101,13 @@ def detect_platform() -> Tuple[str, str]:
 
     elif system == "Darwin":
         if "aarch64" in machine or "arm64" in machine:
-            return "macOS", "arm64"
+            return "Darwin", "arm64"
         if "x86_64" in machine or "amd64" in machine:
-            return "macOS", "x64"  # Normalize to x64 for matching
-        return "macOS", "x64"  # fallback
+            return "Darwin", "x64"  # Normalize to x64 for matching
+        return "Darwin", "x64"  # fallback
 
     else:
         return system, machine
-
 
 def _get_release_info(url: str) -> dict:
     """
@@ -168,7 +162,6 @@ def _get_release_info(url: str) -> dict:
         else:
             raise GitHubAPIError(f"GitHub API unreachable: {e}")
 
-
 def get_latest_release() -> dict:
     """
     Get the latest release from llama.cpp repository.
@@ -178,7 +171,6 @@ def get_latest_release() -> dict:
     """
     url = f"{GITHUB_API_BASE}/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
     return _get_release_info(url)
-
 
 def list_releases() -> List[dict]:
     """
@@ -195,7 +187,7 @@ def list_releases() -> List[dict]:
     while page <= max_pages and not releases:
         try:
             response = requests.get(url, headers=_get_api_headers(), 
-                                  timeout=30, params={'page': page, 'per_page': 100})
+                                   timeout=30, params={'page': page, 'per_page': 100})
             response.raise_for_status()
             page_releases = response.json()
             if not page_releases:
@@ -210,7 +202,6 @@ def list_releases() -> List[dict]:
 
     return releases
 
-
 def get_release_by_tag(tag: str) -> dict:
     """
     Get a specific release by its tag.
@@ -223,7 +214,6 @@ def get_release_by_tag(tag: str) -> dict:
     """
     url = f"{GITHUB_API_BASE}/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/tags/{tag}"
     return _get_release_info(url)
-
 
 def parse_asset_name(name: str) -> Dict[str, str]:
     """
@@ -243,9 +233,6 @@ def parse_asset_name(name: str) -> Dict[str, str]:
     else:
         base_name = Path(name).stem  # Standard extension removal
     
-    # Old format: platform-arch[-variant] (e.g., llama-server-linux-arm64)
-    # New format: llama-{tag}-bin-{platform}-{arch} (e.g., llama-b8763-bin-ubuntu-x64)
-    
     # Try new format first: llama-{tag}-bin-{platform}-{arch}[-variant]
     # Tag can contain hyphens, so we need a more flexible pattern
     # Also handle optional variant suffix like -vulkan, -cuda, etc.
@@ -254,77 +241,54 @@ def parse_asset_name(name: str) -> Dict[str, str]:
     # Tag can contain hyphens, so we need a more flexible pattern
     # Backend is optional, and variant is the optional suffix after architecture
     # Platform can contain hyphens (e.g., rocky-linux), arch is always x64 or arm64
-    new_pattern = r"^llama-[a-zA-Z0-9_-]+-bin-(.*)-(x64|arm64)(?:-(\w+))?$"
+    new_pattern = r"^llama-[a-zA-Z0-9_.-]+-bin-(?P<platform>[a-zA-Z0-9_.-]+(?:-[a-zA-Z0-9_.-]+)*)-(?P<arch>x64|arm64)(?:-(?P<variant>\w+))?$"
     match = re.match(new_pattern, base_name)
     if match:
-        full_platform_backend = match.group(1)
-        arch = match.group(2)
-        variant = match.group(3)
+        platform_name = match.group('platform')
+        arch = match.group('arch')
+        variant = match.group('variant')
         
-        # The platform/backend part contains everything between "-bin-" and the architecture.
-        # The OS is the first part, the Architecture is the last part,
-        # and everything in between is the Backend.
-        parts = full_platform_backend.split('-')
+        parts = [p for p in platform_name.split('-') if p != "bin"]
         
         known_os = ["linux", "windows", "darwin", "ubuntu", "debian", "centos", "rocky", "alpine", "fedora", "rhel", "amazon", "oracle", "suse", "opensuse", "gentoo", "manjaro", "elementary", "pop", "zorin", "linuxmint", "deepin", "kali", "parrot", "win"]
+        
+        platform_name = ""
+        backend = None
         
         if len(parts) == 1:
             platform_name = parts[0].capitalize()
             backend = None
         elif len(parts) == 2:
-            if parts[0] in known_os and parts[1] in known_os:
+            if parts[0].lower() in known_os and parts[1].lower() in known_os:
                 platform_name = f"{parts[0]}-{parts[1]}".capitalize()
                 backend = None
-            elif parts[0] in known_os:
+            elif parts[0].lower() in known_os:
                 platform_name = parts[0].capitalize()
                 backend = parts[1]
             else:
                 platform_name = f"{parts[0]}-{parts[1]}".capitalize()
                 backend = None
         else:
-            if parts[0] == "rocky" and parts[1] == "linux":
+            if parts[0].lower() == "rocky" and parts[1].lower() == "linux":
                 platform_name = "Linux"
                 backend = "-".join(parts[2:])
-            elif parts[0] in known_os and parts[1] in known_os:
+            elif parts[0].lower() in known_os and parts[1].lower() in known_os:
                 platform_name = f"{parts[0]}-{parts[1]}".capitalize()
                 backend = "-".join(parts[2:])
-            elif parts[0] in known_os:
+            elif parts[0].lower() in known_os:
                 platform_name = parts[0].capitalize()
                 backend = "-".join(parts[1:])
             else:
                 platform_name = f"{parts[0]}-{parts[1]}".capitalize()
                 backend = "-".join(parts[2:])
+
+
         
-        # Convert platform names to standard names
         platform_map = {
-            "ubuntu": "Linux",
-            "openEuler": "Linux",
-            "debian": "Linux",
-            "centos": "Linux",
-            "rocky": "Linux",
-            "alpine": "Linux",
-            "archlinux": "Linux",
-            "fedora": "Linux",
-            "redhat": "Linux",
-            "rhel": "Linux",
-            "amazon": "Linux",
-            "oracle": "Linux",
-            "suse": "Linux",
-            "opensuse": "Linux",
-            "gentoo": "Linux",
-            "manjaro": "Linux",
-            "elementary": "Linux",
-            "pop": "Linux",
-            "zorin": "Linux",
-            "linuxmint": "Linux",
-            "deepin": "Linux",
-            "kali": "Linux",
-            "parrot": "Linux",
-            "win": "Windows",
-            "darwin": "macOS"
+            "linux": "Linux",
+            "windows": "Windows",
+            "darwin": "Darwin",
         }
-        
-        # Final platform name normalization
         final_platform = platform_name
         if final_platform not in platform_map and final_platform.lower() in platform_map:
             final_platform = platform_map[final_platform.lower()]
@@ -337,39 +301,61 @@ def parse_asset_name(name: str) -> Dict[str, str]:
             "backend": backend,
             "variant": variant if variant else None
         }
-
-    
+            
     # Try old format: project-platform-arch
     # e.g., llama-server-linux-arm64
-    pattern = r"^(\w+)-(\w+)-(\w+)-(\w+)"
+    pattern = r"^llama-.*-(x64|arm64)$"
     match = re.match(pattern, base_name)
     if match:
-        # group 1: project (llama), group 2: subproject (server), group 3: platform (linux), group 4: arch (arm64)
-        # Normalize platform to standard names
         platform_map = {
             "linux": "Linux",
             "windows": "Windows",
             "darwin": "Darwin",
         }
-        platform = platform_map.get(match.group(3).lower(), match.group(3))
-        arch = match.group(4).lower()
-        # Capitalize first letter
-        platform = platform.capitalize()
-        return {
-            "platform": platform,
-            "arch": arch,
-            "variant": None
-        }
-        platform = platform_map.get(match.group(2).lower(), match.group(2))
-        arch = match.group(3) if match.group(3) else None
-        return {
-            "platform": platform,
-            "arch": arch,
-            "variant": None
-        }
-    
-    return {"platform": None, "arch": None, "variant": None}
+        parts = base_name.split('-')
+        arch = parts[-1].lower()
+        platform_parts = []
+        for i in range(2, len(parts) - 1):
+            if parts[i] != "bin":
+                platform_parts.append(parts[i])
+        
+        if len(platform_parts) == 1:
+            platform_name = platform_parts[0].capitalize()
+            backend = None
+        elif len(platform_parts) == 2:
+            if platform_parts[0] in known_os and platform_parts[1] in known_os:
+                platform_name = f"{platform_parts[0]}-{platform_parts[1]}".capitalize()
+                backend = None
+            elif platform_parts[0] in known_os:
+                platform_name = platform_parts[0].capitalize()
+                backend = platform_parts[1]
+            else:
+                platform_name = f"{platform_parts[0]}-{platform_parts[1]}".capitalize()
+                backend = None
+        else:
+            if platform_parts[0] == "rocky" and platform_parts[1] == "linux":
+                platform_name = "Linux"
+                backend = "-".join(platform_parts[2:])
+            elif platform_parts[0] in known_os and platform_parts[1] in known_os:
+                platform_name = f"{platform_parts[0]}-{platform_parts[1]}".capitalize()
+                backend = "-".join(platform_parts[2:])
+            elif platform_parts[0] in known_os:
+                platform_name = platform_parts[0].capitalize()
+                backend = "-".join(platform_parts[1:])
+            else:
+                platform_name = f"{platform_parts[0]}-{platform_parts[1]}".capitalize()
+                backend = "-".join(platform_parts[2:])
 
+            
+        platform = platform_map.get(platform_name.lower(), platform_name)
+        
+        return {
+            "platform": platform,
+            "arch": arch,
+            "variant": None
+        }
+        
+    return {"platform": None, "arch": None, "variant": None}
 
 def get_available_platforms(release: dict) -> List[dict]:
     """
@@ -398,7 +384,6 @@ def get_available_platforms(release: dict) -> List[dict]:
                 platforms[key]["assets"].append(asset)
 
     return list(platforms.values())
-
 
 def get_checksum_assets(release: dict) -> List[dict]:
     """
@@ -430,7 +415,6 @@ def get_checksum_assets(release: dict) -> List[dict]:
             checksum_assets.append(asset)
     return checksum_assets
 
-
 def download_checksum(archive_path: Path, checksum_asset: dict, ui_manager: Optional["UIManager"] = None) -> Path:
     """
     Download checksum file.
@@ -447,9 +431,8 @@ def download_checksum(archive_path: Path, checksum_asset: dict, ui_manager: Opti
     download_file(checksum_asset['browser_download_url'], checksum_path, ui_manager=ui_manager)
     return checksum_path
 
-
 def select_release(release: dict, available_platforms: List[dict], 
-                   detected_platform: str, detected_arch: str) -> Optional[dict]:
+                    detected_platform: str, detected_arch: str) -> Optional[dict]:
     """
     Select the appropriate release asset based on platform and architecture.
 
@@ -471,7 +454,6 @@ def select_release(release: dict, available_platforms: List[dict],
     
     # If no exact match, show options and let user choose
     return None
-
 
 def download_file(url: str, output_path: Path, ui_manager: Optional["UIManager"] = None) -> Path:
     """
@@ -545,12 +527,11 @@ def download_file(url: str, output_path: Path, ui_manager: Optional["UIManager"]
                     percent=progress_pct,
                     estimated_time=eta_seconds if eta_str else None
                 )
-
+                
         return output_path
-
+    
     except requests.exceptions.RequestException as e:
         raise DownloadError(f"Download failed: {e}")
-
 
 def extract_archive(archive_path: Path, dest_dir: Path) -> None:
     """
@@ -584,7 +565,7 @@ def extract_archive(archive_path: Path, dest_dir: Path) -> None:
                     # Try default zip extraction
                     with zipfile.ZipFile(archive_path, 'r') as zip_ref:
                         zip_ref.extractall(tmpdir)
-
+            
             # Move contents to dest_dir
             extracted_root = Path(tmpdir)
             
@@ -593,10 +574,9 @@ def extract_archive(archive_path: Path, dest_dir: Path) -> None:
                 if item.is_dir() and item.name != '__MACOSX':
                     shutil.move(str(item), str(dest_dir))
                     break
-
+            
     except Exception as e:
         raise ExtractionError(f"Extraction failed: {e}")
-
 
 def verify_checksum(archive_path: Path, checksum_path: Path, ui_manager: Optional["UIManager"] = None) -> bool:
     """
@@ -649,11 +629,10 @@ def verify_checksum(archive_path: Path, checksum_path: Path, ui_manager: Optiona
     except Exception as e:
         raise LlamaUpdaterError(f"Checksum verification failed: {e}")
 
-
 def ensure_executable(path: Path) -> None:
     """
     Make file executable on Unix systems.
-
+    
     Args:
         path: Path to file
     """
@@ -662,7 +641,6 @@ def ensure_executable(path: Path) -> None:
             os.chmod(path, 0o755)
         except OSError:
             pass  # Ignore permission errors
-
 
 def verify_installation(ui_manager: Optional["UIManager"] = None) -> None:
     """
@@ -704,7 +682,6 @@ def verify_installation(ui_manager: Optional["UIManager"] = None) -> None:
     except Exception as e:
         ui.render_error(f"\nWarning: Could not verify llama-server version: {e}")
 
-
 def delete_existing_installation() -> None:
     """
     Delete existing llama-cpp folder if present.
@@ -718,11 +695,10 @@ def delete_existing_installation() -> None:
     except Exception as e:
         raise LlamaUpdaterError(f"Failed to delete existing llama-cpp folder: {e}")
 
-
 def install_release(release: dict, release_tag: str, ui_manager: Optional["UIManager"] = None) -> None:
     """
     Install a llama.cpp release.
-
+    
     Args:
         release: Release data dictionary
         release_tag: Release tag for reference
@@ -733,10 +709,10 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     ui = ui_manager if ui_manager is not None else UIManager("Install llama.cpp")
     
     ui.print_message(f"Installing llama.cpp release {release_tag}...")
-
+    
     # Delete existing installation first
     delete_existing_installation()
-
+    
     # Detect platform
     detected_platform, detected_arch = detect_platform()
     
@@ -750,7 +726,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         variant_suffix = " (variant: " + platform_info['variant'] + ")" if platform_info['variant'] else ""
         platform_entry = {
             'label': f"{platform_info['platform']} {platform_info['arch']}",
-            'description': f"{asset_count} asset{'' if asset_count == 1 else 's'}" + variant_suffix
+            'description': variant_suffix
         }
         platform_options.append(platform_entry)
     
@@ -777,24 +753,20 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         parsed = parse_asset_name(asset['name'])
         if parsed['backend']:
             backends.add(parsed['backend'])
-    
+        else:
+            backends.add('cpu')
+
     sorted_backends = sorted(list(backends))
-    
-    # If no backend segments were found or only one was found, handle defaults
+
     if not sorted_backends:
         sorted_backends = ['cpu']
-    elif len(sorted_backends) == 1:
-        # Only one backend found, show it as the only option
-        pass
     
     # Render Compute Backend selection menu
     backend_options = []
     for i, backend in enumerate(sorted_backends, 1):
-        is_default = (i == 1)
-        marker = " (default)" if is_default else ""
         backend_entry = {
             'label': backend,
-            'description': marker
+            'description': ''
         }
         backend_options.append(backend_entry)
     
@@ -819,27 +791,10 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             filtered_assets.append(asset)
     
     # Update selected_platform_info with filtered assets for the next step
-
     
-    # Prepare zip file options for menu
-    zip_options = []
-    for i, asset in enumerate(selected_platform_info['assets'], 1):
-        is_default = (i == 1)
-        marker = " (default)" if is_default else ""
-        zip_entry = {
-            'label': asset['name'],
-            'description': f"{asset['size']//1024//1024}MB {marker}"
-        }
-        zip_options.append(zip_entry)
     
-    # Render zip file selection menu
-    selected_zip_idx = ui.render_menu(zip_options, default=0, title="Select Archive")
-    
-    if selected_zip_idx == -1:
-        ui.render_error("Zip file selection cancelled.")
-        return
-    
-    selected_asset = selected_platform_info['assets'][selected_zip_idx]
+    # Select the first matching asset
+    selected_asset = filtered_assets[0]
     asset_name = selected_asset['name']
     
     # Show selected release info through UIManager
@@ -858,7 +813,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         return
     
     logger.debug(f"User confirmed installation of {release_tag} - {asset_name}")
-
+    
     # Download
     ui.print_message(f"\nDownloading {asset_name}...")
     archive_path = Path(tempfile.gettempdir()) / f"{asset_name}"
@@ -866,7 +821,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     try:
         download_file(selected_asset['browser_download_url'], archive_path, ui_manager=ui)
         ui.print_message(f"Downloaded to {archive_path}")
-
+        
         # Check for checksum file
         checksum_assets = get_checksum_assets(release)
         if checksum_assets:
@@ -884,17 +839,17 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
                 checksum_path.unlink(missing_ok=True)
         else:
             ui.print_message("No checksum file available for this release, skipping verification")
-
+        
         # Extract
         ui.print_message(f"\nExtracting to {LLAMA_CPP_DIR}")
         extract_archive(archive_path, LLAMA_CPP_DIR)
-
+        
         # Ensure llama-server is executable
         llama_server = LLAMA_CPP_DIR / "llama-server"
         if llama_server.exists():
             ensure_executable(llama_server)
             ui.print_message(f"Made {llama_server} executable")
-
+        
         # Clean up
         archive_path.unlink(missing_ok=True)
         
@@ -902,13 +857,12 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         verify_installation(ui)
         
         ui.print_message("Installation complete!")
-
+        
     except Exception as e:
         # Clean up on error
         archive_path.unlink(missing_ok=True)
         raise e
-
-
+    
 class LlamaUpdater:
     """Main class for llama.cpp download and update operations."""
     
@@ -917,12 +871,11 @@ class LlamaUpdater:
         self.owner = GITHUB_OWNER
         self.repo = GITHUB_REPO
         self.ui_manager = ui_manager
-
-
+    
     def install(self, interactive: bool = False, ui_manager: Optional["UIManager"] = None) -> None:
         """
         Install the latest llama.cpp release.
-
+        
         Args:
             interactive: If True, allow manual platform selection
             ui_manager: Optional UIManager instance to use for all UI operations
@@ -953,7 +906,7 @@ class LlamaUpdater:
                 f"{e}\n\n{reset_msg}"
             )
             return
-
+        
         # Get list of recent releases for tag selection menu
         releases = list_releases()
         # Sort by published_at descending
@@ -976,7 +929,6 @@ class LlamaUpdater:
                 'label': r['tag_name'],
                 'description': 'latest' if r['tag_name'] == release_tag else ''
             })
-
         
         # Use UIManager for tag selection
         ui = ui_manager if ui_manager is not None else UIManager("Select a Tag for llama.cpp")
@@ -999,13 +951,13 @@ class LlamaUpdater:
         else:
             release = releases[selected_tag_idx - 1]
             release_tag = release["tag_name"]
-
+        
         # Call install_release which handles platform detection, zip selection, and installation
         if release is not None and release_tag:
             install_release(release, release_tag, ui)
         else:
             ui.render_error("Installation cancelled or failed to select a valid release.")
-
+        
     def update(self, ui_manager: Optional["UIManager"] = None) -> None:
         """
         Update to the latest release.
@@ -1018,20 +970,19 @@ class LlamaUpdater:
         else:
             print("Updating llama.cpp to latest release...")
         self.install(ui_manager=ui_manager)
-
-
-
+    
+    
 def main():
     """CLI entry point for llama_updater."""
     import argparse
-
+    
     parser = argparse.ArgumentParser(description="Download and install llama.cpp releases")
     parser.add_argument("--install", action="store_true", help="Install latest release")
     parser.add_argument("--update", action="store_true", help="Update to latest release")
     parser.add_argument("--tag", type=str, help="Specific release tag to install")
-
+    
     args = parser.parse_args()
-
+    
     if args.tag:
         # Install specific tag
         release = get_release_by_tag(args.tag)
@@ -1048,7 +999,7 @@ def main():
         ui.print_message(f"Found {len(releases)} releases:")
         for i, r in enumerate(releases[:10], 1):  # Show first 10
             ui.print_message(f"  {i}. {r['tag_name']} - {r['name']}")
-
-
+    
+    
 if __name__ == "__main__":
     main()
