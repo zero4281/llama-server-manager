@@ -211,7 +211,7 @@ class Main:
                         if backup_dir.exists():
                             shutil.rmtree(backup_dir)
                         self.ui.render_success("Self-update complete!")
-                        os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve())] + sys.argv[1:])
+                        os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve())] + [arg for arg in sys.argv[1:] if arg != '--self-update'])
                     else:
                         self.ui.render_error("Could not find top-level directory in extraction.")
             except Exception as e:
