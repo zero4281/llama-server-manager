@@ -1,6 +1,6 @@
 # Llama Server Manager — Software Requirements Document
 
-**Version:** 1.0.8  
+**Version:** 1.0.9  
 **Date:** July 2026  
 **Repository:** https://github.com/zero4281/llama-server-manager
 
@@ -13,19 +13,20 @@
 3. [Configuration File](#3-configuration-file-configjson)
 4. [Start Script](#4-start-script-llama-server-manager)
 5. [Main Entry Point](#5-main-entry-point-mainpy)
-6. [Logging Module](#6-logging-module-loggerpy)
-7. [llama.cpp Update/Download Module](#7-llamacpp-updatedownload-module-llama_updaterpy)
-8. [Run Script](#8-run-script-runnerpy)
-9. [CLI User Interface Module](#9-cli-user-interface-module-ui_managerpy)
-10. [Non-Functional Requirements](#10-non-functional-requirements)
-11. [Out of Scope](#11-out-of-scope)
-12. [Revision History](#revision-history)
+6. [Configuration Module](#6-configuration-module-configpy)
+7. [Logging Module](#7-logging-module-loggerpy)
+8. [llama.cpp Update/Download Module](#8-llamacpp-updatedownload-module-llama_updaterpy)
+9. [Run Script](#9-run-script-runnerpy)
+10. [CLI User Interface Module](#10-cli-user-interface-module-ui_managerpy)
+11. [Non-Functional Requirements](#11-non-functional-requirements)
+12. [Out of Scope](#12-out-of-scope)
+13. [Revision History](#revision-history)
 
 ---
 
 ## 1. Overview
 
-This document defines the requirements for the Llama Server Manager project — a set of Python and Bash scripts that automate the download, installation, updating, and execution of `llama-server` from the llama.cpp project. It covers seven components: the Bash start script, the Python entry point (`main.py`), the logging module (`logger.py`), the llama.cpp update/download module, the run script, the shared configuration file, and the CLI user interface module (`ui_manager.py`).
+This document defines the requirements for the Llama Server Manager project — a set of Python and Bash scripts that automate the download, installation, updating, and execution of `llama-server` from the llama.cpp project. It covers eight components: the Bash start script, the Python entry point (`main.py`), the configuration module (`config.py`), the logging module (`logger.py`), the llama.cpp update/download module, the run script, the shared configuration file, and the CLI user interface module (`ui_manager.py`).
 
 All interactive menus, prompts, progress bars, and confirmation dialogs are rendered using the `curses` module (Python standard library) with a black background and green text.
 
@@ -46,7 +47,8 @@ All interactive menus, prompts, progress bars, and confirmation dialogs are rend
 llama-server-manager/
 ├── llama-server-manager   # Bash start script
 ├── main.py                # Entry point
-├── logger.py               # Program logging configuration module (Section 6)
+├── config.py              # Configuration loading module (Section 6)
+├── logger.py               # Program logging configuration module (Section 7)
 ├── llama_updater.py       # llama.cpp download/update module
 ├── runner.py              # Run script
 ├── ui_manager.py          # ncurses CLI user interface module
@@ -57,16 +59,16 @@ llama-server-manager/
 ├── llama-cpp/             # Extracted llama.cpp release binaries
 │   └── llama-server       # (llama-server.exe on Windows/WSL)
 ├── llama-server.log       # llama-server output log (when enabled)
-└── llama-server-manager.log  # Program's own log file (default path; Section 6.3)
+└── llama-server-manager.log  # Program's own log file (default path; Section 7.3)
 ```
 
 ---
 
 ## 3. Configuration File (config.json)
 
-`config.json` lives in the same directory as `main.py`. If the file does not exist when `main.py` is launched, a default `config.json` must be auto-generated before any other operations proceed.
+`config.json` lives in the same directory as `main.py`. If the file does not exist when `main.py` is launched, a default `config.json` must be auto-generated before any other operations proceed. Reading, writing, and default-generation for this file are implemented exclusively by the configuration module described in Section 6 (`config.py`); no other module accesses `config.json` directly.
 
-The file has three top-level keys: `options`, `llama-server`, and `logging`. `llama-server.options` is a pass-through — its key-value pairs are forwarded directly as CLI arguments to `llama-server` and are not interpreted by the wrapper (see Section 8.2). `options` and `logging` are described below; program-logging settings live under the dedicated top-level `logging` key, never nested under `options`.
+The file has three top-level keys: `options`, `llama-server`, and `logging`. `llama-server.options` is a pass-through — its key-value pairs are forwarded directly as CLI arguments to `llama-server` and are not interpreted by the wrapper (see Section 9.2). `options` and `logging` are described below; program-logging settings live under the dedicated top-level `logging` key, never nested under `options`.
 
 ### 3.1 `options` — program settings
 
@@ -97,13 +99,13 @@ Controls verbosity and destination of the program's own log output (separate fro
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `enabled` | boolean | `true` | Whether program logging is active. When `false`, no log record is written anywhere, regardless of `file` (see Section 6.3). |
+| `enabled` | boolean | `true` | Whether program logging is active. When `false`, no log record is written anywhere, regardless of `file` (see Section 7.3). |
 | `level` | string | `"INFO"` | One of `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `file` | string\|null | `null` | Path to the program log file. If `null` (default), logs are written to `llama-server-manager.log` in the project directory rather than stdout — the program log is never written to stdout/stderr, since the interactive workflow occupies the terminal via `curses` for effectively its entire runtime (see Section 5.1 and Section 6.3). |
+| `file` | string\|null | `null` | Path to the program log file. If `null` (default), logs are written to `llama-server-manager.log` in the project directory rather than stdout — the program log is never written to stdout/stderr, since the interactive workflow occupies the terminal via `curses` for effectively its entire runtime (see Section 5.1 and Section 7.3). |
 
-This section's schema is implemented by the dedicated logging module described in Section 6 (`logger.py`); no other module configures logging directly.
+This section's schema is implemented by the dedicated logging module described in Section 7 (`logger.py`); no other module configures logging directly.
 
-> **Note:** The llama-server output log is controlled separately via the `log-file` key in `config.json`'s `llama-server.options` section, or overridden at runtime via the `--log-file` CLI flag (see Section 8). It is distinct from the program's own log described above.
+> **Note:** The llama-server output log is controlled separately via the `log-file` key in `config.json`'s `llama-server.options` section, or overridden at runtime via the `--log-file` CLI flag (see Section 9). It is distinct from the program's own log described above.
 
 ---
 
@@ -144,7 +146,7 @@ This section's schema is implemented by the dedicated logging module described i
 - All logic must be encapsulated in a class within an appropriate namespace (e.g. `llama_server_manager.Main`).
 - The `if __name__ == '__main__'` block must only instantiate the class and call its `run` method.
 - All interactive output (menus, prompts, progress, confirmations) must be delegated to `UIManager` from `ui_manager.py`.
-- **The entire interactive workflow must remain within the curses environment.** Once `UIManager` initialises the curses session, no output may be written to stdout or stderr directly. Every menu, prompt, confirmation dialog, progress update, success message, and error message must be rendered through `UIManager` without exception. Plain-text output to the terminal is only permitted for messages emitted *before* `UIManager` is constructed (e.g. the WSL detection warning in Section 5.1.1, which is explicitly printed to stderr before curses initialisation, and the Bash-level venv check in Section 4.2, which never enters the Python process at all). Diagnostic output written via the standard library `logging` module (Section 6) is exempt from this restriction: it is always directed to a log file, never to stdout or stderr, so it cannot interfere with the curses display no matter when it is emitted.
+- **The entire interactive workflow must remain within the curses environment.** Once `UIManager` initialises the curses session, no output may be written to stdout or stderr directly. Every menu, prompt, confirmation dialog, progress update, success message, and error message must be rendered through `UIManager` without exception. Plain-text output to the terminal is only permitted for messages emitted *before* `UIManager` is constructed (e.g. the WSL detection warning in Section 5.1.1, which is explicitly printed to stderr before curses initialisation, and the Bash-level venv check in Section 4.2, which never enters the Python process at all). Diagnostic output written via the standard library `logging` module (Section 7) is exempt from this restriction: it is always directed to a log file, never to stdout or stderr, so it cannot interfere with the curses display no matter when it is emitted.
 
 ### 5.1.1 WSL detection
 
@@ -182,7 +184,7 @@ Choice [1]:
 ```
 
 - Pressing Enter without input selects the default (option 1, latest release).
-- Selecting **option 2** fetches the list of available releases from the GitHub Releases API (same endpoints as Section 7.2, with `owner = zero4281`, `repo = llama-server-manager`) and presents a numbered list for the user to choose from.
+- Selecting **option 2** fetches the list of available releases from the GitHub Releases API (same endpoints as Section 8.2, with `owner = zero4281`, `repo = llama-server-manager`) and presents a numbered list for the user to choose from.
 - Selecting **option 3** downloads the current `main` branch HEAD as a ZIP archive from:
   ```
   https://github.com/zero4281/llama-server-manager/archive/refs/heads/main.zip
@@ -190,7 +192,7 @@ Choice [1]:
 
 #### 5.3.2 Confirmation prompt
 
-After the user selects a source, `UIManager` must render a bordered curses window displaying the resolved version or commit reference and prompt for confirmation before modifying any local files. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with Section 9.4. Example layout:
+After the user selects a source, `UIManager` must render a bordered curses window displaying the resolved version or commit reference and prompt for confirmation before modifying any local files. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with Section 10.4. Example layout:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -224,8 +226,8 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 ### 5.4 Startup sequence
 
 1. Parse CLI arguments.
-2. Check for `config.json`; auto-generate a default if missing.
-3. Instantiate `LoggerSetup` and configure the root logger from the `logging` section of `config.json` (Section 6). This must complete before `LlamaUpdater`, `Runner`, or `UIManager` are instantiated.
+2. Call `load_config()` from `config.py` (Section 6) to obtain the configuration dict; a default `config.json` is auto-generated first if the file is missing (Section 6.3).
+3. Instantiate `LoggerSetup` and configure the root logger from the `logging` section of the loaded configuration (Section 7). This must complete before `LlamaUpdater`, `Runner`, or `UIManager` are instantiated.
 4. If `--self-update`: perform update and restart; all other arguments are ignored.
 5. If `--install-llama` or `--update-llama`: instantiate `LlamaUpdater` and call the appropriate method; exit on completion.
 6. If `--stop-server`: signal `runner.py` to stop `llama-server`; exit on completion.
@@ -237,20 +239,50 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 │   llama-server-manager --install-llama         │
 └────────────────────────────────────────────────┘
 ```
-   - If it **exists**, load `config.json`, merge pass-through args, and invoke `Runner`.
+   - If it **exists**, pass the loaded configuration dict and merged pass-through args to `Runner`.
 
 ---
 
-## 6. Logging Module (logger.py)
+## 6. Configuration Module (config.py)
 
 ### 6.1 Language & structure
 
 - Written in Python 3.12+.
-- All logic must be encapsulated in a class (e.g. `llama_server_manager.logger.LoggerSetup`).
-- Never executed directly; instantiated exactly once by `main.py`, immediately after `config.json` has been loaded or auto-generated (Section 5.4, step 3) and before `LlamaUpdater`, `Runner`, or `UIManager` are instantiated.
-- Uses Python's standard library `logging` module exclusively; no third-party logging libraries are permitted.
+- Configuration retrieval is exposed as a single function, `load_config() -> dict`, alongside a module-level `DEFAULT_CONFIG` dictionary constant matching the three-key schema (`options`, `llama-server`, `logging`) described in Section 3.
+- `load_config()` is called exactly once by `main.py` during startup (Section 5.4, step 2), before `LoggerSetup`, `LlamaUpdater`, `Runner`, or `UIManager` are instantiated. The returned dict is passed to whichever modules need configuration values.
 
 ### 6.2 Responsibility
+
+- `config.py` is the single place in the codebase responsible for locating, creating, reading, and falling back to defaults for `config.json`. No other module reads or writes `config.json` directly — modules that need configuration values (e.g. `Runner`, Section 9.2) receive the already-loaded dict rather than opening the file themselves.
+
+### 6.3 Load behaviour
+
+`load_config()` must behave as follows:
+
+1. Resolve the path to `config.json` (Section 3).
+2. If the file does not exist, write `DEFAULT_CONFIG` to that path as pretty-printed JSON (`indent=4`) before proceeding.
+3. Open and parse the file as JSON and return the resulting dict.
+4. If parsing fails (`json.JSONDecodeError`) or the file cannot be read (`IOError`), print a warning to stderr — `Warning: Could not parse config.json, using default configuration.` — and return `DEFAULT_CONFIG` in memory, without modifying the file on disk.
+
+This stderr warning is permitted under the exception in Section 5.1: `load_config()` runs during startup step 2, before `LoggerSetup` or `UIManager` is instantiated, so no curses session is active yet and program logging is not yet configured.
+
+### 6.4 Error handling
+
+- `load_config()` must never raise on a missing or malformed `config.json`; it always returns a usable dict (either the parsed contents or `DEFAULT_CONFIG`).
+- Any other module needing configuration values must obtain them from the dict returned by `load_config()`.
+
+---
+
+## 7. Logging Module (logger.py)
+
+### 7.1 Language & structure
+
+- Written in Python 3.12+.
+- All logic must be encapsulated in a class (e.g. `llama_server_manager.logger.LoggerSetup`).
+- Never executed directly; instantiated exactly once by `main.py`, immediately after the configuration has been loaded via `config.py`'s `load_config()` (Section 6, Section 5.4 step 2) and before `LlamaUpdater`, `Runner`, or `UIManager` are instantiated.
+- Uses Python's standard library `logging` module exclusively; no third-party logging libraries are permitted.
+
+### 7.2 Responsibility
 
 - Reads the `logging` section of `config.json` (Section 3.2) and configures the **root logger** for the lifetime of the process. This is the single place in the codebase where log handlers, formatters, and levels are set up.
 - `LoggerSetup` does not create or hold a logger instance that gets passed around to other classes. Every other module (`LlamaUpdater`, `Runner`, `UIManager`, and `main.py` itself) obtains its own logger independently using the standard idiom:
@@ -262,7 +294,7 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 
   Because Python's `logging` module resolves loggers hierarchically by module name, every module-level logger automatically inherits the handler(s), formatter, and level that `LoggerSetup` configured on the root logger — no dependency injection is required, unlike `UIManager`.
 
-### 6.3 Configuration behaviour
+### 7.3 Configuration behaviour
 
 - `enabled: false` — no handler is attached to the root logger (or logging is suppressed via `logging.disable(logging.CRITICAL)`); no log record is written anywhere for the duration of the process, regardless of the `file` value.
 - `enabled: true` (default):
@@ -272,27 +304,27 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
     - If `file` is `null` (default), a `logging.FileHandler` is attached at the default path `llama-server-manager.log` in the project directory.
   - **Program log output must never be attached to a `StreamHandler` targeting stdout or stderr.** The interactive workflow occupies the terminal via `curses` for effectively the entire runtime of the program (Section 5.1), so writing log records to the terminal outside of `UIManager` would corrupt the display. A file destination is therefore always used whenever logging is enabled — `file: null` selects the default filename rather than stdout.
 
-### 6.4 Formatting
+### 7.4 Formatting
 
 - Log records must include, at minimum, a timestamp, the log level, the originating module/logger name, and the message (e.g. `%(asctime)s [%(levelname)s] %(name)s: %(message)s`).
 
-### 6.5 Relationship to llama-server's own log
+### 7.5 Relationship to llama-server's own log
 
-- This module is unrelated to `llama-server`'s own output log, which is a separate file controlled via `llama-server.options.log-file` in `config.json` or the `--log-file` CLI flag (Section 3.2, Section 8.4). `logger.py` governs only the manager program's own diagnostic logging.
+- This module is unrelated to `llama-server`'s own output log, which is a separate file controlled via `llama-server.options.log-file` in `config.json` or the `--log-file` CLI flag (Section 3.2, Section 9.4). `logger.py` governs only the manager program's own diagnostic logging.
 
 ---
 
-## 7. llama.cpp Update/Download Module (llama_updater.py)
+## 8. llama.cpp Update/Download Module (llama_updater.py)
 
-### 7.1 Language & structure
+### 8.1 Language & structure
 
 - Written in Python 3.12+.
 - All logic must be encapsulated in a class (e.g. `llama_server_manager.updater.LlamaUpdater`).
 - Never executed directly; always instantiated by `main.py`.
 - All interactive output (menus, prompts, progress bars, confirmations) must be delegated to `UIManager` from `ui_manager.py`.
-- Obtains a module-level logger via `logging.getLogger(__name__)` (Section 6) and logs significant events — release resolved, download started/completed, checksum result, errors — at the appropriate level.
+- Obtains a module-level logger via `logging.getLogger(__name__)` (Section 7) and logs significant events — release resolved, download started/completed, checksum result, errors — at the appropriate level.
 
-### 7.2 GitHub API usage
+### 8.2 GitHub API usage
 
 Release discovery must use the GitHub REST API (API version `2022-11-28`). Full reference:
 https://docs.github.com/en/enterprise-server@3.17/rest/releases/releases?apiVersion=2022-11-28
@@ -322,9 +354,9 @@ The `assets` array in each release response contains the downloadable files. Eac
 
 > **Note:** The GitHub API applies rate limits to unauthenticated requests (60 requests/hour). The module must handle `403` / `429` rate-limit responses gracefully, inform the user, and include the `X-RateLimit-Reset` time from the response headers where available.
 
-### 7.3 Release selection
+### 8.3 Release selection
 
-Selecting a release to install is a four-screen workflow, in this order: **(1)** Release/tag selection, **(2)** Operating System & Architecture selection, **(3)** Compute Backend selection, **(4)** Confirmation of the resolved zip/archive file. Each screen is a distinct `UIManager` menu with its own title reflecting the items being displayed on that screen (see Section 9.3); the title bar must never be reused verbatim from a different screen.
+Selecting a release to install is a four-screen workflow, in this order: **(1)** Release/tag selection, **(2)** Operating System & Architecture selection, **(3)** Compute Backend selection, **(4)** Confirmation of the resolved zip/archive file. Each screen is a distinct `UIManager` menu with its own title reflecting the items being displayed on that screen (see Section 10.3); the title bar must never be reused verbatim from a different screen.
 
 #### 7.3.0 Naming pattern
 
@@ -339,13 +371,13 @@ For example, `llama-b10107-bin-ubuntu-vulkan-x64.tar.gz` decomposes as:
 | Segment | Value | Meaning |
 |---|---|---|
 | Project | `llama` | Always `llama`; not user-selectable. |
-| Build/Tag | `b10107` | The release tag, resolved in Section 7.3.1. |
+| Build/Tag | `b10107` | The release tag, resolved in Section 8.3.1. |
 | Type | `bin` | Always `bin` (pre-compiled binary); not user-selectable. |
-| OS | `ubuntu` | Resolved together with Architecture in Section 7.3.2. |
-| Backend | `vulkan` | Compute backend, resolved in Section 7.3.3. Optional — some OS/Architecture combinations ship a single build with no backend segment in the filename. |
-| Architecture | `x64` | Resolved together with OS in Section 7.3.2. |
+| OS | `ubuntu` | Resolved together with Architecture in Section 8.3.2. |
+| Backend | `vulkan` | Compute backend, resolved in Section 8.3.3. Optional — some OS/Architecture combinations ship a single build with no backend segment in the filename. |
+| Architecture | `x64` | Resolved together with OS in Section 8.3.2. |
 
-`LlamaUpdater` must parse each asset filename from the resolved release against this template to drive the OS/Architecture and Compute Backend menus described below, and to reconstruct the final filename for the confirmation screen (Section 7.3.4). A filename that does not match the template (missing or extra segments) must be excluded from all selection menus.
+`LlamaUpdater` must parse each asset filename from the resolved release against this template to drive the OS/Architecture and Compute Backend menus described below, and to reconstruct the final filename for the confirmation screen (Section 8.3.4). A filename that does not match the template (missing or extra segments) must be excluded from all selection menus.
 
 #### 7.3.1 Tag selection prompt
 
@@ -374,7 +406,7 @@ Enter release tag:
 
 **Title:** `Select Operating System & Architecture`
 
-After a release tag is resolved, fetch its asset list from the GitHub API and parse every asset filename per the naming pattern in Section 7.3.0. Build a de-duplicated, numbered list of the distinct **OS / Architecture** pairs present across all assets for that release (the Backend segment is ignored at this stage). Auto-detect the current platform and architecture using Python's `platform` module and highlight the matching pair as the recommended option; the recommended option is also the default if the user presses Enter without a selection. Example:
+After a release tag is resolved, fetch its asset list from the GitHub API and parse every asset filename per the naming pattern in Section 8.3.0. Build a de-duplicated, numbered list of the distinct **OS / Architecture** pairs present across all assets for that release (the Backend segment is ignored at this stage). Auto-detect the current platform and architecture using Python's `platform` module and highlight the matching pair as the recommended option; the recommended option is also the default if the user presses Enter without a selection. Example:
 
 ```
 Select Operating System & Architecture
@@ -391,7 +423,7 @@ If auto-detection fails (platform or architecture cannot be determined, or no as
 
 **Title:** `Select Compute Backend`
 
-After OS and Architecture are resolved, filter the release's assets down to those matching the selected OS/Architecture pair and parse the remaining Backend segment(s) per Section 7.3.0. Present the distinct backends as a numbered list; the first listed option is the default if the user presses Enter without a selection. There is no auto-detection for Compute Backend, since the correct choice depends on locally installed drivers/hardware that Python's `platform` module cannot report. Example:
+After OS and Architecture are resolved, filter the release's assets down to those matching the selected OS/Architecture pair and parse the remaining Backend segment(s) per Section 8.3.0. Present the distinct backends as a numbered list; the first listed option is the default if the user presses Enter without a selection. There is no auto-detection for Compute Backend, since the correct choice depends on locally installed drivers/hardware that Python's `platform` module cannot report. Example:
 
 ```
 Select Compute Backend
@@ -413,7 +445,7 @@ Pressing Enter accepts option `1` in either case.
 
 #### 7.3.4 Confirmation prompt
 
-After Release, OS/Architecture, and Compute Backend are all resolved, reconstruct the final archive filename per the template in Section 7.3.0 and use it to locate the matching asset. `UIManager` must render a bordered curses window titled `Confirm Installation` displaying the resolved filename and prompt for confirmation before downloading anything. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with Section 9.4. Example layout:
+After Release, OS/Architecture, and Compute Backend are all resolved, reconstruct the final archive filename per the template in Section 8.3.0 and use it to locate the matching asset. `UIManager` must render a bordered curses window titled `Confirm Installation` displaying the resolved filename and prompt for confirmation before downloading anything. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with Section 10.4. Example layout:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -427,14 +459,14 @@ After Release, OS/Architecture, and Compute Backend are all resolved, reconstruc
 
 Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits with status code `0` without modifying any files.
 
-### 7.4 Platform & architecture detection
+### 8.4 Platform & architecture detection
 
 - Auto-detect the current platform (Linux, Windows, macOS) and architecture (`x86_64`, `arm64`, etc.) using Python's `platform` module.
-- Use the detected platform/architecture to determine and highlight the recommended OS/Architecture pair in the selection list (see Section 7.3.2).
+- Use the detected platform/architecture to determine and highlight the recommended OS/Architecture pair in the selection list (see Section 8.3.2).
 - If detection fails, display all OS/Architecture pairs without a highlighted recommendation and require the user to select explicitly.
-- Auto-detection applies only to OS and Architecture. Compute Backend (Section 7.3.3) is never auto-detected, since the correct backend depends on locally installed drivers/hardware that Python's `platform` module cannot report; the first listed backend is offered as the default instead.
+- Auto-detection applies only to OS and Architecture. Compute Backend (Section 8.3.3) is never auto-detected, since the correct backend depends on locally installed drivers/hardware that Python's `platform` module cannot report; the first listed backend is offered as the default instead.
 
-### 7.5 Download & extraction
+### 8.5 Download & extraction
 
 - Download the selected release archive (`.zip` or `.tar.gz`) using the asset's `browser_download_url`.
 - Display a ncurses progress bar (rendered via `UIManager`) during the download so the user can track progress.
@@ -446,7 +478,7 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 - Remove the downloaded archive file after successful extraction.
 - After a successful install, display a success message via `UIManager` and run a quick sanity check by executing `llama-server --version` and displaying its output through `UIManager`. If the sanity check fails, display a warning via `UIManager` but still exit with status code `0` (the binaries were installed; the version check is informational).
 
-### 7.6 Error handling
+### 8.6 Error handling
 
 - Handle `403` and `429` responses from the GitHub API as rate-limit errors; display a clear message via `UIManager` including the `X-RateLimit-Reset` time if present in the response headers.
 - If the GitHub API is otherwise unreachable, display a clear error via `UIManager` and exit with a non-zero status.
@@ -454,32 +486,32 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 
 ---
 
-## 8. Run Script (runner.py)
+## 9. Run Script (runner.py)
 
-### 8.1 Language & structure
+### 9.1 Language & structure
 
 - Written in Python 3.12+.
 - All logic must be encapsulated in a class (e.g. `llama_server_manager.runner.Runner`).
 - Never executed directly; always instantiated by `main.py`.
 - Any user-facing status output must be delegated to `UIManager` from `ui_manager.py`.
-- Obtains a module-level logger via `logging.getLogger(__name__)` (Section 6) and logs process launch, PID, and shutdown events.
+- Obtains a module-level logger via `logging.getLogger(__name__)` (Section 7) and logs process launch, PID, and shutdown events.
 
-### 8.2 Configuration loading
+### 9.2 Configuration loading
 
-- Read `config.json` from the project directory.
+- Receive the already-loaded configuration dict from `main.py` (obtained via `config.py`'s `load_config()`, Section 6); `Runner` must not read `config.json` directly.
 - Extract key-value pairs from the `llama-server.options` section and convert them to CLI arguments for `llama-server`.
 - Merge any pass-through arguments received from `main.py`, with CLI arguments taking precedence over `config.json` values on conflict.
 
-### 8.3 Process execution
+### 9.3 Process execution
 
 - Launch `./llama-cpp/llama-server` (`./llama-cpp/llama-server.exe` on Windows) with the assembled argument list.
 - Record the PID of the launched `llama-server` process.
 - Write the PID to `llama-server.pid` in the project directory.
 - `main.py` returns control to the shell immediately after launch.
 
-### 8.4 Logging (llama-server output)
+### 9.4 Logging (llama-server output)
 
-This is the log produced by the `llama-server` process itself and is distinct from the manager program's own log described in Section 6.
+This is the log produced by the `llama-server` process itself and is distinct from the manager program's own log described in Section 7.
 
 The log file path is resolved in the following order of precedence:
 
@@ -489,7 +521,7 @@ The log file path is resolved in the following order of precedence:
 
 The resolved path is passed to `llama-server` via its `--log-file` flag.
 
-### 8.5 Graceful shutdown
+### 9.5 Graceful shutdown
 
 Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the `--stop-server` argument passed to `main.py`.
 
@@ -501,24 +533,24 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 ---
 
-## 9. CLI User Interface Module (ui_manager.py)
+## 10. CLI User Interface Module (ui_manager.py)
 
-### 9.1 Language & structure
+### 10.1 Language & structure
 
 - Written in Python 3.12+.
 - All logic must be encapsulated in a class (e.g. `llama_server_manager.ui.UIManager`).
 - Uses Python's standard library `curses` module exclusively; no third-party terminal UI libraries are permitted.
 - Never executed directly; always instantiated by `main.py` and passed to other modules that require user interaction.
-- Obtains a module-level logger via `logging.getLogger(__name__)` (Section 6), like every other module.
+- Obtains a module-level logger via `logging.getLogger(__name__)` (Section 7), like every other module.
 
-### 9.2 Visual style
+### 10.2 Visual style
 
 - Background: black (`curses.COLOR_BLACK`).
 - Foreground text: green (`curses.COLOR_GREEN`).
 - All windows and panels must use this colour pair consistently.
 - Highlighted / selected items (e.g. the currently focused menu option) must be rendered in reverse video (`curses.A_REVERSE`) using the same green-on-black pair.
 
-### 9.3 Numbered menus
+### 10.3 Numbered menus
 
 - Render each menu inside a bordered `curses` window.
 - The title line is supplied by the caller on each invocation and must describe the specific items being displayed on that screen (e.g. `Select a Release`, `Select Operating System & Architecture`). `UIManager` must not reuse or hard-code a single generic title across different menus — each call renders its own title text.
@@ -527,58 +559,58 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 - Pressing Enter confirms the selection; pressing `q` or `Esc` cancels (equivalent to the user entering `n` at a confirmation prompt).
 - A default option, where applicable, is indicated by appending `(default)` to the option label.
 
-### 9.4 Confirmation prompts
+### 10.4 Confirmation prompts
 
 - Render as a bordered curses window containing a status line (the resolved selection being confirmed) followed by a prompt line: `Proceed? [Y/n]:`.
 - `Y` / Enter confirms; `n` / `Esc` cancels.
 - Must never drop out of the curses environment; all rendering goes through `UIManager`.
 
-### 9.5 Progress bar
+### 10.5 Progress bar
 
 - Render inside a bordered `curses` window with a title line (e.g. the filename being downloaded).
 - Display a filled bar that updates in real time as download bytes are received.
 - Show current progress as both a percentage and a `downloaded / total` byte count (human-readable, e.g. `12.4 MB / 98.0 MB`).
 - If the total size is unknown (no `Content-Length` header), display a spinner animation instead of a filled bar.
 
-### 9.6 Lifecycle
+### 10.6 Lifecycle
 
 - `UIManager` must initialise the `curses` environment (`curses.initscr`, colour setup, `cbreak`, `noecho`, hidden cursor) on construction and restore the terminal to its original state on destruction or on any unhandled exception, ensuring the terminal is never left in a broken state.
 - The `UIManager` instance must remain active and the curses session must remain open for the **entire duration** of the program's interactive workflow — from first menu to final success/error message. The curses session must not be torn down and re-entered mid-workflow; `UIManager` is constructed once and destroyed once.
 
-### 9.7 Logging integration
+### 10.7 Logging integration
 
 - Whenever `UIManager` renders an error, warning, or success/informational message to the user, it must also emit a corresponding record to its module logger at a matching level:
   - Error messages → `logger.error(...)`
   - Warning messages → `logger.warning(...)`
   - Success / informational messages → `logger.info(...)`
-- Whether a given message is actually persisted depends on the `enabled` and `level` settings configured for the process (Section 3.2, Section 6.3). For example, an informational success message logged at `INFO` will not appear in the log file if `level` is set to `WARNING` or `ERROR`.
-- This dual output (curses display + log record) is independent of, and does not replace, the separate `llama-server` output log described in Section 8.4.
+- Whether a given message is actually persisted depends on the `enabled` and `level` settings configured for the process (Section 3.2, Section 7.3). For example, an informational success message logged at `INFO` will not appear in the log file if `level` is set to `WARNING` or `ERROR`.
+- This dual output (curses display + log record) is independent of, and does not replace, the separate `llama-server` output log described in Section 9.4.
 
 ---
 
-## 10. Non-Functional Requirements
+## 11. Non-Functional Requirements
 
-### 10.1 Cross-platform compatibility
+### 11.1 Cross-platform compatibility
 
 - All Python code must run on Linux and macOS without modification. Windows is supported via WSL only (see Section 5.1.1).
 - Path handling must use `pathlib.Path` throughout to avoid OS-specific separator issues.
 - Signal handling must use platform-appropriate mechanisms (`SIGTERM`/`SIGKILL` on POSIX; `TerminateProcess` on Windows/WSL).
 
-### 10.2 Dependencies
+### 11.2 Dependencies
 
 - Standard library only where possible.
 - The `requests` library (or `urllib`) may be used for GitHub API calls and file downloads.
 - The `curses` module (standard library) is used for all CLI UI rendering; no third-party terminal UI libraries are permitted.
-- The `logging` module (standard library) is used for all program log output; see Section 6. No third-party logging libraries are permitted.
+- The `logging` module (standard library) is used for all program log output; see Section 7. No third-party logging libraries are permitted.
 - No third-party dependency should be required for core start/stop/run operations.
 
-### 10.3 Error handling & exit codes
+### 11.3 Error handling & exit codes
 
 - All external calls (GitHub API, subprocess launches, file I/O) must be wrapped in `try/except` blocks.
 - Errors must be logged (according to the logging config) and result in a non-zero exit code.
 - The program must never silently swallow exceptions.
 
-### 10.4 Code style
+### 11.4 Code style
 
 - Follow PEP 8 conventions.
 - Each module must include a module-level docstring describing its purpose.
@@ -586,7 +618,7 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 ---
 
-## 11. Out of Scope
+## 12. Out of Scope
 
 - Model file management (downloading, converting, or organising GGUF model files).
 - A graphical user interface.
@@ -599,6 +631,7 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
+| 1.0.9 | July 2026 | zero4281 | Added a dedicated Configuration Module (`config.py`, new §6) to clarify where config.json load/create/default-fallback logic lives, matching the module's `load_config()`/`DEFAULT_CONFIG` implementation. Clarified in §3 that `config.py` is the sole reader/writer of `config.json`. Updated §5.4 (Startup sequence) and §9.2 (Runner) so that `main.py` calls `load_config()` and passes the resulting dict to `Runner` rather than each module reading `config.json` independently. Renumbered former §6–§11 to §7–§12 accordingly. |
 | 1.0.8 | July 2026 | zero4281 | Restructured the llama.cpp install/update flow (§7.3) into four distinct screens with per-screen titles: Release selection (§7.3.1), Operating System & Architecture selection (§7.3.2, replacing the old direct zip/asset picker), Compute Backend selection (§7.3.3, new), and a final Confirmation screen (§7.3.4) showing the resolved archive filename. Added §7.3.0 documenting the `[Project]-[Build/Tag]-[Type]-[OS]-[Backend]-[Architecture].[Ext]` naming template used to parse assets and reconstruct the final filename. Clarified in §7.4 that auto-detection applies only to OS/Architecture, not Compute Backend. Updated §9.3 to require menu titles to be supplied per-call and reflect the current screen's content rather than being reused across menus. |
 | 1.0.7 | July 2026 | zero4281 | Added a dedicated Logging Module (`logger.py`, new §6) to clarify where program-logging logic lives. Clarified that all other modules obtain a logger via the standard `logging.getLogger(__name__)` idiom rather than dependency injection. Changed the effective behaviour of `logging.file: null`: program logs now default to `llama-server-manager.log` in the project directory instead of stdout, since stdout/stderr output is prohibited while curses is active (§5.1); `enabled: false` remains the way to disable logging entirely. Fixed the `config.json` example in §3.1, which previously showed a stray `options.logfile` key instead of the documented `logging` section. Added §9.7 requiring `UIManager` to mirror every displayed error/warning/success message to the program log at a matching level. Renumbered former §6–§10 to §7–§11 accordingly. |
 | 1.0.6 | July 2026 | zero4281 | Removed §7.4 Daemon mode (the program is not a daemon); moved PID file (`llama-server.pid`) requirement and shell-return behaviour into §7.3 Process execution. Renumbered former §7.5 Logging → §7.4 and former §7.6 Graceful shutdown → §7.5. |

@@ -234,7 +234,7 @@ class Main:
         # Load config (auto-generate if missing)
         self.config = self.load_config()
         
-        LoggerSetup().setup()
+        LoggerSetup(self.config).setup()
         
         # Instantiate UI
         self.ui = UIManager("Llama Server Manager")
