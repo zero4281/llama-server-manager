@@ -600,7 +600,7 @@ class UIManager:
             
             height = label_lines + desc_lines
             option_heights.append(height)
-            total_options_height += (height + 1)
+            total_options_height += (height + (1 if desc else 0))
 
         menu_height = total_options_height + 4
         
@@ -662,7 +662,7 @@ class UIManager:
                             win.addstr(current_y + (len(full_label) + content_width - 1) // content_width, x_offset, desc)
                         win.attroff(self._color_pair)
                     
-                    current_y += option_heights[i] + 1
+                    current_y += option_heights[i] + (1 if options[i].get('description') else 0)
                 
                 footer = "Use arrow keys to navigate, type number to select, Enter to confirm, q to cancel"
                 truncated_footer = footer[:box_width] if len(footer) > box_width else footer
