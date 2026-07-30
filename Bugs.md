@@ -128,16 +128,47 @@ Modified `ui_manager.py` to ensure that the `(default)` marker is only appended 
 
 ---
 
+### ✅ COMPLETE: Program crashes if config.json is missing on startup
+
+**Status:** ✅ **COMPLETE** **Priority:** **P1** — Core workflow broken
+**Description:**
+When running `./llama-server-manager` with any option (e.g., `--install-llama`), the program crashes with a `FileNotFoundError` if `config.json` is missing from the project directory.
+
+Requirements.md §3 and §5.4 specify that `config.json` must be auto-generated if it does not exist when `main.py` is launched. The current implementation fails to do this, leading to a crash in `logger.py` when it attempts to open the missing file during the initialization sequence.
+
+**Reproduction Steps:**
+1. Delete the `config.json` file from the project directory.
+2. Run `./llama-server-manager --install-llama`.
+3. Observe the program crashing with a `FileNotFoundError: [Errno 2] No such file or directory: '.../config.json'`.
+
+**Affected Components:**
+- `main.py` (startup sequence)
+- `logger.py` (initialization)
+
+**Dependencies:**
+- `main.py`
+- `logger.py`
+
+**Test Coverage:**
+A new integration test should be added to verify that `main.py` correctly auto-generates a default `config.json` if it is missing from the working directory, ensuring the program continues to start successfully without crashing.
+
+**Verification:**
+Confirmed via manual dynamic testing in a sandbox environment: deleting `config.json` and running the manager resulted in a `FileNotFoundError` in `logger.py` during the `LoggerSetup().setup()` call.
+**Resolution:** Modified `config.py` to auto-generate `config.json` if missing, refactored `logger.py` to accept config dictionary, and updated `main.py` startup sequence.
+
+---
+
 ### 📋 Project Roadmap / Status Summary
 
 | Section                     | Status                                                                                                                                                                                                                                                                                                                                      |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Bug Reports** | 4 open |
+| **Bug Reports** | 1 open |
 | **Documentation Status**    | Out of sync: `Testing Strategy.md`, `Requirements.md` reference removed/unused features                                                                                                                                                                                                                      |
 | **Install Workflow (§7.3)** | 3 open bugs. Previously closed bugs (backend-less `Type`/`bin` leak, missing `cpu` fallback, extraneous "Select Archive" screen) remain fixed. |
 
 **Current Priorities:**
 
 1. **P1** — Fix `llama_updater.py`'s §7.3.0 filename parser to consistently isolate the *present* Backend segment (including versioned backends like `openvino-2026.2.1`, `rocm-7.2`, `cuda-12.4`) so it no longer folds into the OS token on the OS/Architecture screen, and so all real backends surface correctly on the Compute Backend screen.
+2. **P1** — Ensure `config.json` is auto-generated on startup if missing, as per Requirements.md §3 and §5.4.
 
 ---
