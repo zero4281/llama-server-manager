@@ -582,20 +582,35 @@ class UIManager:
         self._screen.erase()
         self._screen.refresh()  # Force full screen refresh to clear old content
         screen_height, screen_width = self._screen.getmaxyx()
-        menu_height = len(options) + 4
-        
-        # Calculate menu width: max label length + padding, but ensure minimum percentage and fit on screen
         max_label_len = max(len(opt.get('label', '')) for opt in options) if options else 20
         min_width = int(screen_width * self.MIN_WIDTH_PERCENT)
         menu_width = max(min_width, min(max_label_len + 15, screen_width - 8)) + 2
+        content_width = menu_width - 4
         
-        y_offset = 2
-        x_offset = 4
-        highlighted_idx = highlighted if highlighted is not None else 0
+        total_options_height = 0
+        option_heights = []
+        for i, opt in enumerate(options):
+            label = opt.get('label', '')
+            desc = opt.get('description', '')
+            marker = " (default)" if default is not None and i == default else ""
+            full_label = f"  {i}. {label}{marker}"
+            
+            label_lines = (len(full_label) + content_width - 1) // content_width
+            desc_lines = (len(desc) + content_width - 1) // content_width if desc else 0
+            
+            height = label_lines + desc_lines
+            option_heights.append(height)
+            total_options_height += (height + (1 if desc else 0))
+
+        menu_height = total_options_height + 4
         
         # Calculate centered position
         y_center = max(2, (screen_height - menu_height) // 2)
         x_center = max(2, (screen_width - menu_width) // 2)
+        
+        y_offset = 2
+        x_offset = 4
+        highlighted_idx = highlighted if highlighted is not None else 0
         
         # Define redraw function
         def redraw(win, hi_idx):
@@ -627,23 +642,28 @@ class UIManager:
                     win.addstr(0, x_offset, display_title.center(box_width))
                     win.attroff(white_attr)
                     win.addstr(1, 1, "-" * (menu_width - 2))
+                current_y = 2
                 for i, opt in enumerate(options):
                     label = opt.get('label', '')
                     desc = opt.get('description', '')
                     marker = " (default)" if default is not None and i == default else ""
                     full_label = f"  {i}. {label}{marker}"
+                    
                     if i == hi_idx:
                         win.attron(self._color_pair | curses.A_BOLD | curses.A_REVERSE)
-                        win.addstr(i + 2, x_offset, full_label)
+                        win.addstr(current_y, x_offset, full_label)
                         if desc:
-                            win.addstr(i + 3, x_offset, desc)
+                            win.addstr(current_y + (len(full_label) + content_width - 1) // content_width, x_offset, desc)
                         win.attroff(self._color_pair | curses.A_BOLD | curses.A_REVERSE)
                     else:
                         win.attron(self._color_pair)
-                        win.addstr(i + 2, x_offset, full_label)
+                        win.addstr(current_y, x_offset, full_label)
                         if desc:
-                            win.addstr(i + 3, x_offset, desc)
+                            win.addstr(current_y + (len(full_label) + content_width - 1) // content_width, x_offset, desc)
                         win.attroff(self._color_pair)
+                    
+                    current_y += option_heights[i] + (1 if options[i].get('description') else 0)
+                
                 footer = "Use arrow keys to navigate, type number to select, Enter to confirm, q to cancel"
                 truncated_footer = footer[:box_width] if len(footer) > box_width else footer
                 centered_footer = truncated_footer.center(box_width)
