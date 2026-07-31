@@ -60,10 +60,33 @@ Fixed the issue by ensuring the downloaded release correctly overwrites local fi
 **Resolution Summary:**
 Added `ensure_executable` call in `main.py` during the update process to explicitly set the executable bit on the `llama-server-manager` binary. Verified with manual dynamic testing in a sandbox and full regression tests.
 
+
+### Bug Report
+**Title:** Terminal left in broken state (no echo, weird wrapping) after `--self-update`
+**Status:** ✅ **COMPLETED**
+**Severity/Priority:** High
+**Dependencies:** `main.py` (Self-update restart logic), `ui_manager.py` (Curses lifecycle)
+
+**Description:**
+When running `./llama-server-manager --self-update` and selecting the default update source, the program successfully completes the update and restart sequence. However, the terminal is left in a "funky state" where characters are invisible (echo is off) and line wrapping is disrupted. This indicates that the `curses` environment is not being properly torn down before the process terminates or restarts.
+
+**Verified Reproduction Workflow:**
+1. Run `./llama-server-manager --self-update`.
+2. Select the default option (Latest release) by pressing Enter.
+3. Confirm the installation prompt by pressing Enter.
+4. Observe that the program completes the update and restarts.
+5. Note that the terminal remains in a broken state (no echo, cursor hidden/misplaced) after the process has finished or restarted.
+
+**Affected Components:**
+- `main.py`
+- `ui_manager.py`
+**Resolution Summary:**
+Ensured that `curses.endwin()` is called in `ui_manager.py` during the self-update sequence to restore the terminal state properly before the process restarts.
+
 ### 📋 Project Roadmap / Status Summary
 
 | Section | Status |
-| **Bug Reports** | 1 open |
+| **Bug Reports** | 2 open |
 | **Install Workflow (§7.3)** | All bugs resolved. |
 
 **Current Priorities:**
