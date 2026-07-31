@@ -47,7 +47,7 @@ Fixed the issue by ensuring the downloaded release correctly overwrites local fi
 
 ### Bug Report
 **Title:** Self-update loses executable permission on llama-server-manager
-**Status:** 📋 **Open**
+**Status:** ✅ **COMPLETED**
 **Severity/Priority:** Medium
 **Dependencies:** `main.py` (Self-update logic), `llama_updater.py` (File movement)
 
@@ -57,11 +57,13 @@ Fixed the issue by ensuring the downloaded release correctly overwrites local fi
 3. Confirm the installation prompt by pressing Enter.
 4. Observe that the program completes the UI flow but the `llama-server-manager` binary loses its executable bit (e.g., `-rwxrwxr-x` becomes `-rw-rw-r--`).
 
+**Resolution Summary:**
+Added `ensure_executable` call in `main.py` during the update process to explicitly set the executable bit on the `llama-server-manager` binary. Verified with manual dynamic testing in a sandbox and full regression tests.
 
 ### 📋 Project Roadmap / Status Summary
 
 | Section | Status |
-| **Bug Reports** | 2 open |
+| **Bug Reports** | 1 open |
 | **Install Workflow (§7.3)** | All bugs resolved. |
 
 **Current Priorities:**

@@ -1,0 +1,30 @@
+Perform Manual Dynamic Testing for the bug: 'Self-update loses executable permission on llama-server-manager'.
+
+Follow the 'Special case: testing --self-update (sandbox required)' procedure from ./Testing Strategy.md strictly.
+
+1. Sandbox Setup:
+   - Create a sandbox copy: rm -rf /tmp/llama-server-manager-sandbox && cp -r /home/zero/Code/llama-server-manager /tmp/llama-server-manager-sandbox
+   - Navigate to the sandbox.
+   - Gate Check: Run pwd and realpath . and realpath /home/zero/Code/llama-server-manager. Confirm the paths are different. Do not proceed if they match.
+
+2. Pre-Test Sync:
+   - Ensure all current source code changes are reflected in the sandbox by copying the files from the working repo to the sandbox.
+
+3. Execution:
+   - Launch the application: python3 main.py --self-update
+   - Use tmux with remain-on-exit on as specified in the strategy.
+   - Capture the initial source selection menu to /tmp/source_menu.txt.
+   - Send Enter to select the default (latest release).
+   - Capture the confirmation prompt to /tmp/confirmation_prompt.txt.
+   - Send Enter to confirm the update.
+   - Wait for the update to complete.
+   - Capture the final state to /tmp/after_update.txt.
+   - Clean up the tmux session.
+
+4. Verification:
+   - Confirm that the source selection and confirmation windows rendered correctly via UIManager.
+   - Verify that the llama-server-manager file in the sandbox was replaced and has executable permissions.
+   - Confirm that the working repository was NOT modified.
+
+5. Error Handling:
+   - If any crashes, regressions, or permission issues occur, report the logs back for source code repair. Do not modify test scripts or paper over issues.
