@@ -23,7 +23,7 @@ from pathlib import Path
 from logger import LoggerSetup
 from ui_manager import UIManager
 from runner import Runner
-from llama_updater import LlamaUpdater
+from llama_updater import LlamaUpdater, ensure_executable
 from config import load_config
 
 # Add current directory to path for imports
@@ -201,12 +201,15 @@ class Main:
                                     backup_path.parent.mkdir(parents=True, exist_ok=True)
                                     shutil.move(str(target), str(backup_path))
                                     backups.append((backup_path, target))
-                                    shutil.move(str(file_path), str(target))
                                 else:
                                     target.parent.mkdir(parents=True, exist_ok=True)
-                                    shutil.move(str(file_path), str(target))
+
+                                shutil.move(str(file_path), str(target))
+                                if target.name == 'llama-server-manager':
+                                    ensure_executable(target)
 
                                 self.ui.print_message(f"Updated: {rel_path}")
+
 
                         if backup_dir.exists():
                             shutil.rmtree(backup_dir)

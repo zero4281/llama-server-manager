@@ -27,7 +27,6 @@ Verified via manual dynamic testing in a sandbox environment. The `os.execv` cal
 Modified `main.py` to filter out the `--self-update` flag from the arguments list before calling `os.execv` during self-updates.
 
 
-
 ### Bug Report
 **Title:** Self-update fails to download and replace project files
 **Status:** ✅ **COMPLETED**
@@ -37,9 +36,29 @@ Modified `main.py` to filter out the `--self-update` flag from the arguments lis
 1. Run `./llama-server-manager --self-update`.
 2. Select the default option (Latest release) and press Enter.
 3. Confirm the installation prompt by pressing Enter.
-4. Observe that the program completes the UI flow but the local files (specifically `main.py`) are not updated to the version containing the removal of the `--self-update` flag.\n\n**Resolution Summary:**\nFixed the issue by ensuring the downloaded release correctly overwrites local files and the `--self-update` flag is filtered out before restarting.\n\n---
+4. Observe that the program completes the UI flow but the local files (specifically `main.py`) are not updated to the version containing the removal of the `--self-update` flag.
+
+**Resolution Summary:**
+Fixed the issue by ensuring the downloaded release correctly overwrites local files and the `--self-update` flag is filtered out before restarting.
 
 ---
+
+---
+
+### Bug Report
+**Title:** Self-update loses executable permission on llama-server-manager
+**Status:** ✅ **COMPLETED**
+**Severity/Priority:** Medium
+**Dependencies:** `main.py` (Self-update logic), `llama_updater.py` (File movement)
+
+**Verified Reproduction Workflow:**
+1. Run `./llama-server-manager --self-update`.
+2. Select the default option (Latest release) and press Enter.
+3. Confirm the installation prompt by pressing Enter.
+4. Observe that the program completes the UI flow but the `llama-server-manager` binary loses its executable bit (e.g., `-rwxrwxr-x` becomes `-rw-rw-r--`).
+
+**Resolution Summary:**
+Added `ensure_executable` call in `main.py` during the update process to explicitly set the executable bit on the `llama-server-manager` binary. Verified with manual dynamic testing in a sandbox and full regression tests.
 
 ### 📋 Project Roadmap / Status Summary
 
