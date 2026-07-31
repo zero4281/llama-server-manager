@@ -31,16 +31,6 @@ sys.path.insert(0, str(Path.cwd()))
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONFIG = {
-    "options": {},
-    "llama-server": {"options": {}},
-    "logging": {
-        "enabled": True,
-        "level": "INFO",
-        "file": None
-    }
-}
-
 class Main:
     """Main wrapper application."""
 
@@ -214,6 +204,7 @@ class Main:
                         if backup_dir.exists():
                             shutil.rmtree(backup_dir)
                         self.ui.render_success("Self-update complete!")
+                        self.ui._cleanup_terminal()
                         os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve())] + [arg for arg in sys.argv[1:] if arg != '--self-update'])
                     else:
                         self.ui.render_error("Could not find top-level directory in extraction.")
