@@ -2,7 +2,6 @@ import sys
 import json
 from pathlib import Path
 
-
 DEFAULT_CONFIG = {
     "options": {},
     "llama-server": {"options": {}},
@@ -31,3 +30,11 @@ def load_config() -> dict:
         with open(config_path, "w") as f:
             json.dump(DEFAULT_CONFIG, f, indent=4)
     return DEFAULT_CONFIG
+
+def save_config(config: dict) -> None:
+    """
+    Save configuration to config.json.
+    """
+    config_path = Path.cwd() / "config.json"
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=4)

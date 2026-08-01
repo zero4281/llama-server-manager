@@ -1,56 +1,74 @@
-# Version 1.0.9
+# Version 1.1.0
 
 ## Section 1: Current State Assessment
 
 ### Compliance Checklist
-- [ ] Requirement 5.4 (Startup Sequence): LoggerSetup violates single-source-of-truth by reading `config.json` independently.
-- [ ] Requirement 6.3 (Config Auto-generation): `config.py` fails to write `config.json` to disk when missing.
-- [ ] Requirement 9.3 (Run Script - Return Control): `runner.py` blocks execution via `process.wait()`.
+| Requirement | Status | Verification |
+|---|---|---|
+| Req 4 | Fully Met | Verified |
+| Req 5 | Partially Met | In Progress |
+| Req 6 | Fully Met | Verified |
+| Req 7 | Fully Met | Verified |
+| Req 8 | Fully Met | Verified |
+| Req 9 | Fully Met | Verified |
+| Req 10 | Fully Met | Verified |
 
 ### Implementation Verification Table
-| Requirement | Status | Finding |
+| Feature | Implementation Status | Notes |
 |---|---|---|
-| 5.4 | Non-Compliant | `logger.py` reads `config.json` directly instead of receiving a config dict. |
-| 6.3 | Non-Compliant | `config.py` does not write `DEFAULT_CONFIG` to `config.json` on first launch. |
-| 9.3 | Non-Compliant | `runner.py` blocks the parent process with `process.wait()`. |
+| Start Script | Completed | Bash script functional |
+| Main Entry Point | Completed | Python entry point active |
+| Configuration Module | Completed | `config.py` logic verified |
+| Logging Module | Completed | `logger.py` logic verified |
+| Update Module | Completed | `llama_updater.py` functional |
+| Run Script | Completed | `runner.py` functional |
+| CLI UI Module | Completed | `ui_manager.py` functional |
+| Unit & Integration Tests | Unverified | Not yet implemented |
 
 ## Section 2: Core Engineering Decisions or Filename Consistency
-- Refactor `main.py` to pass the loaded configuration dictionary to `LoggerSetup`.
-- Update `config.py` to write `config.json` to disk if it is missing during `load_config()`.
-- Modify `runner.py` to use non-blocking process execution so it returns control to the shell immediately.
+
+- **UI Framework**: Strict adherence to `curses` for all interactive elements.
+- **Configuration**: `config.json` as the single source of truth, managed by `config.py`.
+- **Persistence**: `options.llama-cpp` values (OS/Architecture and Backend) are persisted to `config.json` automatically.
+- **Fast Path**: Implementation of the `--update-llama` fast path to skip UI prompts when saved selections are present.
+- **Logging**: Root logger configuration in `logger.py` inherited by all modules via `logging.getLogger(__name__)`.
 
 ## Section 3: Testing & Verification Status
 
 ### Unit Tests
-- [ ] `config_test`: Verify `load_config()` creates `config.json` if missing.
-- [ ] `logger_test`: Verify `LoggerSetup` uses passed dictionary without reading disk.
-- [ ] `runner_test`: Verify `Runner` does not call `.wait()`.
+- [ ] Basic configuration loading
+- [ ] Logger setup validation
+- [ ] `llama_updater` release parsing
+- [ ] `runner` argument merging
 
 ### Integration Tests
-- [ ] `startup_test`: Verify `main.py` initializes logger with config and launches runner.
-- [ ] `flow_test`: Verify shell returns control immediately after `runner.py` starts.
+- [ ] Full `llama-server` launch flow
+- [ ] `--self-update` full cycle
+- [ ] `SIGTERM` graceful shutdown
 
 ### Manual Checklists
-- [ ] Check if `config.json` is present after first run.
-- [ ] Confirm `llama-server` starts in background and shell is interactive.
+- [ ] UI color and reverse video consistency
+- [ ] WSL detection warning on native Windows
+- [ ] `config.json` auto-generation on first run
+- [ ] `llama-server` log file persistence
 
 ## Section 4: Exit Codes
-- 0: Success
-- 1: Config Error
-- 2: Installation Error
-- 3: Runtime Error
-- 4: OS Detection Error
+- `0`: Success (including clean shutdown and cancelled updates).
+- `Non-Zero`: Any failure (installation error, API error, checksum failure, etc.).
 
 ## Section 5: Security
-- No secrets in `config.json`.
-- Filesystem operations restricted to project directory.
+- No local secrets stored in `config.json`.
+- Standard input/output handled via `curses` to prevent unauthorized terminal leaks.
+- File paths resolved using `pathlib`.
 
 ## Section 6: Dependencies
-- Python 3.12+
-- `requests`
-- `curses` (std library)
+- `requests` (for GitHub API)
+- `curses` (Standard Library)
+- `logging` (Standard Library)
+- `pathlib` (Standard Library)
 
-## Section 7: Non-functional requirements
-- Platform: Linux, macOS, Windows (WSL).
-- UI: `curses` based, green-on-black.
-- Performance: Minimal overhead for config loading.
+## Section 7: Non-Functional Requirements
+- **Cross-platform**: Linux, macOS, Windows (via WSL).
+- **Robustness**: UI must remain stable during long-running downloads/extractions.
+- **Logging**: All UI messages must be mirrored in the program log.
+- **Error Handling**: No silent failures; all exceptions must be caught and reported.

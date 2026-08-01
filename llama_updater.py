@@ -13,14 +13,15 @@ import re
 import shutil
 import subprocess
 import sys
-import tarfile
+import requests
 import tempfile
 import time
 import zipfile
+import tarfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import requests
+from config import load_config, save_config
 
 import logging
 logger = logging.getLogger(__name__)
@@ -710,9 +711,6 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     
     ui.print_message(f"Installing llama.cpp release {release_tag}...")
     
-    # Delete existing installation first
-    delete_existing_installation()
-    
     # Detect platform
     detected_platform, detected_arch = detect_platform()
     
@@ -755,9 +753,9 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             backends.add(parsed['backend'])
         else:
             backends.add('cpu')
-
+    
     sorted_backends = sorted(list(backends))
-
+    
     if not sorted_backends:
         sorted_backends = ['cpu']
     
@@ -790,9 +788,6 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         elif not parsed['backend'] and selected_backend == 'cpu':
             filtered_assets.append(asset)
     
-    # Update selected_platform_info with filtered assets for the next step
-    
-    
     # Select the first matching asset
     selected_asset = filtered_assets[0]
     asset_name = selected_asset['name']
@@ -802,7 +797,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     
     # Check UI mode before render_confirmation
     if not ui._using_curses or not ui._screen:
-        logger.warning("UI manager not using curses, falling back to console for confirmation")
+        ui.render_error("UI manager not using curses, falling back to console for confirmation")
     
     # Confirmation prompt
     release_info = f"{release_tag} ({asset_name})"
@@ -831,7 +826,6 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             
             try:
                 if not verify_checksum(archive_path, checksum_path):
-                    # Verification failed - clean up
                     archive_path.unlink(missing_ok=True)
                     checksum_path.unlink(missing_ok=True)
                     raise LlamaUpdaterError("Checksum verification failed")
@@ -858,10 +852,132 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         
         ui.print_message("Installation complete!")
         
+        # Persist configuration
+        config = load_config()
+        options = config.get("options", {})
+        llama_cpp = options.get("llama-cpp", {})
+        llama_cpp["os-architecture"] = f"{selected_platform_info['platform']}-{selected_platform_info['arch']}"
+        llama_cpp["backend"] = selected_backend
+        options["llama-cpp"] = llama_cpp
+        config["options"] = options
+        try:
+            save_config(config)
+        except Exception as e:
+            ui.render_error(f"Warning: Could not save configuration: {e}")
+        
     except Exception as e:
-        # Clean up on error
         archive_path.unlink(missing_ok=True)
         raise e
+
+def _install_release_core(release: dict, release_tag: str, platform: str, arch: str, backend: str, ui_manager: Optional["UIManager"] = None, skip_confirmation: bool = False) -> None:
+    """
+    Core installation logic for llama.cpp.
+    
+    Args:
+        release: Release data dictionary
+        release_tag: Release tag
+        platform: Target platform
+        arch: Target architecture
+        backend: Target compute backend
+        ui_manager: UI manager instance
+        skip_confirmation: If True, skip the confirmation prompt
+    """
+    from ui_manager import UIManager
+    ui = ui_manager if ui_manager is not None else UIManager("Install llama.cpp")
+    
+    # Delete existing installation first
+    delete_existing_installation()
+    
+    # Filter assets by platform and architecture
+    filtered_assets = []
+    for asset in release.get("assets", []):
+        parsed = parse_asset_name(asset['name'])
+        if parsed.get('platform') and parsed.get('arch') and parsed['platform'].lower() == platform.lower() and parsed['arch'].lower() == arch.lower():
+
+
+            if parsed['backend'] == backend:
+                filtered_assets.append(asset)
+            elif not parsed['backend'] and backend == 'cpu':
+                filtered_assets.append(asset)
+    
+    if not filtered_assets:
+        ui.render_error(f"No matching assets found for {platform}-{arch} with backend {backend}")
+        raise PlatformNotFoundError(f"No matching assets found for {platform}-{arch} with backend {backend}")
+    
+    selected_asset = filtered_assets[0]
+    asset_name = selected_asset['name']
+    
+    ui.print_message(f"\nSelected: {release_tag} ({asset_name})")
+    
+    if not skip_confirmation:
+        release_info = f"{release_tag} ({asset_name})"
+        confirmed = ui.render_confirmation(f"Proceed with installation?", release_info)
+        if not confirmed:
+            ui.render_error("Installation cancelled.")
+            return
+    
+    logger.debug(f"User confirmed installation of {release_tag} - {asset_name}")
+    
+    # Download
+    ui.print_message(f"\nDownloading {asset_name}...")
+    archive_path = Path(tempfile.gettempdir()) / f"{asset_name}"
+    
+    try:
+        download_file(selected_asset['browser_download_url'], archive_path, ui_manager=ui)
+        ui.print_message(f"Downloaded to {archive_path}")
+        
+        # Check for checksum file
+        checksum_assets = get_checksum_assets(release)
+        if checksum_assets:
+            ui.print_message("Checking checksum...")
+            checksum_asset = checksum_assets[0]
+            checksum_path = download_checksum(archive_path, checksum_asset, ui_manager=ui)
+            
+            try:
+                if not verify_checksum(archive_path, checksum_path):
+                    archive_path.unlink(missing_ok=True)
+                    checksum_path.unlink(missing_ok=True)
+                    raise LlamaUpdaterError("Checksum verification failed")
+            finally:
+                checksum_path.unlink(missing_ok=True)
+        else:
+            ui.print_message("No checksum file available for this release, skipping verification")
+        
+        # Extract
+        ui.print_message(f"\nExtracting to {LLAMA_CPP_DIR}")
+        extract_archive(archive_path, LLAMA_CPP_DIR)
+        
+        # Ensure llama-server is executable
+        llama_server = LLAMA_CPP_DIR / "llama-server"
+        if llama_server.exists():
+            ensure_executable(llama_server)
+            ui.print_message(f"Made {llama_server} executable")
+        
+        # Clean up
+        archive_path.unlink(missing_ok=True)
+        
+        # Post-install sanity check
+        verify_installation(ui)
+        
+        ui.print_message("Installation complete!")
+        
+        # Persist configuration
+        config = load_config()
+        options = config.get("options", {})
+        llama_cpp = options.get("llama-cpp", {})
+        llama_cpp["os-architecture"] = f"{platform}-{arch}"
+        llama_cpp["backend"] = backend
+        options["llama-cpp"] = llama_cpp
+        config["options"] = options
+        try:
+            save_config(config)
+        except Exception as e:
+            ui.render_error(f"Warning: Could not save configuration: {e}")
+        
+    except Exception as e:
+        archive_path.unlink(missing_ok=True)
+        raise e
+
     
 class LlamaUpdater:
     """Main class for llama.cpp download and update operations."""
@@ -965,11 +1081,59 @@ class LlamaUpdater:
         Args:
             ui_manager: UIManager instance for UI operations
         """
-        if ui_manager is not None:
-            ui_manager.print_message("Updating llama.cpp to latest release...")
+        from ui_manager import UIManager
+        ui = ui_manager if ui_manager is not None else UIManager("Update llama.cpp")
+        ui.print_message("Updating llama.cpp to latest release...")
+        
+        config = load_config()
+        options = config.get("options", {})
+        llama_cpp = options.get("llama-cpp", {})
+        
+        os_arch = llama_cpp.get("os-architecture")
+        backend = llama_cpp.get("backend")
+        
+        if os_arch and backend:
+            logger.debug(f"Fast path detected: os-architecture={os_arch}, backend={backend}")
+            
+            # Resolve platform and arch from os_arch
+            # Assuming os_arch is in format 'platform-arch' (e.g. 'linux-x64')
+            parts = os_arch.split('-')
+            if len(parts) != 2:
+                ui.render_error("Invalid os-architecture in configuration. Expected 'platform-arch'.")
+                return
+            platform, arch = parts[0].capitalize(), parts[1]
+            
+            try:
+                release = get_latest_release()
+                release_tag = release["tag_name"]
+                
+                # Filter assets
+                filtered_assets = []
+                for asset in release.get("assets", []):
+                    parsed = parse_asset_name(asset['name'])
+                    if parsed.get('platform') and parsed.get('arch') and parsed['platform'].lower() == platform.lower() and parsed['arch'].lower() == arch.lower():
+                        if parsed['backend'] == backend:
+                            filtered_assets.append(asset)
+                        elif not parsed['backend'] and backend == 'cpu':
+                            filtered_assets.append(asset)
+
+
+                
+                if not filtered_assets:
+                    ui.render_error(f"No matching assets found for {platform}-{arch} with backend {backend}")
+                    raise PlatformNotFoundError(f"No matching assets found for {platform}-{arch} with backend {backend}")
+                
+                # Perform installation
+                # We can reuse the logic in _install_release_core
+                _install_release_core(release, release_tag, platform, arch, backend, ui, skip_confirmation=True)
+            except PlatformNotFoundError as e:
+                ui.render_error(str(e))
+                sys.exit(1)
+            except Exception as e:
+                ui.render_error(f"Fast path update failed: {e}")
+                return
         else:
-            print("Updating llama.cpp to latest release...")
-        self.install(ui_manager=ui_manager)
+            self.install(ui_manager=ui)
     
     
 def main():

@@ -1,6 +1,6 @@
 # Llama Server Manager — Software Requirements Document
 
-**Version:** 1.0.9  
+**Version:** 1.1.0  
 **Date:** July 2026  
 **Repository:** https://github.com/zero4281/llama-server-manager
 
@@ -76,7 +76,12 @@ Top-level `options` keys control the program itself. The `llama-server.options` 
 
 ```json
 {
-  "options": {},
+  "options": {
+    "llama-cpp": {
+      "os-architecture": "ubuntu/x64",
+      "backend": "vulkan"
+    }
+  },
   "llama-server": {
     "options": {
       "host": "0.0.0.0",
@@ -92,6 +97,15 @@ Top-level `options` keys control the program itself. The `llama-server.options` 
   }
 }
 ```
+
+### 3.1.1 `options.llama-cpp` — saved OS/Architecture & Compute Backend
+
+| Key | Type | Description |
+|---|---|---|
+| `os-architecture` | string (absent if never installed) | The OS/Architecture pair last resolved during a successful llama.cpp install or update (Section 8.3.2), stored as `"<os>/<architecture>"` (e.g. `"ubuntu/x64"`). |
+| `backend` | string (absent if never installed) | The Compute Backend last resolved during a successful llama.cpp install or update (Section 8.3.3), e.g. `"vulkan"`. |
+
+These two keys are written automatically by `LlamaUpdater` — never by the user or by `config.py` — after every successful install or update (Section 8.3.5). They are **not** part of `DEFAULT_CONFIG` (Section 6.1) and are simply absent from `config.json` until the first successful install. Their presence or absence together determines whether `--update-llama` takes the fast path or falls back to the full interactive `--install-llama` workflow (Section 8.7).
 
 ### 3.2 `logging` — program logging settings
 
@@ -164,7 +178,7 @@ This section's schema is implemented by the dedicated logging module described i
 |---|---|---|
 | `--self-update` | Flag | Update the program's own scripts from the project GitHub repository. Prompts the user to choose between the latest release, a previous release, or the repository `main` branch HEAD before proceeding. |
 | `--install-llama` | Flag | Download and install the newest release of llama.cpp. Delegates to `LlamaUpdater` in `llama_updater.py`. |
-| `--update-llama` | Flag | Update an existing llama.cpp installation to the latest release. Delegates to `LlamaUpdater`. |
+| `--update-llama` | Flag | Update to the latest llama.cpp release. If `options.llama-cpp.os-architecture` and `options.llama-cpp.backend` (Section 3.1.1) are both present in `config.json`, downloads automatically with no menu interaction (fast path, Section 8.7). If either is missing, falls back to running the full interactive `--install-llama` workflow instead (Section 8.7). Delegates to `LlamaUpdater`. |
 | `--stop-server` | Flag | Signal `runner.py` to gracefully stop a running `llama-server` process. |
 | `--log-file` | String | Path for llama-server output log. Overrides the `log-file` value in `config.json`. Defaults to `llama-server.log` in the project folder if not set in either place. |
 | `<llama args>` | Pass-through | Any other arguments are collected and forwarded verbatim to `llama-server` via `runner.py`. |
@@ -459,6 +473,14 @@ After Release, OS/Architecture, and Compute Backend are all resolved, reconstruc
 
 Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits with status code `0` without modifying any files.
 
+#### 7.3.5 Saving selections
+
+- Once the confirmation in Section 8.3.4 is accepted, and before the download begins, `LlamaUpdater` must write the resolved OS/Architecture pair and Compute Backend to `config.json` under `options.llama-cpp` (Section 3.1.1). This applies whether the four-screen workflow was reached via `--install-llama` directly or via the `--update-llama` fallback described in Section 8.7.
+- Saving happens automatically; the user is never prompted separately to opt in or out.
+- `LlamaUpdater` updates the `options.llama-cpp.os-architecture` and `options.llama-cpp.backend` keys on the already-loaded configuration dict and writes the full configuration back to `config.json` as pretty-printed JSON (`indent=4`), preserving every other existing key and value. `LlamaUpdater` is the only module permitted to write these two keys, consistent with the ownership rules in Section 6.2.
+- If writing `config.json` fails (e.g. a permissions error), display a warning via `UIManager` and continue with the download regardless — a failure to persist the selection must not block installation.
+- The Release tag itself is never saved to `config.json`; only OS/Architecture and Compute Backend persist. `--update-llama` (Section 8.7) always resolves the newest release at run time, regardless of which tag was previously installed.
+
 ### 8.4 Platform & architecture detection
 
 - Auto-detect the current platform (Linux, Windows, macOS) and architecture (`x86_64`, `arm64`, etc.) using Python's `platform` module.
@@ -483,6 +505,20 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 - Handle `403` and `429` responses from the GitHub API as rate-limit errors; display a clear message via `UIManager` including the `X-RateLimit-Reset` time if present in the response headers.
 - If the GitHub API is otherwise unreachable, display a clear error via `UIManager` and exit with a non-zero status.
 - If the download fails or the archive is corrupt, clean up any partial files and report the error via `UIManager`.
+
+### 8.7 `--update-llama` fast path
+
+When `main.py` dispatches `--update-llama` (Section 5.2, Section 5.4 step 5), `LlamaUpdater` decides between two behaviours based on the already-loaded configuration dict, before issuing any network requests:
+
+1. **Fast path — saved options present.** If both `options.llama-cpp.os-architecture` and `options.llama-cpp.backend` (Section 3.1.1) are present in the loaded configuration:
+   - Skip Section 8.3.1 (Release selection) entirely — always resolve the newest release via `GET /repos/ggml-org/llama.cpp/releases/latest` (Section 8.2).
+   - Skip Section 8.3.2 (OS/Architecture selection) — use the saved `os-architecture` value directly.
+   - Skip Section 8.3.3 (Compute Backend selection) — use the saved `backend` value directly.
+   - Skip Section 8.3.4 (Confirmation screen) — once the archive filename is reconstructed (Section 8.3.0) and the matching asset located, proceed directly to download.
+   - No `UIManager` menu or confirmation prompt is shown at any point during selection. `UIManager` is still used for the download progress bar (Section 8.5, Section 10.5) and for the final success/warning/error message (Section 8.5, Section 10.7).
+   - If no asset in the latest release matches the reconstructed filename (e.g. the saved OS/Architecture/Backend combination is no longer published for the newest release), display an error via `UIManager` stating that the saved selection could not be matched, and exit with a non-zero status code. Do **not** silently fall back to the interactive workflow in this case — the missing-options fallback in item 2 below applies only when the keys are absent from `config.json`, not when they fail to match.
+   - After a successful download and extraction, re-save `options.llama-cpp.os-architecture` and `options.llama-cpp.backend` per Section 8.3.5 (the values are unchanged, but this keeps the write path uniform for both flags).
+2. **Fallback — saved options absent or incomplete.** If either `options.llama-cpp.os-architecture` or `options.llama-cpp.backend` is missing from `config.json` (e.g. `config.json` was auto-generated from `DEFAULT_CONFIG` and llama.cpp has never been installed via this program), `LlamaUpdater` must run the identical interactive workflow used by `--install-llama` (Sections 8.3.1–8.3.5) instead — all four menu screens, including the Confirmation screen. In effect, `--update-llama` behaves exactly like `--install-llama` for the remainder of the run in this case.
 
 ---
 
@@ -631,6 +667,7 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
+| 1.1.0 | July 2026 | zero4281 | Added persistence of the Operating System & Architecture (§8.3.2) and Compute Backend (§8.3.3) selections to `config.json` under the new `options.llama-cpp` key (new §3.1.1), written automatically by `LlamaUpdater` after every successful install/update (new §8.3.5). Added §8.7 defining the `--update-llama` fast path: when both saved values are present, all four selection screens (§8.3.1–§8.3.4) are skipped and the newest release is downloaded automatically with the saved OS/Architecture/Backend and no `UIManager` prompts; when either value is missing, `--update-llama` falls back to running the identical interactive workflow as `--install-llama`. Updated the `config.json` example and the `--update-llama` row in §5.2 accordingly. |
 | 1.0.9 | July 2026 | zero4281 | Added a dedicated Configuration Module (`config.py`, new §6) to clarify where config.json load/create/default-fallback logic lives, matching the module's `load_config()`/`DEFAULT_CONFIG` implementation. Clarified in §3 that `config.py` is the sole reader/writer of `config.json`. Updated §5.4 (Startup sequence) and §9.2 (Runner) so that `main.py` calls `load_config()` and passes the resulting dict to `Runner` rather than each module reading `config.json` independently. Renumbered former §6–§11 to §7–§12 accordingly. |
 | 1.0.8 | July 2026 | zero4281 | Restructured the llama.cpp install/update flow (§7.3) into four distinct screens with per-screen titles: Release selection (§7.3.1), Operating System & Architecture selection (§7.3.2, replacing the old direct zip/asset picker), Compute Backend selection (§7.3.3, new), and a final Confirmation screen (§7.3.4) showing the resolved archive filename. Added §7.3.0 documenting the `[Project]-[Build/Tag]-[Type]-[OS]-[Backend]-[Architecture].[Ext]` naming template used to parse assets and reconstruct the final filename. Clarified in §7.4 that auto-detection applies only to OS/Architecture, not Compute Backend. Updated §9.3 to require menu titles to be supplied per-call and reflect the current screen's content rather than being reused across menus. |
 | 1.0.7 | July 2026 | zero4281 | Added a dedicated Logging Module (`logger.py`, new §6) to clarify where program-logging logic lives. Clarified that all other modules obtain a logger via the standard `logging.getLogger(__name__)` idiom rather than dependency injection. Changed the effective behaviour of `logging.file: null`: program logs now default to `llama-server-manager.log` in the project directory instead of stdout, since stdout/stderr output is prohibited while curses is active (§5.1); `enabled: false` remains the way to disable logging entirely. Fixed the `config.json` example in §3.1, which previously showed a stray `options.logfile` key instead of the documented `logging` section. Added §9.7 requiring `UIManager` to mirror every displayed error/warning/success message to the program log at a matching level. Renumbered former §6–§10 to §7–§11 accordingly. |
