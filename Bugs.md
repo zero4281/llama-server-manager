@@ -83,10 +83,42 @@ When running `./llama-server-manager --self-update` and selecting the default up
 **Resolution Summary:**
 Ensured that `curses.endwin()` is called in `ui_manager.py` during the self-update sequence to restore the terminal state properly before the process restarts.
 
+
+### Bug Report
+**Title:** Llama installation fails during extraction due to missing `tarfile` import
+**Status:** ✅ **COMPLETED**
+**Severity/Priority:** High
+**Dependencies:** `llama_updater.py`, `main.py`, `ui_manager.py`
+
+**Description:**
+When running `./llama-server-manager --install-llama` and selecting the default options in all menus, the application successfully downloads the llama-cpp archive but fails to install it. The program crashes with a `NameError` because the `tarfile` module is not imported in `llama_updater.py`.
+
+**Verified Reproduction Workflow:**
+1. Run `./llama-server-manager --install-llama`.
+2. Navigate through the release selection, OS/Architecture, and Compute Backend menus using the default options (pressing Enter).
+3. Confirm the installation prompt (pressing Enter).
+4. Observe the application crash during the extraction phase with the following error:
+   ```
+   Traceback (most recent call last):
+     File ".../llama_updater.py", line 562, in extract_archive
+       with tarfile.open(archive_path, 'r:gz') as tar_ref:
+            ^^^^^^^
+   NameError: name 'tarfile' is not defined. Did you mean: 'tempfile'? Or did you forget to import 'tarfile'?
+   ```
+5. The `llama_updater.ExtractionError` is raised, and the installation process terminates prematurely.
+
+**Affected Components:**
+- `llama_updater.py` (`extract_archive` function)
+
+**Resolution Summary:**
+Add `import tarfile` to the top of `llama_updater.py`.
+
+---
+
 ### 📋 Project Roadmap / Status Summary
 
 | Section | Status |
-| **Bug Reports** | 2 open |
+| **Bug Reports** | 1 open |
 | **Install Workflow (§7.3)** | All bugs resolved. |
 
 **Current Priorities:**
