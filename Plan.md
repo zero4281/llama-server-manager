@@ -1,74 +1,63 @@
-# Version 1.1.0
+# Plan: Llama Server Manager
+
+**Version:** 1.1.2
 
 ## Section 1: Current State Assessment
 
-### Compliance Checklist
-| Requirement | Status | Verification |
-|---|---|---|
-| Req 4 | Fully Met | Verified |
-| Req 5 | Partially Met | In Progress |
-| Req 6 | Fully Met | Verified |
-| Req 7 | Fully Met | Verified |
-| Req 8 | Fully Met | Verified |
-| Req 9 | Fully Met | Verified |
-| Req 10 | Fully Met | Verified |
+### Requirement Verification Status
 
-### Implementation Verification Table
-| Feature | Implementation Status | Notes |
+| Requirement | Status | Notes |
 |---|---|---|
-| Start Script | Completed | Bash script functional |
-| Main Entry Point | Completed | Python entry point active |
-| Configuration Module | Completed | `config.py` logic verified |
-| Logging Module | Completed | `logger.py` logic verified |
-| Update Module | Completed | `llama_updater.py` functional |
-| Run Script | Completed | `runner.py` functional |
-| CLI UI Module | Completed | `ui_manager.py` functional |
-| Unit & Integration Tests | Unverified | Not yet implemented |
+| Req 3 (Configuration) | Fully Met | |
+| Req 4 (Start Script) | Fully Met | |
+| Req 5 (Main Entry Point) | Partially Met | Missing `__version__` constant and `--version` flag. |
+| Req 6 (Configuration Module) | Fully Met | |
+| Req 7 (Logging Module) | Fully Met | |
+| Req 8 (Update/Download Module) | Partially Met | Restart behavior (§8.5.1) is unmet. |
+| Req 9 (Run Script) | Fully Met | |
+| Req 10 (CLI UI Module) | Fully Met | |
+| Req 11 (Non-Functional) | Fully Met | |
+
+### Structural & Functional Drift
+- **Version Mismatch:** `Plan.md` was at v1.1.0 while `Requirements.md` is at v1.1.2.
+- **Incorrect Status:** Requirement 8 was incorrectly marked as "Fully Met" in previous documentation.
+- **Requirement 5 Specifics:** Specific items for Requirement 5 (Main Entry Point) need to be addressed (missing `__version__` constant and `--version` flag).
 
 ## Section 2: Core Engineering Decisions or Filename Consistency
-
-- **UI Framework**: Strict adherence to `curses` for all interactive elements.
-- **Configuration**: `config.json` as the single source of truth, managed by `config.py`.
-- **Persistence**: `options.llama-cpp` values (OS/Architecture and Backend) are persisted to `config.json` automatically.
-- **Fast Path**: Implementation of the `--update-llama` fast path to skip UI prompts when saved selections are present.
-- **Logging**: Root logger configuration in `logger.py` inherited by all modules via `logging.getLogger(__name__)`.
+- **Configuration Ownership:** `config.py` is the single source of truth for reading, writing, and default-generation of `config.json`. No other module may access `config.json` directly.
+- **Logging Isolation:** `logger.py` configures the root logger; all other modules obtain independent loggers via `logging.getLogger(__name__)`.
+- **UI Consistency:** `UIManager` is the sole entry point for all interactive output (menus, prompts, progress bars, and messages) within the curses environment.
 
 ## Section 3: Testing & Verification Status
-
-### Unit Tests
-- [ ] Basic configuration loading
-- [ ] Logger setup validation
-- [ ] `llama_updater` release parsing
-- [ ] `runner` argument merging
-
-### Integration Tests
-- [ ] Full `llama-server` launch flow
-- [ ] `--self-update` full cycle
-- [ ] `SIGTERM` graceful shutdown
-
-### Manual Checklists
-- [ ] UI color and reverse video consistency
-- [ ] WSL detection warning on native Windows
-- [ ] `config.json` auto-generation on first run
-- [ ] `llama-server` log file persistence
+- **Unit Tests:**
+  - [ ] Test `config.py`'s `load_config()` with missing/malformed files.
+  - [ ] Test `logger.py`'s root logger configuration.
+- **Integration Tests:**
+  - [ ] Verify `main.py`'s startup sequence correctly handles `--version`.
+  - [ ] Verify `LlamaUpdater`'s fast path and fallback logic.
+- **Manual Checklists:**
+  - [ ] Verify `llama-server-manager --version` output.
+  - [ ] Verify `llama-server` restart behavior on install/update.
 
 ## Section 4: Exit Codes
-- `0`: Success (including clean shutdown and cancelled updates).
-- `Non-Zero`: Any failure (installation error, API error, checksum failure, etc.).
+- `0`: Success (Normal exit, version display, update completion).
+- `1`: General Error (Config parsing error, network failure, file I/O error).
+- `2`: Dependency Missing (e.g. `llama-cpp` not found).
+- `3`: User Cancellation (Exiting via `n`/`Esc` in menus/confirmation).
 
 ## Section 5: Security
-- No local secrets stored in `config.json`.
-- Standard input/output handled via `curses` to prevent unauthorized terminal leaks.
-- File paths resolved using `pathlib`.
+- No sensitive credentials (passwords, API keys) are stored in `config.json`.
+- Local file permissions are respected; `config.json` is created in the project directory.
+- The program does not execute arbitrary shell commands except for the managed `llama-server` process.
 
 ## Section 6: Dependencies
-- `requests` (for GitHub API)
-- `curses` (Standard Library)
-- `logging` (Standard Library)
-- `pathlib` (Standard Library)
+- Python 3.12+
+- `requests` (for GitHub API calls)
+- Standard `curses` library (for CLI UI)
+- Standard `logging` library (for program logs)
 
 ## Section 7: Non-Functional Requirements
-- **Cross-platform**: Linux, macOS, Windows (via WSL).
-- **Robustness**: UI must remain stable during long-running downloads/extractions.
-- **Logging**: All UI messages must be mirrored in the program log.
-- **Error Handling**: No silent failures; all exceptions must be caught and reported.
+- **Cross-platform:** Linux, macOS, Windows (WSL).
+- **Reliability:** Proper cleanup of PID files and temporary download archives.
+- **User Experience:** Interactive workflow must remain consistent within the `curses` environment.
+- **Transparency:** Progress bars and status messages must be clear and real-time.

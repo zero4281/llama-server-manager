@@ -1,55 +1,54 @@
 ---
 name: project-plan
-description: Use this skill to reconcile Requirements.md with the implementation codebase and generate/update Plan.md.
-
+description: Use this skill to perform a gap analysis between Requirements.md and the codebase, then generate or update Plan.md.
 ---
 
 # Skill Instructions
-**Constraint:** Do not modify any source code files, configuration files, or files inside `./Tests/`. Only modify `./Plan.md` and `./Update.md`. Use the todowrite tool to track the lifecycle of this planning iteration.
+**Constraint:** Do not modify any source code files, configuration files, or files inside `./Tests/`. Only modify `./Plan.md`. Use the todowrite tool to track the planning lifecycle.
 
-⚠️ **AGENT BOUNDARY** — The orchestrator must NOT parse the codebase file contents or perform document synchronization directly. All file analysis, verification, and text modifications must be delegated to an @general agent.
+⚠️ **AGENT BOUNDARY** — The orchestrator must NOT read codebase files, parse execution logic, or directly modify markdown documents. All technical analysis, comparison loops, and file writing must be delegated to an @general agent.
 
-**EXECUTION POLICY:** Perform tasks strictly in sequence. Do not spawn concurrent agents or proceed to subsequent phases until the current tracking task's output has been completely returned and evaluated.
-
----
-
-## Phase 1 — Verify & Assess Gaps
-
-Use todowrite to create the following verification task and assign it to @general.
-
-> Read `./Requirements.md` and the existing `./Plan.md` (if present). Review the local project structure and source code files to verify exactly what components match the requirements. Identify:
-> 1. Which requirements are fully met, partially met, or entirely unverified.
-> 2. Any structural or functional drift between the actual code files and the current plan.
-> Return a clear, structural summary of findings back to the orchestrator.
-
-**WAIT:** Do not proceed until the verification task is marked complete and the summary is returned.
+**EXECUTION POLICY:** Perform tasks strictly in sequence. Do not spawn concurrent agents or proceed to final file generation until the analysis phase is verified.
 
 ---
 
-## Phase 2 — Generate/Replace Plan
+## Phase 1 — Revision & Gap Analysis
 
-Based on the verified status from Phase 1, use todowrite to create the update task and assign it to @general. 
+Use todowrite to create the following planning analysis task and assign it to @general.
 
-> Read the current version string from the top of `./Requirements.md`. 
-> Create `./Plan.md` if it does not exist. If it does exist, completely overwrite and replace its entire contents to purge all obsolete entries, resolved gaps, and historical violations.
-> Rewrite the file as **Version [Insert Extracted Version String Here]** based *only* on the current outstanding gaps found in Phase 1.
-> Ensure the updated document strictly adheres to the standard layout:
-> - Section 1: Current State Assessment (with a compliance checklist and implementation verification table).
-> - Section 2: Core Engineering Decisions or Filename Consistency.
-> - Section 3: Testing & Verification Status (Unit, Integration, and Manual checklists).
-> - Section 4-7: Architectural specifications (Exit codes, Security, Dependencies, Non-functional requirements).
+> Read `./Requirements.md` as the authoritative functional baseline.
+> 
+> **REVISION HISTORY ANALYSIS:**
+> Parse the **Revision History** table/section at the end of `./Requirements.md`. 
+> 1. Identify the current target version from the latest entry in the Revision History.
+> 2. Read the current version heading in `./Plan.md` (if it exists). 
+> 3. Identify any intermediate or skipped revisions between the baseline version in `Plan.md` and the target version in `Requirements.md` (e.g., jumping from `1.1.0` directly to `1.1.2`, skipping `1.1.1`).
+> 4. Compile a cumulative list of all functional, structural, and architectural changes across all intermediate revisions leading up to the target version.
+>
+> Review all source code files (excluding `./Tests/`) to compare current codebase state against the cumulative requirements of the target revision range.
+> Identify missing requirements, structural drift, unverified functionality, and outdated implementation assumptions.
+> 
+> Return a clear summary of findings, including explicit notes on any multi-revision jump context.
 
-**WAIT:** Do not proceed until `./Plan.md` has been successfully written and verified.
+**WAIT:** Do not proceed until the analysis task is marked complete and verified.
 
 ---
 
-## Phase 3 — Invalidate Downstream Artifacts
+## Phase 2 — Generate/Replace Plan Artifact
 
-To prevent the execution engine from running outdated gap analyses against a fresh plan, use todowrite to create the cleanup task and assign it to @general.
+Based on the verified findings from Phase 1, use todowrite to create the Plan generation task and assign it to @general.
 
-> Check for the existence of `./Update.md`. 
-> If `./Update.md` does not exist, create it. 
-> If it does exist, completely overwrite and replace its contents. 
-> The file must contain only this single line of text:
-> "Update.md is stale — re-run /project-update."
-> This ensures that code updates cannot accidentally be executed against an obsolete plan.
+> Create `./Plan.md` if it does not exist. If it exists, completely overwrite and replace its contents.
+> 
+> Structure `./Plan.md` as follows:
+> - **Header Tag:** `**Version [Target Version]**`
+> - **Revision Jump Context (If applicable):** If intermediate revisions were jumped (e.g., `1.1.0` $\rightarrow$ `1.1.2`), include a sub-section explicitly listing all intermediate versions processed during this planning cycle and their primary changes.
+> - **Section 1: Current State Assessment** (Verification table and structural/functional drift breakdown).
+> - **Section 2: Core Engineering Decisions or Filename Consistency** (Architectural alignment for all target changes).
+> - **Section 3: Testing & Verification Status** (Unit, Integration, and Manual Checklists).
+> - **Section 4: Exit Codes**
+> - **Section 5: Security**
+> - **Section 6: Dependencies**
+> - **Section 7: Non-Functional Requirements**
+
+**WAIT:** Do not consider this skill execution complete until `./Plan.md` has been successfully written and verified.
