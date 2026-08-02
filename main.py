@@ -8,6 +8,8 @@ This is the central CLI tool that orchestrates all operations:
 - Running llama-server with configured options
 """
 
+__version__ = "1.1.2"
+
 import logging
 import argparse
 import os
@@ -63,10 +65,10 @@ class Main:
         parser.add_argument("--stop-server", action="store_true",
                               help="Gracefully stop a running llama-server")
 
-        # Pass-through arguments for llama-server
-        parser.add_argument("llama_args", nargs="*",
-                              help="Additional arguments passed to llama-server")
-
+        # Version flag
+        parser.add_argument("--version", action="store_true",
+                            help="Print the version and exit")
+        
         return parser.parse_args(args)
 
     def load_config(self) -> dict:
@@ -205,7 +207,7 @@ class Main:
                             shutil.rmtree(backup_dir)
                         self.ui.render_success("Self-update complete!")
                         self.ui._cleanup_terminal()
-                        os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve())] + [arg for arg in sys.argv[1:] if arg != '--self-update'])
+                        sys.exit(0)
                     else:
                         self.ui.render_error("Could not find top-level directory in extraction.")
             except Exception as e:
@@ -222,26 +224,32 @@ class Main:
 
     def run(self) -> None:
         """Main execution flow."""
-        # Parse arguments
+        # 1. Parse arguments
         self.args = self.parse_args()
         
-        # Load config (auto-generate if missing)
+        # 2. If --version: instantiate UIManager, print version, exit
+        if self.args.version:
+            self.ui = UIManager("Llama Server Manager")
+            self.ui.print_message(f"llama-server-manager version {__version__}")
+            sys.exit(0)
+        
+        # 3. Call load_config() to obtain the configuration dict.
         self.config = self.load_config()
         
+        # 4. Instantiate LoggerSetup using the loaded configuration.
         LoggerSetup(self.config).setup()
         
-        # Instantiate UI
-        self.ui = UIManager("Llama Server Manager")
-
-        # Runner instance
-        runner = Runner(self.args, self.config, self.ui)
-
-        # Handle special operations
+        # Ensure UI is initialized for remaining paths
+        if not self.ui:
+            self.ui = UIManager("Llama Server Manager")
+            
+        # 5. If --self-update: perform the self-update and exit.
         if self.args.self_update:
             self.ui.print_message("\n[Self-Update Mode]\n")
             self.perform_self_update(self.args)
             return
-
+        
+        # 6. If --install-llama or --update-llama: instantiate LlamaUpdater and call the appropriate method, then exit.
         if self.args.install_llama:
             self.ui.print_message("\n[Install llama.cpp]\n")
             try:
@@ -250,16 +258,16 @@ class Main:
                 raise
             except Exception as e:
                 from llama_updater import (RateLimitError, GitHubAPIError,
-                                           DownloadError, ExtractionError,
-                                           PlatformNotFoundError, LlamaUpdaterError)
+                                          DownloadError, ExtractionError,
+                                          PlatformNotFoundError, LlamaUpdaterError)
                 if isinstance(e, (RateLimitError, GitHubAPIError,
-                                   DownloadError, ExtractionError,
-                                   PlatformNotFoundError, LlamaUpdaterError)):
+                                    DownloadError, ExtractionError,
+                                    PlatformNotFoundError, LlamaUpdaterError)):
                     raise
                 self.ui.render_error(f"Error: {e}")
                 sys.exit(1)
             return
-
+            
         if self.args.update_llama:
             self.ui.print_message("\n[Update llama.cpp]\n")
             try:
@@ -268,31 +276,33 @@ class Main:
                 raise
             except Exception as e:
                 from llama_updater import (RateLimitError, GitHubAPIError,
-                                           DownloadError, ExtractionError,
-                                           PlatformNotFoundError, LlamaUpdaterError)
+                                          DownloadError, ExtractionError,
+                                          PlatformNotFoundError, LlamaUpdaterError)
                 if isinstance(e, (RateLimitError, GitHubAPIError,
-                                   DownloadError, ExtractionError,
-                                   PlatformNotFoundError, LlamaUpdaterError)):
+                                    DownloadError, ExtractionError,
+                                    PlatformNotFoundError, LlamaUpdaterError)):
                     raise
                 self.ui.render_error(f"Error: {e}")
                 sys.exit(1)
             return
 
+        # 7. If --stop-server: signal runner.py to stop and exit.
         if self.args.stop_server:
             self.ui.print_message("\n[Stop Server Mode]\n")
+            runner = Runner(self.args, self.config, self.ui)
             exit_code = runner.stop_server()
             sys.exit(exit_code)
 
-        # Default: Run llama-server
+        # 8. Otherwise:
         self.ui.print_message("\n[Run llama-server]\n")
-
-        # Check if llama-cpp is installed
         llama_cpp_path = Path.cwd() / "llama-cpp" / "llama-server"
         if not llama_cpp_path.exists():
-            self.ui.render_error("Error: llama-cpp is not installed. Please run with --install-llama first.\n"
+            self.ui.print_message("Error: llama-cpp is not installed. Please run with --install-llama first.\n"
                                    "Usage: ./llama-server-manager --install-llama")
             sys.exit(1)
-
+            
+        # Instantiate Runner and call runner.run()
+        runner = Runner(self.args, self.config, self.ui)
         runner.run()
 
 if __name__ == "__main__":

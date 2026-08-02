@@ -1,7 +1,7 @@
 # Llama Server Manager — Software Requirements Document
 
-**Version:** 1.1.0  
-**Date:** July 2026  
+**Version:** 1.1.2  
+**Date:** August 2026  
 **Repository:** https://github.com/zero4281/llama-server-manager
 
 ---
@@ -160,7 +160,8 @@ This section's schema is implemented by the dedicated logging module described i
 - All logic must be encapsulated in a class within an appropriate namespace (e.g. `llama_server_manager.Main`).
 - The `if __name__ == '__main__'` block must only instantiate the class and call its `run` method.
 - All interactive output (menus, prompts, progress, confirmations) must be delegated to `UIManager` from `ui_manager.py`.
-- **The entire interactive workflow must remain within the curses environment.** Once `UIManager` initialises the curses session, no output may be written to stdout or stderr directly. Every menu, prompt, confirmation dialog, progress update, success message, and error message must be rendered through `UIManager` without exception. Plain-text output to the terminal is only permitted for messages emitted *before* `UIManager` is constructed (e.g. the WSL detection warning in Section 5.1.1, which is explicitly printed to stderr before curses initialisation, and the Bash-level venv check in Section 4.2, which never enters the Python process at all). Diagnostic output written via the standard library `logging` module (Section 7) is exempt from this restriction: it is always directed to a log file, never to stdout or stderr, so it cannot interfere with the curses display no matter when it is emitted.
+- **The entire interactive workflow must remain within the curses environment.** Once `UIManager` initialises the curses session, no output may be written to stdout or stderr directly. Every menu, prompt, confirmation dialog, progress update, and message must be rendered through `UIManager` without exception: menus, confirmation prompts, and the progress bar use their respective bordered windows (Sections 10.3–10.5), while standalone success, warning, and error messages use `UIManager`'s `print_message` method (Section 10.8) rather than a bordered window. Plain-text output to the terminal is only permitted for messages emitted *before* `UIManager` is constructed (e.g. the WSL detection warning in Section 5.1.1, which is explicitly printed to stderr before curses initialisation, and the Bash-level venv check in Section 4.2, which never enters the Python process at all). Diagnostic output written via the standard library `logging` module (Section 7) is exempt from this restriction: it is always directed to a log file, never to stdout or stderr, so it cannot interfere with the curses display no matter when it is emitted.
+- `main.py` must define a single module-level `__version__` string constant. This is the sole source of truth for `--version` (Section 5.2.1) and must be manually kept in sync with this document's own version number (title page and Revision History) on every release — the two values are always identical.
 
 ### 5.1.1 WSL detection
 
@@ -177,11 +178,21 @@ This section's schema is implemented by the dedicated logging module described i
 | Argument | Type | Description |
 |---|---|---|
 | `--self-update` | Flag | Update the program's own scripts from the project GitHub repository. Prompts the user to choose between the latest release, a previous release, or the repository `main` branch HEAD before proceeding. |
-| `--install-llama` | Flag | Download and install the newest release of llama.cpp. Delegates to `LlamaUpdater` in `llama_updater.py`. |
-| `--update-llama` | Flag | Update to the latest llama.cpp release. If `options.llama-cpp.os-architecture` and `options.llama-cpp.backend` (Section 3.1.1) are both present in `config.json`, downloads automatically with no menu interaction (fast path, Section 8.7). If either is missing, falls back to running the full interactive `--install-llama` workflow instead (Section 8.7). Delegates to `LlamaUpdater`. |
+| `--version` | Flag | Display the program's version and exit (Section 5.2.1). Takes priority over every other argument. |
+| `--install-llama` | Flag | Download and install the newest release of llama.cpp. Delegates to `LlamaUpdater` in `llama_updater.py`. If `llama-server` was already running, it is restarted after a successful install (Section 8.5.1). |
+| `--update-llama` | Flag | Update to the latest llama.cpp release. If `options.llama-cpp.os-architecture` and `options.llama-cpp.backend` (Section 3.1.1) are both present in `config.json`, downloads automatically with no menu interaction (fast path, Section 8.7). If either is missing, falls back to running the full interactive `--install-llama` workflow instead (Section 8.7). Delegates to `LlamaUpdater`. If `llama-server` was already running, it is restarted after a successful update (Section 8.5.1). |
 | `--stop-server` | Flag | Signal `runner.py` to gracefully stop a running `llama-server` process. |
 | `--log-file` | String | Path for llama-server output log. Overrides the `log-file` value in `config.json`. Defaults to `llama-server.log` in the project folder if not set in either place. |
-| `<llama args>` | Pass-through | Any other arguments are collected and forwarded verbatim to `llama-server` via `runner.py`. |
+
+### 5.2.1 Version display (`--version`)
+
+- If `--version` is present anywhere among the parsed arguments, it takes priority over every other flag; all other arguments are ignored, including `--self-update`.
+- Displaying the version must not print directly to stdout/stderr. `main.py` instantiates `UIManager` and calls `print_message` (Section 10.8, `level="info"`) with the `__version__` constant (Section 5.1) — this is a standalone message, not a menu or confirmation, so it is **not** rendered in a bordered window. Example output:
+  ```
+  llama-server-manager version 1.1.2
+  ```
+- After the message is printed, exit with status code `0`.
+- `--version` does not require `config.json` to be loaded, the logger to be configured, or the `./llama-cpp` directory to exist; it is handled immediately after argument parsing, before Section 5.4 steps 3 onward.
 
 ### 5.3 Self-update behaviour (`--self-update`)
 
@@ -234,26 +245,25 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 
 - Download the selected archive or branch ZIP to a temporary location.
 - Replace local project files with the downloaded versions.
-- After a successful update, restart `main.py` with the same arguments that were originally passed.
+- After a successful update, display a success message via `UIManager` and exit with status code `0`. `main.py` is **not** restarted; the user must invoke the program again to run the updated scripts.
 - If the download or file replacement fails, display an error via `UIManager` and exit with a non-zero status code. Local files must not be left in a partially modified state; restore originals if replacement has already begun.
 
 ### 5.4 Startup sequence
 
 1. Parse CLI arguments.
-2. Call `load_config()` from `config.py` (Section 6) to obtain the configuration dict; a default `config.json` is auto-generated first if the file is missing (Section 6.3).
-3. Instantiate `LoggerSetup` and configure the root logger from the `logging` section of the loaded configuration (Section 7). This must complete before `LlamaUpdater`, `Runner`, or `UIManager` are instantiated.
-4. If `--self-update`: perform update and restart; all other arguments are ignored.
-5. If `--install-llama` or `--update-llama`: instantiate `LlamaUpdater` and call the appropriate method; exit on completion.
-6. If `--stop-server`: signal `runner.py` to stop `llama-server`; exit on completion.
-7. Otherwise: check whether the `./llama-cpp` directory exists.
-   - If it **does not exist**, display the following error via `UIManager` (bordered curses window) and exit with a non-zero status code:
+2. If `--version`: instantiate `UIManager`, print the version message (Section 5.2.1), and exit with status code `0`. All other arguments are ignored.
+3. Call `load_config()` from `config.py` (Section 6) to obtain the configuration dict; a default `config.json` is auto-generated first if the file is missing (Section 6.3).
+4. Instantiate `LoggerSetup` and configure the root logger from the `logging` section of the loaded configuration (Section 7). This must complete before `LlamaUpdater`, `Runner`, or `UIManager` are instantiated.
+5. If `--self-update`: perform update; exit on completion. All other arguments are ignored.
+6. If `--install-llama` or `--update-llama`: instantiate `LlamaUpdater` and call the appropriate method; exit on completion.
+7. If `--stop-server`: signal `runner.py` to stop `llama-server`; exit on completion.
+8. Otherwise: check whether the `./llama-cpp` directory exists.
+   - If it **does not exist**, display the following error via `UIManager`'s `print_message` (Section 10.8, `level="error"`) — plain text, not a bordered window — and exit with a non-zero status code:
 ```
-┌────────────────────────────────────────────────┐
-│ llama-cpp not found. Please install it first:  │
-│   llama-server-manager --install-llama         │
-└────────────────────────────────────────────────┘
+llama-cpp not found. Please install it first:
+  llama-server-manager --install-llama
 ```
-   - If it **exists**, pass the loaded configuration dict and merged pass-through args to `Runner`.
+   - If it **exists**, pass the loaded configuration dict to `Runner`.
 
 ---
 
@@ -498,7 +508,21 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 - If a `./llama-cpp/` folder already exists, delete it entirely before extraction without prompting or creating a backup.
 - Ensure `llama-server` (or `llama-server.exe` on Windows) is executable after extraction.
 - Remove the downloaded archive file after successful extraction.
-- After a successful install, display a success message via `UIManager` and run a quick sanity check by executing `llama-server --version` and displaying its output through `UIManager`. If the sanity check fails, display a warning via `UIManager` but still exit with status code `0` (the binaries were installed; the version check is informational).
+- After a successful install, display a success message via `UIManager` and run a quick sanity check by executing `llama-server --version` and displaying its output through `UIManager`.
+  - If the sanity check **passes**, proceed to Section 8.5.1 to restart `llama-server` if it was already running.
+  - If the sanity check **fails**, display a warning via `UIManager`, stop any already-running `llama-server` instance per Section 8.5.1 (without starting a new one), and still exit with status code `0` (the binaries were installed; the version check is informational).
+
+#### 8.5.1 Restarting `llama-server`
+
+This applies after every successful download/extraction reached via `--install-llama` or `--update-llama` — including both the `--update-llama` fast path (Section 8.7, item 1) and its interactive fallback (Section 8.7, item 2), since both reach this point via Section 8.5.
+
+- Check whether `llama-server.pid` (Section 9.3) exists in the project directory.
+  - If it does not exist, no instance was running before the install/update; do nothing further.
+  - If it exists, read the recorded PID and verify that it currently corresponds to a running `llama-server` process (not just that the file is present — the file may be stale, e.g. left over from a crash). If the PID does not correspond to a live `llama-server` process, delete the stale PID file and do nothing further.
+- If the PID corresponds to a live `llama-server` process:
+  - Stop it using `Runner`'s existing graceful shutdown logic (Section 9.5), called in-process — do not duplicate that logic here and do not shell out to `--stop-server`.
+  - If the sanity check (Section 8.5) passed, start a new `llama-server` instance using `Runner`'s existing process execution logic (Section 9.3), called in-process. The new instance's launch arguments must be re-derived from `config.json` by calling `load_config()` (Section 6) fresh; no CLI pass-through arguments are used (Section 5.2 defines no such mechanism).
+  - If the sanity check failed, do not start a new instance; instead display a message via `UIManager` explaining that the previously running `llama-server` instance was stopped because the newly installed binary failed its sanity check.
 
 ### 8.6 Error handling
 
@@ -517,7 +541,7 @@ When `main.py` dispatches `--update-llama` (Section 5.2, Section 5.4 step 5), `L
    - Skip Section 8.3.4 (Confirmation screen) — once the archive filename is reconstructed (Section 8.3.0) and the matching asset located, proceed directly to download.
    - No `UIManager` menu or confirmation prompt is shown at any point during selection. `UIManager` is still used for the download progress bar (Section 8.5, Section 10.5) and for the final success/warning/error message (Section 8.5, Section 10.7).
    - If no asset in the latest release matches the reconstructed filename (e.g. the saved OS/Architecture/Backend combination is no longer published for the newest release), display an error via `UIManager` stating that the saved selection could not be matched, and exit with a non-zero status code. Do **not** silently fall back to the interactive workflow in this case — the missing-options fallback in item 2 below applies only when the keys are absent from `config.json`, not when they fail to match.
-   - After a successful download and extraction, re-save `options.llama-cpp.os-architecture` and `options.llama-cpp.backend` per Section 8.3.5 (the values are unchanged, but this keeps the write path uniform for both flags).
+   - The fast path never writes to `config.json`: `options.llama-cpp.os-architecture` and `options.llama-cpp.backend` are read but not re-saved, since they are already correct and unchanged. Only the four-screen workflow (Section 8.3.5) writes these keys — that is, `--install-llama` run directly, or the `--update-llama` fallback in item 2 below.
 2. **Fallback — saved options absent or incomplete.** If either `options.llama-cpp.os-architecture` or `options.llama-cpp.backend` is missing from `config.json` (e.g. `config.json` was auto-generated from `DEFAULT_CONFIG` and llama.cpp has never been installed via this program), `LlamaUpdater` must run the identical interactive workflow used by `--install-llama` (Sections 8.3.1–8.3.5) instead — all four menu screens, including the Confirmation screen. In effect, `--update-llama` behaves exactly like `--install-llama` for the remainder of the run in this case.
 
 ---
@@ -535,8 +559,7 @@ When `main.py` dispatches `--update-llama` (Section 5.2, Section 5.4 step 5), `L
 ### 9.2 Configuration loading
 
 - Receive the already-loaded configuration dict from `main.py` (obtained via `config.py`'s `load_config()`, Section 6); `Runner` must not read `config.json` directly.
-- Extract key-value pairs from the `llama-server.options` section and convert them to CLI arguments for `llama-server`.
-- Merge any pass-through arguments received from `main.py`, with CLI arguments taking precedence over `config.json` values on conflict.
+- Extract key-value pairs from the `llama-server.options` section and convert them to CLI arguments for `llama-server`. The program accepts no CLI pass-through arguments for `llama-server` (Section 5.2); `config.json` is the sole source of these launch arguments.
 
 ### 9.3 Process execution
 
@@ -622,6 +645,13 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 - Whether a given message is actually persisted depends on the `enabled` and `level` settings configured for the process (Section 3.2, Section 7.3). For example, an informational success message logged at `INFO` will not appear in the log file if `level` is set to `WARNING` or `ERROR`.
 - This dual output (curses display + log record) is independent of, and does not replace, the separate `llama-server` output log described in Section 9.4.
 
+### 10.8 Plain messages (`print_message`)
+
+- For any output that is purely informational and does not require a menu (Section 10.3), confirmation prompt (Section 10.4), or progress bar (Section 10.5) — success messages, warnings, and errors — `UIManager` exposes a `print_message(text, level)` method. It writes the text as plain, unbordered lines within the active curses session; it is **not** a bordered window, and it never falls back to a direct stdout/stderr `print()` call.
+- `level` is one of `info`, `warning`, `error`, matching Section 10.7's logging integration — the same call also emits the corresponding log record at a matching level.
+- `print_message` is the correct rendering path for standalone messages such as: the `--version` output (Section 5.2.1), the `./llama-cpp` not-found error (Section 5.4), self-update success/failure messages (Section 5.3.3), and install/update success/warning/error messages (Sections 8.5, 8.5.1, 8.6, 8.7). Anywhere this document says a message is "displayed via `UIManager`" without describing a menu, confirmation prompt, or progress bar, `print_message` is the method used.
+- `print_message` is distinct from the bordered constructs in Sections 10.3–10.5, which remain bordered `curses` windows because they require structured layout or direct user interaction (selection, confirmation, or a live-updating bar). A message rendered via `print_message` is never bordered, even when it is emitted immediately after a bordered menu or confirmation window closes.
+
 ---
 
 ## 11. Non-Functional Requirements
@@ -667,6 +697,8 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
+| 1.1.2 | August 2026 | zero4281 | Added `--version` flag (new §5.2.1): prints the program's version via `UIManager`'s `print_message` (new §10.8) and exits, taking priority over all other arguments. Added a `main.py`-level `__version__` constant (§5.1) as the single source of truth, required to be kept manually in sync with this document's own version number on every release. Updated §5.4 startup sequence to check `--version` immediately after argument parsing, before `config.json` is loaded or the logger is configured. Added new §10.8 defining `print_message` as the correct rendering path for standalone success/warning/error messages, as distinct from the bordered windows used for menus, confirmation prompts, and the progress bar (§10.3–§10.5); clarified §5.1 accordingly. Fixed the §5.4 `llama-cpp` not-found error, which had incorrectly specified a bordered curses window (an artifact of the pre-`print_message` version of this spec) — it now uses `print_message` with plain, unbordered text. |
+| 1.1.1 | August 2026 | zero4281 | Removed the CLI pass-through mechanism (`<llama args>`, old §5.2); `Runner` now derives all `llama-server` launch arguments solely from `config.json` (§9.2). Removed the incorrect `main.py` self-restart behaviour from §5.3.3/§5.4 step 4 — `--self-update` now exits after a successful update instead of relaunching itself. Removed the fast-path config re-save from §8.7 item 1; only the four-screen workflow (§8.3.5) — i.e. `--install-llama` run directly, or the `--update-llama` fallback — writes `options.llama-cpp.os-architecture`/`backend`, since the fast path's saved values are already correct and unchanged. Added new §8.5.1 defining `llama-server` restart behaviour: after a successful `--install-llama` or `--update-llama` (both fast path and fallback), if `llama-server.pid` exists and corresponds to a live `llama-server` process, `LlamaUpdater` stops and restarts it in-process by calling `Runner`'s existing shutdown (§9.5) and launch (§9.3) logic directly, rather than duplicating that logic or shelling out to `--stop-server`; if the post-install sanity check fails, the running instance is stopped but not restarted, with a message displayed via `UIManager`. |
 | 1.1.0 | July 2026 | zero4281 | Added persistence of the Operating System & Architecture (§8.3.2) and Compute Backend (§8.3.3) selections to `config.json` under the new `options.llama-cpp` key (new §3.1.1), written automatically by `LlamaUpdater` after every successful install/update (new §8.3.5). Added §8.7 defining the `--update-llama` fast path: when both saved values are present, all four selection screens (§8.3.1–§8.3.4) are skipped and the newest release is downloaded automatically with the saved OS/Architecture/Backend and no `UIManager` prompts; when either value is missing, `--update-llama` falls back to running the identical interactive workflow as `--install-llama`. Updated the `config.json` example and the `--update-llama` row in §5.2 accordingly. |
 | 1.0.9 | July 2026 | zero4281 | Added a dedicated Configuration Module (`config.py`, new §6) to clarify where config.json load/create/default-fallback logic lives, matching the module's `load_config()`/`DEFAULT_CONFIG` implementation. Clarified in §3 that `config.py` is the sole reader/writer of `config.json`. Updated §5.4 (Startup sequence) and §9.2 (Runner) so that `main.py` calls `load_config()` and passes the resulting dict to `Runner` rather than each module reading `config.json` independently. Renumbered former §6–§11 to §7–§12 accordingly. |
 | 1.0.8 | July 2026 | zero4281 | Restructured the llama.cpp install/update flow (§7.3) into four distinct screens with per-screen titles: Release selection (§7.3.1), Operating System & Architecture selection (§7.3.2, replacing the old direct zip/asset picker), Compute Backend selection (§7.3.3, new), and a final Confirmation screen (§7.3.4) showing the resolved archive filename. Added §7.3.0 documenting the `[Project]-[Build/Tag]-[Type]-[OS]-[Backend]-[Architecture].[Ext]` naming template used to parse assets and reconstruct the final filename. Clarified in §7.4 that auto-detection applies only to OS/Architecture, not Compute Backend. Updated §9.3 to require menu titles to be supplied per-call and reflect the current screen's content rather than being reused across menus. |
