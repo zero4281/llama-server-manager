@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from runner import Runner
+from config import load_config, save_config
 
 import logging
 logger = logging.getLogger(__name__)
@@ -937,6 +938,13 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     except Exception as e:
         archive_path.unlink(missing_ok=True)
         raise e
+
+def delete_existing_installation() -> None:
+    """
+    Deletes the existing llama-cpp installation directory.
+    """
+    if LLAMA_CPP_DIR.exists():
+        shutil.rmtree(LLAMA_CPP_DIR, ignore_errors=True)
 
 def _install_release_core(release: dict, release_tag: str, platform: str, arch: str, backend: str, ui_manager: Optional["UIManager"] = None, skip_confirmation: bool = False) -> None:
     """
