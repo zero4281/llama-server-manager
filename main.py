@@ -230,7 +230,7 @@ class Main:
         # 2. If --version: instantiate UIManager, print version, exit
         if self.args.version:
             self.ui = UIManager("Llama Server Manager")
-            self.ui.print_message(f"llama-server-manager version {__version__}")
+            self.ui.print_message(f"llama-server-manager version {__version__}", level="info")
             sys.exit(0)
         
         # 3. Call load_config() to obtain the configuration dict.
@@ -239,7 +239,7 @@ class Main:
         # 4. Instantiate LoggerSetup using the loaded configuration.
         LoggerSetup(self.config).setup()
         
-        # Ensure UI is initialized for remaining paths
+        # Instantiate UI for the rest of the paths (after LoggerSetup)
         if not self.ui:
             self.ui = UIManager("Llama Server Manager")
             
@@ -249,7 +249,7 @@ class Main:
             self.perform_self_update(self.args)
             return
         
-        # 6. If --install-llama or --update-llama: instantiate LlamaUpdater and call the appropriate method, then exit.
+        # 6. If --install-llama or --update-llama: instantiate LlamaUpdater and call the appropriate method; exit on completion.
         if self.args.install_llama:
             self.ui.print_message("\n[Install llama.cpp]\n")
             try:
@@ -285,25 +285,25 @@ class Main:
                 self.ui.render_error(f"Error: {e}")
                 sys.exit(1)
             return
-
-        # 7. If --stop-server: signal runner.py to stop and exit.
+            
+        # 7. Otherwise:
         if self.args.stop_server:
             self.ui.print_message("\n[Stop Server Mode]\n")
             runner = Runner(self.args, self.config, self.ui)
             exit_code = runner.stop_server()
             sys.exit(exit_code)
-
-        # 8. Otherwise:
+            
         self.ui.print_message("\n[Run llama-server]\n")
-        llama_cpp_path = Path.cwd() / "llama-cpp" / "llama-server"
-        if not llama_cpp_path.exists():
-            self.ui.print_message("Error: llama-cpp is not installed. Please run with --install-llama first.\n"
-                                   "Usage: ./llama-server-manager --install-llama")
+        llama_cpp_dir = Path.cwd() / "llama-cpp"
+        if not llama_cpp_dir.exists():
+            self.ui.print_message("Error: llama-cpp not found. Please install it first:\n"
+                                   "   ./llama-server-manager --install-llama")
             sys.exit(1)
             
         # Instantiate Runner and call runner.run()
         runner = Runner(self.args, self.config, self.ui)
         runner.run()
+
 
 if __name__ == "__main__":
     app = Main()

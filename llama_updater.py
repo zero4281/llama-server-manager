@@ -645,90 +645,91 @@ def ensure_executable(path: Path) -> None:
         except OSError:
             pass  # Ignore permission errors
 
-    def verify_installation(ui_manager: Optional["UIManager"] = None) -> bool:
-        """
-        Run post-install sanity check (llama-server --version).
+def verify_installation(ui_manager: Optional["UIManager"] = None) -> bool:
+    """
+    Run post-install sanity check (llama-server --version).
+    
+    Executes llama-server --version and displays output.
+    If check fails, displays a warning but exits with code 0.
+    
+    Returns:
+        bool: True if sanity check passed, False otherwise.
+    """
+    from ui_manager import UIManager
+    ui = ui_manager if ui_manager is not None else UIManager("Verify Installation")
+    
+    llama_server = LLAMA_CPP_DIR / "llama-server"
+    
+    if not llama_server.exists():
+        ui.print_message("Warning: Could not find llama-server executable for verification")
+        return False
+    
+    try:
+        result = subprocess.run(
+            [str(llama_server), "--version"],
+            stdout=subprocess.PIPE,          
+            stderr=subprocess.STDOUT,        
+            text=True,                       
+            timeout=10                       
+        )
         
-        Executes llama-server --version and displays output.
-        If check fails, displays a warning but exits with code 0.
-        
-        Returns:
-            bool: True if sanity check passed, False otherwise.
-        """
-        from ui_manager import UIManager
-        ui = ui_manager if ui_manager is not None else UIManager("Verify Installation")
-        
-        llama_server = LLAMA_CPP_DIR / "llama-server"
-        
-        if not llama_server.exists():
-            ui.print_message("Warning: Could not find llama-server executable for verification")
-            return False
-        
-        try:
-            result = subprocess.run(
-                [str(llama_server), "--version"],
-                stdout=subprocess.PIPE,          
-                stderr=subprocess.STDOUT,        
-                text=True,                       
-                timeout=10                       
-            )
-            
-            if result.returncode == 0:
-                import re                                                          
-                match = re.search(r'version:\s*(.+)$', result.stdout, re.MULTILINE)
-                if match:
-                    version_output = match.group(1).strip()
-                    ui.print_message(f"llama-server version: {version_output}\n")
-                else:
-                    ui.print_message(f"llama-server version: {result.stdout.strip()}")
-                return True
+        if result.returncode == 0:
+            import re                                                          
+            match = re.search(r'version:\s*(.+)$', result.stdout, re.MULTILINE)
+            if match:
+                version_output = match.group(1).strip()
+                ui.print_message(f"llama-server version: {version_output}\n")
             else:
-                ui.render_error(f"Warning: llama-server --version returned exit code {result.returncode}\nOutput: {result.stderr[:200]}")
-                return False
-        except subprocess.TimeoutExpired:
-            ui.render_error("\nWarning: llama-server --version timed out")
+                ui.print_message(f"llama-server version: {result.stdout.strip()}")
+            return True
+        else:
+            ui.render_error(f"Warning: llama-server --version returned exit code {result.returncode}\nOutput: {result.stderr[:200]}")
             return False
-        except Exception as e:
-            ui.render_error(f"\nWarning: Could not verify llama-server version: {e}")
-            return False
+    except subprocess.TimeoutExpired:
+        ui.render_error("\nWarning: llama-server --version timed out")
+        return False
+    except Exception as e:
+        ui.render_error(f"\nWarning: Could not verify llama-server version: {e}")
+        return False
 
-
-def _restart_llama_server(ui_manager: Optional["UIManager"], args: argparse.Namespace = None) -> None:
+def ensure_executable(path: Path) -> None:
     """
-    Restart llama-server if it is already running.
+    Make file executable on Unix systems.
     """
-    if args is None:
-        return
+    if sys.platform != 'win32':
+        try:
+            os.chmod(path, 0o755)
+        except OSError:
+            pass  # Ignore permission errors
 
-    config = load_config()
+
+def _restart_llama_server(ui_manager, args, is_verified=True):
     pid_file = Path.cwd() / "llama-server.pid"
-
     if not pid_file.exists():
         return
-
+    
     try:
-        with open(pid_file, "r") as f:
-            pid = int(f.read().strip())
+        pid = int(pid_file.read_text().strip())
     except (ValueError, OSError):
-        # If we can't read the PID, it's likely stale
         pid_file.unlink(missing_ok=True)
         return
-
-    # Verify if process is live
+    
     try:
         os.kill(pid, 0)
     except OSError:
-        # Process is not live, delete stale PID file
         pid_file.unlink(missing_ok=True)
         return
-
-    # Process is live, stop it
-    runner = Runner(args, config, ui_manager)
+    
+    runner = Runner(args, load_config(), ui_manager)
     runner.stop_server()
+    
+    if is_verified:
+        runner = Runner(argparse.Namespace(), load_config(), ui_manager)
+        runner.run()
+    else:
+        ui_manager.print_message("The previously running llama-server instance was stopped because the new binary failed its sanity check.")
 
-    # If sanity check passed, start new instance
-    # This is handled by the caller passing the result of verify_installation
-    pass
+
 
 
 def install_release(release: dict, release_tag: str, ui_manager: Optional["UIManager"] = None) -> None:
