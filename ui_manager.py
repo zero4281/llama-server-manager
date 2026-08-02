@@ -358,8 +358,18 @@ class UIManager:
             logger.warning("Window refresh failed, likely invalid")
             return False
 
-    def print_message(self, text: str, y: int = 1, x: int = 1):
-        """Print message at specific position with color."""
+    def print_message(self, text: str, level: str = "info", y: int = 1, x: int = 1):
+        """Print message at specific position with color and log it."""
+        level_map = {
+            "debug": logging.DEBUG,
+            "info": logging.INFO,
+            "warning": logging.WARNING,
+            "error": logging.ERROR,
+            "critical": logging.CRITICAL
+        }
+        log_level = level_map.get(level.lower(), logging.INFO)
+        logger.log(log_level, text)
+
         if not self._using_curses:
             print(text)
             return

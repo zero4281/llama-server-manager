@@ -78,9 +78,7 @@ class Runner:
         Returns:
             Merged list of arguments
         """
-        # Get pass-through args from main
-        llama_args = getattr(self.args, 'llama_args', [])
-        return config_args + llama_args
+        return config_args
 
     def _build_command(self, merged_args: list) -> list:
         """
