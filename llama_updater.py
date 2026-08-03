@@ -846,6 +846,9 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
     
     logger.debug(f"User confirmed installation of {release_tag} - {asset_name}")
     
+    # Delete existing installation first
+    delete_existing_installation()
+
     # Download
     ui.print_message(f"\nDownloading {asset_name}...")
     archive_path = Path(tempfile.gettempdir()) / f"{asset_name}"

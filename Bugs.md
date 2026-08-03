@@ -19,5 +19,25 @@ When running `./llama-server-manager --update-llama`, the application crashes du
 - `llama_updater.py` (`LlamaUpdater.update` method)
 
 **Resolution:** Added missing imports for load_config and save_config in llama_updater.py, and implemented the delete_existing_installation helper to resolve a secondary NameError found during verification.
+
+### Bug Report
+**Title:** `install_release` fails when `./llama-cpp` directory is not cleaned before extraction
+**Status:** ✅ **COMPLETED**
+**Severity/Priority:** High
+**Dependencies:** `llama_updater.py` (`install_release` function)
+**Description:** 
+When running `./llama-server-manager --install-llama`, the installation fails if the `./llama-cpp` directory already exists and contains a subdirectory with the same name as the archive being extracted. This occurs because `install_release` does not call `delete_existing_installation()`, unlike the fast-path logic in `_install_release_core`.
+
+**Resolution:** Added `delete_existing_installation()` to the `install_release` function in `llama_updater.py` to ensure the directory is cleared before extraction.
+
+**Verified Reproduction Workflow:**
+1. Ensure the `./llama-cpp` directory exists in the project root.
+2. Create a subdirectory within `./llama-cpp` that matches the expected name of the release's extracted content (e.g., `mkdir ./llama-cpp/llama-b10235`).
+3. Run `./llama-server-manager --install-llama`.
+4. Observe the application exit with `shutil.Error: Destination path '...' already exists` during the extraction phase.
+
+## Project Roadmap
+- [ ] Fix `NameError` in `llama_updater.py` (High Priority)
+- [ ] Fix `install_release` failure when `./llama-cpp` is not cleaned (High Priority)`,oldString:
 ## Project Roadmap
 - [ ] Fix `NameError` in `llama_updater.py` (High Priority)
