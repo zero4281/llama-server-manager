@@ -36,8 +36,25 @@ When running `./llama-server-manager --install-llama`, the installation fails if
 3. Run `./llama-server-manager --install-llama`.
 4. Observe the application exit with `shutil.Error: Destination path '...' already exists` during the extraction phase.
 
+### Bug Report
+**Title:** `--update-llama` fails to restart `llama-server` after successful update
+**Status:** ✅ **COMPLETED**
+**Severity/Priority:** High
+**Dependencies:** `llama_updater.py`
+**Description:**
+When running `./llama-server-manager --update-llama`, the application successfully completes the update of the `llama-cpp` binaries but fails to restart the already-running `llama-server` instance. The `llama-server.pid` file remains unchanged, and the old process is either left running or is stopped without being replaced by a new instance. Analysis of `llama_updater.py` reveals that while a `_restart_llama_server` function is defined, it is never actually invoked by the `install_release` or `_install_release_core` workflows.
+
+**Verified Reproduction Workflow:**
+1. Start `llama-server` using the manager or manually, ensuring `llama-server.pid` is created and the process is running.
+2. Run `./llama-server-manager --update-llama`.
+3. Observe that after the update completes, the `llama-server` process is not restarted (the PID remains the same or no new process is spawned).
+
+**Affected Components:**
+- `llama_updater.py` (`install_release` and `_install_release_core` functions)
+
+**Resolution:** Fixed the restart logic in `llama_updater.py` by ensuring `_restart_llama_server` is called when a `llama-server.pid` file exists. Also fixed indentation errors in `llama_updater.py` to resolve syntax issues. Verified the fix with both manual dynamic testing and automated regression tests.
+
 ## Project Roadmap
 - [ ] Fix `NameError` in `llama_updater.py` (High Priority)
-- [ ] Fix `install_release` failure when `./llama-cpp` is not cleaned (High Priority)`,oldString:
-## Project Roadmap
-- [ ] Fix `NameError` in `llama_updater.py` (High Priority)
+- [ ] Fix `install_release` failure when `./llama-cpp` is not cleaned (High Priority)
+- [ ] Fix `llama-server` restart failure after `--update-llama` (High Priority)

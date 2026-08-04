@@ -2,18 +2,22 @@
 name: project-commit
 description: Use this skill to verify test health, manage git branching conventions, and commit code changes safely.
 ---
+
 # Skill Instructions
-**Constraint:** Do not bypass failing tests. Commit messages must be exactly one sentence long. Branch names must follow the exact syntax specified in the execution guidelines. Use the todowrite tool to manage the commit lifecycle tracking.
 
-⚠️ **AGENT BOUNDARY** — The orchestrator must NOT directly interact with the local shell, execute git commands, or run the test suite. All environmental inspection, verification execution, and repository modifications must be delegated to an @general agent.
+**Constraint:** Do not bypass failing tests. Use the `todowrite` tool to manage commit lifecycle tracking.
 
-**EXECUTION POLICY:** Perform lifecycle tasks strictly in sequence. If a preceding phase fails (e.g., test regressions or dirty validation issues), you must immediately halt the pipeline. Do not execute any subsequent git mutations or pushes.
+⚠️ **STRICT AGENT BOUNDARY & ORCHESTRATION RULES:**
+- You are acting SOLELY as an **orchestrator**. You must NOT perform direct work (file edits, code analysis, or terminal execution) in the main interface.
+- All technical inspection, file updates, and shell executions MUST be delegated to an `@general` agent via `todowrite`.
+
+**EXECUTION POLICY:** Perform lifecycle steps strictly in sequence. If a preceding phase fails (e.g., test regressions or dirty validation issues), halt the pipeline immediately. Do not execute any subsequent git mutations or pushes.
 
 ---
 
 ## Phase 1 — Pre-Commit Testing Verification
 
-Before attempting any version control actions, use todowrite to create a test verification task and assign it to @general.
+Before attempting any version control actions, use `todowrite` to create a test verification step and assign it to @general.
 
 > Read `./Testing Strategy.md` to extract the primary test suite execution command.
 > Execute the full regression test suite using that exact command.
@@ -21,13 +25,13 @@ Before attempting any version control actions, use todowrite to create a test ve
 > 
 > **CRITICAL:** If any tests fail, report the failures immediately and abort the workflow. Do not proceed to branch evaluation or staging under any circumstances.
 
-**WAIT:** Do not proceed to Phase 2 until the test verification task is marked complete and runs completely green.
+**WAIT:** Do not proceed to Phase 2 until the test verification step is marked complete and runs completely green.
 
 ---
 
 ## Phase 2 — Branch Management Analysis
 
-Once tests are verified to pass, use todowrite to create a branch assessment task and assign it to @general.
+Once tests are verified to pass, use `todowrite` to create a branch assessment step and assign it to @general.
 
 > Read the current version number from `./Plan.md`.
 > Inspect the current local repository git state.
@@ -47,13 +51,13 @@ Once tests are verified to pass, use todowrite to create a branch assessment tas
 
 ## Phase 3 — Stage, Document, and Commit
 
-Use todowrite to create the staging and commit generation task and assign it to @general.
+Use `todowrite` to create the staging and commit generation step and assign it to @general.
 
 > 1. Check `git status` and scan for untracked artifacts using `git ls-files --others --exclude-standard` to ensure all relevant files are captured.
-> 2. Ingest the modifications made to the codebase and auto-generate a git commit message. 
+> 2. Ingest the modifications made to the codebase and auto-generate a git commit message.
 > 
-> **CRITICAL CONSTRAINT:** The final commit message must be exactly one sentence long. No multi-line breaks, paragraphs, or lists.
+> **COMMIT MESSAGE CONSTRAINT:** The commit subject (first line) must be concise (maximum 72 characters) suitable for use as a Pull Request title[cite: 1]. Optionally, include a brief body description below a blank line for necessary context[cite: 1]. Avoid long lists or multi-paragraph blocks[cite: 1].
 > 
-> 3. Stage the files, execute the git commit using the single-sentence message, and push the active branch to the remote repository. 
+> 3. Stage the files, execute the git commit, and push the active branch to the remote repository.
 > 
 > Return a final success confirmation including the commit message and targeted push URL.
