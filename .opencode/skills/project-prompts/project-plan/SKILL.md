@@ -4,17 +4,20 @@ description: Use this skill to perform a gap analysis between Requirements.md an
 ---
 
 # Skill Instructions
-**Constraint:** Do not modify any source code files, configuration files, or files inside `./Tests/`. Only modify `./Plan.md`. Use the todowrite tool to track the planning lifecycle.
 
-⚠️ **AGENT BOUNDARY** — The orchestrator must NOT read codebase files, parse execution logic, or directly modify markdown documents. All technical analysis, comparison loops, and file writing must be delegated to an @general agent.
+**Constraint:** Do not modify any source code files, configuration files, or files inside designated test directories defined in `./Testing Strategy.md`. Only modify `./Plan.md`. Use the `todowrite` tool to track the planning lifecycle.
 
-**EXECUTION POLICY:** Perform tasks strictly in sequence. Do not spawn concurrent agents or proceed to final file generation until the analysis phase is verified.
+⚠️ **STRICT AGENT BOUNDARY & ORCHESTRATION RULES:**
+- You are acting SOLELY as an **orchestrator**. You must NOT perform direct work (file edits, code analysis, or terminal execution) in the main interface.
+- All technical inspection, file updates, and shell executions MUST be delegated to an `@general` agent via `todowrite`.
+
+**EXECUTION POLICY:** Perform steps strictly in sequence. Do not spawn concurrent agents or proceed to final file generation until the analysis phase is verified.
 
 ---
 
 ## Phase 1 — Revision & Gap Analysis
 
-Use todowrite to create the following planning analysis task and assign it to @general.
+Use `todowrite` to create the following planning analysis step and assign it to @general.
 
 > Read `./Requirements.md` as the authoritative functional baseline.
 > 
@@ -24,19 +27,19 @@ Use todowrite to create the following planning analysis task and assign it to @g
 > 2. Read the current version heading in `./Plan.md` (if it exists). 
 > 3. Identify any intermediate or skipped revisions between the baseline version in `Plan.md` and the target version in `Requirements.md` (e.g., jumping from `1.1.0` directly to `1.1.2`, skipping `1.1.1`).
 > 4. Compile a cumulative list of all functional, structural, and architectural changes across all intermediate revisions leading up to the target version.
->
-> Review all source code files (excluding `./Tests/`) to compare current codebase state against the cumulative requirements of the target revision range.
+> 
+> Review all source code files (excluding designated test directories defined in `./Testing Strategy.md`) to compare current codebase state against the cumulative requirements of the target revision range.
 > Identify missing requirements, structural drift, unverified functionality, and outdated implementation assumptions.
 > 
 > Return a clear summary of findings, including explicit notes on any multi-revision jump context.
 
-**WAIT:** Do not proceed until the analysis task is marked complete and verified.
+**WAIT:** Do not proceed until the analysis step is marked complete and verified.
 
 ---
 
 ## Phase 2 — Generate/Replace Plan Artifact
 
-Based on the verified findings from Phase 1, use todowrite to create the Plan generation task and assign it to @general.
+Based on the verified findings from Phase 1, use `todowrite` to create the Plan generation step and assign it to @general.
 
 > Create `./Plan.md` if it does not exist. If it exists, completely overwrite and replace its contents.
 > 
@@ -50,5 +53,5 @@ Based on the verified findings from Phase 1, use todowrite to create the Plan ge
 > - **Section 5: Security**
 > - **Section 6: Dependencies**
 > - **Section 7: Non-Functional Requirements**
-
-**WAIT:** Do not consider this skill execution complete until `./Plan.md` has been successfully written and verified.
+> 
+> **WAIT:** Do not consider this skill execution complete until `./Plan.md` has been successfully written and verified.

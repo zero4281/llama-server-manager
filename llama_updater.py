@@ -870,7 +870,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
                     checksum_path.unlink(missing_ok=True)
                     raise LlamaUpdaterError("Checksum verification failed")
             finally:
-                checksum_path.unlink(missing_ok=True)
+                    checksum_path.unlink(missing_ok=True)
         else:
             ui.print_message("No checksum file available for this release, skipping verification")
         
@@ -892,41 +892,9 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         
         pid_file = Path.cwd() / "llama-server.pid"
         if pid_file.exists():
-            try:
-                with open(pid_file, "r") as f:
-                    pid = int(f.read().strip())
-                
-                # Check if process is live
-                try:
-                    os.kill(pid, 0)
-                    # Process is live, stop it
-                    ui.print_message("Found running llama-server. Stopping...")
-                    config = load_config()
-                    class Args:
-                        def __init__(self):
-                            self.llama_args = []
-                    
-                    runner = Runner(args=Args(), config=config, ui=ui)
-                    runner.stop_server()
-                    
-                    if is_verified:
-                        ui.print_message("Starting new instance...")
-                        config = load_config()
-                        runner = Runner(args=Args(), config=config, ui=ui)
-                        runner.run()
-                except (OSError, ValueError):
-                    # Process not live or PID file is corrupt
-                    pid_file.unlink(missing_ok=True)
-                    ui.print_message("Found stale PID file. Deleting it.")
-            except Exception as e:
-                logger.error(f"Error handling PID file: {e}")
+            _restart_llama_server(ui, argparse.Namespace(), is_verified=is_verified)
         else:
             ui.print_message("No running llama-server detected.")
-        
-        ui.print_message("Installation complete!")
-        
-        # Persist configuration
-        config = load_config()
         options = config.get("options", {})
         llama_cpp = options.get("llama-cpp", {})
         llama_cpp["os-architecture"] = f"{selected_platform_info['platform']}-{selected_platform_info['arch']}"
@@ -949,7 +917,7 @@ def delete_existing_installation() -> None:
     if LLAMA_CPP_DIR.exists():
         shutil.rmtree(LLAMA_CPP_DIR, ignore_errors=True)
 
-def _install_release_core(release: dict, release_tag: str, platform: str, arch: str, backend: str, ui_manager: Optional["UIManager"] = None, skip_confirmation: bool = False) -> None:
+def _install_release_core(release: dict, release_tag: str, platform: str, arch: str, backend: str, ui_manager: Optional["UIManager"] = None, skip_confirmation: bool = False, is_verified: bool = True) -> None:
     """
     Core installation logic for llama.cpp.
     
@@ -961,6 +929,7 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
         backend: Target compute backend
         ui_manager: UI manager instance
         skip_confirmation: If True, skip the confirmation prompt
+        is_verified: Whether the installation was verified by a sanity check
     """
     from ui_manager import UIManager
     ui = ui_manager if ui_manager is not None else UIManager("Install llama.cpp")
@@ -973,8 +942,8 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
     for asset in release.get("assets", []):
         parsed = parse_asset_name(asset['name'])
         if parsed.get('platform') and parsed.get('arch') and parsed['platform'].lower() == platform.lower() and parsed['arch'].lower() == arch.lower():
-
-
+            
+            
             if parsed['backend'] == backend:
                 filtered_assets.append(asset)
             elif not parsed['backend'] and backend == 'cpu':
@@ -1019,10 +988,10 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
                     checksum_path.unlink(missing_ok=True)
                     raise LlamaUpdaterError("Checksum verification failed")
             finally:
-                checksum_path.unlink(missing_ok=True)
+                    checksum_path.unlink(missing_ok=True)
         else:
             ui.print_message("No checksum file available for this release, skipping verification")
-        
+            
         # Extract
         ui.print_message(f"\nExtracting to {LLAMA_CPP_DIR}")
         extract_archive(archive_path, LLAMA_CPP_DIR)
@@ -1037,9 +1006,16 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
         archive_path.unlink(missing_ok=True)
         
         # Post-install sanity check
-        verify_installation(ui)
+        is_verified_check = verify_installation(ui)
         
         ui.print_message("Installation complete!")
+        
+        # Restart server if needed
+        pid_file = Path.cwd() / "llama-server.pid"
+        if pid_file.exists():
+            _restart_llama_server(ui, argparse.Namespace(), is_verified=is_verified_check)
+        else:
+            ui.print_message("No running llama-server detected.")
         
         # Persist configuration
         config = load_config()
@@ -1205,8 +1181,10 @@ class LlamaUpdater:
                 
                 # Perform installation
                 # We can reuse the logic in _install_release_core
-                _install_release_core(release, release_tag, platform, arch, backend, ui, skip_confirmation=True)
+                is_verified = verify_installation(ui)
+                _install_release_core(release, release_tag, platform, arch, backend, ui, skip_confirmation=True, is_verified=is_verified)
             except PlatformNotFoundError as e:
+
                 ui.render_error(str(e))
                 sys.exit(1)
             except Exception as e:

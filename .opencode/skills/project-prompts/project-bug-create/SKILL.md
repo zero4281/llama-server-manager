@@ -1,16 +1,17 @@
 ---
 name: project-bug-create
 description: Use this skill to triage, analyze, reproduce via manual terminal verification, and document new issues in the Bugs.md file.
-
 ---
 
 # Skill Instructions
 
-**Constraint:** Do not modify any source code files, test files, or configuration files. This is a documentation-only workflow. Only modify `./Bugs.md`. Use the todowrite tool to manage this triage iteration.
+**Constraint:** Do not modify any source code files, test files, or configuration files. This is a documentation-only workflow. Only modify `./Bugs.md`. Use the `todowrite` tool to manage this triage iteration.
 
-⚠️ **AGENT BOUNDARY** — The orchestrator must NOT parse local project files, execute terminal testing commands, or directly append entries to the bug tracking documents. All duplication scanning, technical dependency analysis, manual dynamic reproduction testing, and document adjustments must be delegated to an @general agent.
+⚠️ **STRICT AGENT BOUNDARY & ORCHESTRATION RULES:**
+- You are acting SOLELY as an **orchestrator**. You must NOT perform direct work (file edits, code analysis, or terminal execution) in the main interface.
+- All technical inspection, file updates, and shell executions MUST be delegated to an `@general` agent via `todowrite`.
 
-**EXECUTION POLICY:** Perform tasks strictly in sequence. Do not spawn concurrent agents. You must pause and wait for explicit user approval via AskUserQuestion before finalizing and appending any bug entry to the filesystem.
+**EXECUTION POLICY:** Perform steps strictly in sequence. Do not spawn concurrent agents. You must pause and wait for explicit user approval via AskUserQuestion before finalizing and appending any bug entry to the filesystem.
 
 ---
 
@@ -23,7 +24,7 @@ Use AskUserQuestion to prompt the user for a clear, concise description of the i
 
 ## Phase 2 — Technical Analysis, Manual Verification & Drafting
 
-Once intake details are received, use todowrite to create the combined analysis and manual verification task and assign it to @general.
+Once intake details are received, use `todowrite` to create the combined analysis and manual verification step and assign it to @general.
 
 > Read `./Requirements.md`, `./Plan.md`, `./Testing Strategy.md`, and the existing `./Bugs.md`.
 > Parse the user's provided bug report:
@@ -31,14 +32,12 @@ Once intake details are received, use todowrite to create the combined analysis 
 > 
 > Execute manual dynamic verification to confirm and analyze the bug behavior before drafting the entry:
 > 
-> 1. **Dynamic Reproduction Session:** Read the 'Manual Dynamic Testing' section of `./Testing Strategy.md`. Formulate the appropriate application startup command, runtime configuration, and specific sequence of interactive user inputs/keypresses needed to exercise and expose the reported bug.
-> 2. **Run and Capture:** Launch the app inside a detached `tmux` session, send the keypresses to navigate to the faulty behavior, and capture the terminal state. Enforce the following execution rules strictly during the interactive reproduction:
->    - *CRITICAL — Environment Isolation & Safety Gates:* You must parse `./Testing Strategy.md` for any "Special Case" testing requirements or destructive workflows (e.g., self-overwriting flags, file-clobbering operations). If the determined execution or reproduction sequence triggers one of these conditions, you **must** set up the specified isolation environment (such as a temporary sandbox directory) and execute mandatory validation gates (e.g., directory matching or path checks) before launching the execution session. You are explicitly forbidden from running destructive operations directly within the active working repository.
->    - *STATE SYNCHRONIZATION POLICY:* To ensure accuracy and prevent testing stale or mismatched logic when using an isolated environment, you must adhere to a strict directional synchronization lifecycle:
->      1. **Pre-Test Sync:** Before running the reproduction sequence or spawning the execution session, copy the relevant application files from the active working repository into the sandbox environment.
->      2. **Post-Session Isolation:** Do not copy any environmental runtime configurations or session-generated application binaries back into the working repository. Keep the working directory structurally pristine.
->    - *Scratch Artifact Pattern:* All state captures, logs, or text dumps must be written strictly to scratch or temporary locations (e.g., `/tmp/initial_menu.txt`, `/tmp/after_input.txt`). They must **never** be written to automated test directories or committed.
->    - *Session Cleanup:* The interactive `tmux` session or background process must be explicitly terminated and cleaned up once states are captured.
+> 1. **Dynamic Reproduction Session:** Read the 'Manual Dynamic Testing' section of `./Testing Strategy.md`. Formulate the appropriate application startup command, runtime configuration, and specific sequence of interactive user inputs needed to exercise and expose the reported bug.
+> 2. **Run and Capture:** Launch the interactive execution session using the session management tool or runner specified in `./Testing Strategy.md`, send the keypresses/inputs to navigate to the faulty behavior, and capture the terminal state[cite: 1]. Enforce the following execution rules strictly during reproduction:
+>    - *CRITICAL — Environment Isolation & Safety Gates:* Parse `./Testing Strategy.md` for any "Special Case" testing requirements or destructive workflows. If triggered, set up the specified isolation environment (such as a temporary sandbox directory) and execute mandatory validation gates before launching the session.
+>    - *STATE SYNCHRONIZATION POLICY:* Copy relevant application files from the active working repository into the sandbox environment before testing. Do not copy runtime configs or generated binaries back into the working repository.
+>    - *Scratch Artifact Pattern:* Write state captures or text dumps strictly to temporary locations (e.g., `/tmp/`). Never write to automated test directories or git history.
+>    - *Session Cleanup:* Terminate and clean up the interactive session or background process once states are captured.
 > 3. **Duplicate & Dependency Checks:** Check the 'Current Bug Reports' section of `./Bugs.md` to ensure the bug is not a duplicate. Cross-reference `./Requirements.md` and `./Plan.md` to identify dependencies and affected modules.
 > 4. **Test Suitability:** Reference `./Testing Strategy.md` to determine if a new automated test case is required later to prevent this bug from reoccurring.
 > 
@@ -58,7 +57,7 @@ Review the entry drafted by @general. Use AskUserQuestion to present the draft d
 
 ## Phase 4 — Document Finalization
 
-Once approved by the user, use todowrite to create the write task and assign it to @general.
+Once approved by the user, use `todowrite` to create the write step and assign it to @general.
 
 > Append the approved bug entry to the 'Current Bug Reports' section of `./Bugs.md`.
 > Update the 'Project Roadmap' or status summary section within `./Bugs.md` to reflect the new tracked item.
