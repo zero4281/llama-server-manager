@@ -704,7 +704,7 @@ def ensure_executable(path: Path) -> None:
             pass  # Ignore permission errors
 
 
-def _restart_llama_server(ui_manager, args, is_verified=True):
+def _restart_llama_server(ui_manager, args, config, is_verified=True):
     pid_file = Path.cwd() / "llama-server.pid"
     if not pid_file.exists():
         return
@@ -721,7 +721,7 @@ def _restart_llama_server(ui_manager, args, is_verified=True):
         pid_file.unlink(missing_ok=True)
         return
     
-    runner = Runner(args, load_config(), ui_manager)
+    runner = Runner(args, config, ui_manager)
     runner.stop_server()
     
     if is_verified:
@@ -733,7 +733,7 @@ def _restart_llama_server(ui_manager, args, is_verified=True):
 
 
 
-def install_release(release: dict, release_tag: str, ui_manager: Optional["UIManager"] = None) -> None:
+def install_release(release: dict, release_tag: str, ui_manager: Optional["UIManager"] = None, args: Optional[argparse.Namespace] = None, config: Optional[dict] = None) -> None:
     """
     Install a llama.cpp release.
     
@@ -742,9 +742,11 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         release_tag: Release tag for reference
         ui_manager: UIManager instance for UI operations
     """
+    config = config if config is not None else load_config()
     from ui_manager import UIManager
-    
     ui = ui_manager if ui_manager is not None else UIManager("Install llama.cpp")
+    config = load_config()
+    
     
     ui.print_message(f"Installing llama.cpp release {release_tag}...")
     
@@ -892,7 +894,7 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         
         pid_file = Path.cwd() / "llama-server.pid"
         if pid_file.exists():
-            _restart_llama_server(ui, argparse.Namespace(), is_verified=is_verified)
+            _restart_llama_server(ui, args if args is not None else argparse.Namespace(), config, is_verified=is_verified)
         else:
             ui.print_message("No running llama-server detected.")
         options = config.get("options", {})
@@ -933,6 +935,7 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
     """
     from ui_manager import UIManager
     ui = ui_manager if ui_manager is not None else UIManager("Install llama.cpp")
+    config = load_config()
     
     # Delete existing installation first
     delete_existing_installation()
@@ -1013,13 +1016,13 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
         # Restart server if needed
         pid_file = Path.cwd() / "llama-server.pid"
         if pid_file.exists():
-            _restart_llama_server(ui, argparse.Namespace(), is_verified=is_verified_check)
+            _restart_llama_server(ui, argparse.Namespace(), config, is_verified=is_verified_check)
         else:
             ui.print_message("No running llama-server detected.")
         
         # Persist configuration
-        config = load_config()
         options = config.get("options", {})
+
         llama_cpp = options.get("llama-cpp", {})
         llama_cpp["os-architecture"] = f"{platform}-{arch}"
         llama_cpp["backend"] = backend
@@ -1044,7 +1047,7 @@ class LlamaUpdater:
         self.repo = GITHUB_REPO
         self.ui_manager = ui_manager
     
-    def install(self, interactive: bool = False, ui_manager: Optional["UIManager"] = None) -> None:
+    def install(self, interactive: bool = False, ui_manager: Optional["UIManager"] = None, args: Optional[argparse.Namespace] = None) -> None:
         """
         Install the latest llama.cpp release.
         
@@ -1126,7 +1129,7 @@ class LlamaUpdater:
         
         # Call install_release which handles platform detection, zip selection, and installation
         if release is not None and release_tag:
-            install_release(release, release_tag, ui)
+            install_release(release, release_tag, ui, args=args)
         else:
             ui.render_error("Installation cancelled or failed to select a valid release.")
         
@@ -1214,7 +1217,7 @@ def main():
         if args.update:
             updater.update()
         else:
-            updater.install()
+            updater.install(args=args)
     else:
         # Default: show available releases
         releases = list_releases()
