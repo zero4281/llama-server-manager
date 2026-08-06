@@ -766,8 +766,13 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             'description': variant_suffix
         }
         platform_options.append(platform_entry)
-    
+
+    if not platform_options:
+        ui.render_error("No compatible assets found for this release.")
+        return
+
     # Find the matching platform info for auto-highlight
+
     default_platform_idx = None
     for i, platform_info in enumerate(available_platforms, 1):
         if platform_info['platform'].lower() == detected_platform.lower() and platform_info['arch'].lower() == detected_arch.lower():
