@@ -35,33 +35,37 @@ A lightweight wrapper around [llama.cpp](https://github.com/ggerganov/llama.cpp)
 
 Create and activate a Python virtual environment before installing dependencies.
 
-**Create the environment:**
+### Create the environment:
 
+#### Linux / MacOS / WSL
 ```bash
-# macOS / Linux / WSL
 python3 -m venv .venv
+```
 
-# Windows (native)
+#### Windows (native)
+```bash
 python -m venv .venv
 ```
 
-**Activate the environment:**
+### Activate the environment:
 
+#### Linux / MacOS / WSL
 ```bash
-# macOS / Linux / WSL
 source .venv/bin/activate
+```
 
-# Windows (native)
+#### Windows (native)
+```bash
 .venv\Scripts\activate
 ```
 
-**Install the project dependencies:**
+### Install the project dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-**Install the Hugging Face CLI for model management:**
+### Install the Hugging Face CLI for model management:
 
 ```bash
 pip install hf-cli
@@ -87,7 +91,7 @@ Once installation completes, a `llama-cpp/` folder will appear in your install d
 
 On first run, the wrapper generates a `config.json` with safe defaults. You can customize it to pass additional options directly to `llama-server`.
 
-**Example `config.json`:**
+### Example `config.json`:
 
 ```json
 {
@@ -113,7 +117,7 @@ On first run, the wrapper generates a `config.json` with safe defaults. You can 
 }
 ```
 
-**Key options:**
+### Key options:
 
 | Option | Default | Description |
 |---|---|---|
@@ -178,13 +182,13 @@ On first run, the wrapper generates a `config.json` with safe defaults. You can 
 
 In the meantime, there are two ways to download models:
 
-**Option 1 — Hugging Face CLI:**
+### Option 1 — Hugging Face CLI:
 
 ```bash
 hf download {model-name}
 ```
 
-**Option 2 — llama-cli (downloads directly into llama.cpp's format):**
+### Option 2 — llama-cli (downloads directly into llama.cpp's format):
 
 ```bash
 llama-cli -hf {model-name}
