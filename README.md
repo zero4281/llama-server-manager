@@ -26,7 +26,7 @@ A lightweight wrapper around [llama.cpp](https://github.com/ggerganov/llama.cpp)
 ## Requirements
 
 - Python 3.12+ with `pip` — [Download Python](https://www.python.org/downloads/) (pip is included with Python 3.4+)
-- macOS, Linux, or Windows (WSL)
+- Linux, MacOS, or Windows (WSL)
 - A Hugging Face account (for downloading models)
 
 ---
