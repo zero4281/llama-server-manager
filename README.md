@@ -25,7 +25,7 @@ A lightweight wrapper around [llama.cpp](https://github.com/ggerganov/llama.cpp)
 
 ## Requirements
 
-- Python 3.12.3+ with `pip` — [Download Python](https://www.python.org/downloads/) (pip is included with Python 3.4+)
+- Python 3.12+ with `pip` — [Download Python](https://www.python.org/downloads/) (pip is included with Python 3.4+)
 - macOS, Linux, or Windows (WSL)
 - A Hugging Face account (for downloading models)
 
@@ -85,13 +85,18 @@ Once installation completes, a `llama-cpp/` folder will appear in your install d
 
 ## Configuration
 
-On first run, the wrapper generates a `conf.json` with safe defaults. You can customize it to pass additional options directly to `llama-server`.
+On first run, the wrapper generates a `config.json` with safe defaults. You can customize it to pass additional options directly to `llama-server`.
 
-**Example `conf.json`:**
+**Example `config.json`:**
 
 ```json
 {
-  "options": {},
+  "options": {
+    "llama-cpp": {
+      "os-architecture": "ubuntu/x64",
+      "backend": "vulkan"
+    }
+  },
   "llama-server": {
     "options": {
       "host": "0.0.0.0",
@@ -129,6 +134,7 @@ On first run, the wrapper generates a `conf.json` with safe defaults. You can cu
 | `./llama-server-manager [llama-server args]` | Start the server and pass arguments directly to llama-server |
 | `./llama-server-manager --install-llama` | Download and install the latest llama.cpp release |
 | `./llama-server-manager --update-llama` | Update an existing llama.cpp installation to the latest release |
+| `./llama-server-manager --version` | Display the program's version and exit |
 | `./llama-server-manager --self-update` | Pull the latest manager code from GitHub and restart |
 | `./llama-server-manager --stop-server` | Gracefully stop a running llama-server |
 
@@ -140,19 +146,19 @@ On first run, the wrapper generates a `conf.json` with safe defaults. You can cu
 ./llama-server-manager --some-llama-arg value
 ```
 
-**`--install-llama`** — Run this once after cloning the repo to download and install llama.cpp. The installer will attempt to detect your OS and hardware, but review each prompt carefully to confirm the correct build for your system.
+**`--install-llama`** — Run this once after cloning the repo to download and install llama.cpp. The installer will attempt to detect your OS and hardware, but review each prompt carefully to confirm the correct build for your system. If `llama-server` was already running, it will be restarted after a successful installation.
 
 ```bash
 ./llama-server-manager --install-llama
 ```
 
-**`--update-llama`** — Updates your existing llama.cpp installation to the latest release without needing to reinstall the manager or reconfigure anything.
+**`--update-llama`** — Updates your existing llama.cpp installation to the latest release. If `options.llama-cpp.os-architecture` and `options.llama-cpp.backend` are present in `config.json`, it will perform a "fast path" update (skipping selection menus). If either is missing, it will fall back to the interactive installation workflow. If `llama-server` was already running, it will be restarted after a successful update.
 
 ```bash
 ./llama-server-manager --update-llama
 ```
 
-**`--self-update`** — Pulls the latest version of the manager itself from GitHub and restarts. No prerequisites required.
+**`--self-update`** — Pulls the latest manager code from the project's GitHub repository and restarts. No prerequisites required.
 
 ```bash
 ./llama-server-manager --self-update
@@ -243,10 +249,25 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-> Update `base_url` to match the `host` and `port` values in your `conf.json`.
+> Update `base_url` to match the `host` and `port` values in your `config.json`.
 
 ---
 
 **Read My Article About This Journey**
 
 [I Built a Local AI Coding Assistant on Consumer Hardware…and It Works. I think.](https://joshrising.com/i-built-a-local-ai-coding-assistant-on-consumer-hardware-and-it-works-i-think/)
+
+---
+
+## Testing & Development
+
+### Testing Strategy
+- All automated tests live in the `Tests/` directory.
+- The test suite uses **mocked curses**, ensuring that tests run cleanly in any environment, including CI/CD pipelines.
+- For manual verification against a real terminal, see `Testing Strategy.md`.
+
+### Development Notes
+- **Version Source of Truth**: The `__version__` constant in `main.py` is the source of truth for the `--version` flag.
+- **Restart Logic**: The manager uses `llama-server.pid` to track and manage the lifecycle of the `llama-server` process, allowing for graceful shutdowns and automatic restarts after updates.
+- **Path Handling**: Uses `pathlib` throughout for cross-platform compatibility.
+
