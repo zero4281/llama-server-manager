@@ -1,6 +1,6 @@
 # Llama Server Manager — Software Requirements Document
 
-**Version:** 1.1.2  
+**Version:** 1.1.3  
 **Date:** August 2026  
 **Repository:** https://github.com/zero4281/llama-server-manager
 
@@ -396,12 +396,17 @@ For example, `llama-b10107-bin-ubuntu-vulkan-x64.tar.gz` decomposes as:
 |---|---|---|
 | Project | `llama` | Always `llama`; not user-selectable. |
 | Build/Tag | `b10107` | The release tag, resolved in Section 8.3.1. |
-| Type | `bin` | Always `bin` (pre-compiled binary); not user-selectable. |
+| Type | `bin` | Must literally equal `bin` (pre-compiled binary); not user-selectable. This segment is validated by value, not merely by position — see below. |
 | OS | `ubuntu` | Resolved together with Architecture in Section 8.3.2. |
 | Backend | `vulkan` | Compute backend, resolved in Section 8.3.3. Optional — some OS/Architecture combinations ship a single build with no backend segment in the filename. |
 | Architecture | `x64` | Resolved together with OS in Section 8.3.2. |
 
-`LlamaUpdater` must parse each asset filename from the resolved release against this template to drive the OS/Architecture and Compute Backend menus described below, and to reconstruct the final filename for the confirmation screen (Section 8.3.4). A filename that does not match the template (missing or extra segments) must be excluded from all selection menus.
+`LlamaUpdater` must parse each asset filename from the resolved release against this template to drive the OS/Architecture and Compute Backend menus described below, and to reconstruct the final filename for the confirmation screen (Section 8.3.4). A filename must be excluded from all selection menus unless **both** of the following hold:
+
+1. **Segment shape matches** — the filename splits into the expected number of dash-separated segments for the template (five, or six when the optional Backend segment is present), plus a recognised extension.
+2. **Type segment equals `bin`** — the segment in the Type position must be the literal string `bin`. Matching segment *shape* alone is not sufficient; an asset with the correct number of segments but a different Type value (e.g. a source or auxiliary archive that happens to parse into the right number of dash-separated parts) must still be excluded.
+
+Non-bin assets such as `llama-b10297-xcframework.zip` (wrong segment count) and redistributable archives like `cudart-llama-bin-win-cuda-12.4-x64.zip` (extra leading segment, `Project` segment does not equal `llama`) are both excluded by these rules — the first by segment-shape mismatch, the second by segment-shape mismatch on the `Project` position. Superficial presence or absence of the substring `bin` anywhere in the filename is not itself the criterion; exclusion is always determined by full positional template matching.
 
 #### 7.3.1 Tag selection prompt
 
@@ -697,6 +702,7 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
+| 1.1.3 | August 2026 | zero4281 | Clarified §7.3.0's asset-filename matching rule: exclusion from selection menus now explicitly requires both correct segment shape *and* a literal `bin` value in the Type position, not segment shape alone. Closes a gap where a non-bin asset with an incidentally correct segment count (e.g. a hypothetical source/auxiliary archive) would have parsed successfully under the old wording. Added worked examples (`llama-b10297-xcframework.zip`, `cudart-llama-bin-win-cuda-12.4-x64.zip`) showing both are excluded via positional template matching, not via a filename substring check. |
 | 1.1.2 | August 2026 | zero4281 | Added `--version` flag (new §5.2.1): prints the program's version via `UIManager`'s `print_message` (new §10.8) and exits, taking priority over all other arguments. Added a `main.py`-level `__version__` constant (§5.1) as the single source of truth, required to be kept manually in sync with this document's own version number on every release. Updated §5.4 startup sequence to check `--version` immediately after argument parsing, before `config.json` is loaded or the logger is configured. Added new §10.8 defining `print_message` as the correct rendering path for standalone success/warning/error messages, as distinct from the bordered windows used for menus, confirmation prompts, and the progress bar (§10.3–§10.5); clarified §5.1 accordingly. Fixed the §5.4 `llama-cpp` not-found error, which had incorrectly specified a bordered curses window (an artifact of the pre-`print_message` version of this spec) — it now uses `print_message` with plain, unbordered text. |
 | 1.1.1 | August 2026 | zero4281 | Removed the CLI pass-through mechanism (`<llama args>`, old §5.2); `Runner` now derives all `llama-server` launch arguments solely from `config.json` (§9.2). Removed the incorrect `main.py` self-restart behaviour from §5.3.3/§5.4 step 4 — `--self-update` now exits after a successful update instead of relaunching itself. Removed the fast-path config re-save from §8.7 item 1; only the four-screen workflow (§8.3.5) — i.e. `--install-llama` run directly, or the `--update-llama` fallback — writes `options.llama-cpp.os-architecture`/`backend`, since the fast path's saved values are already correct and unchanged. Added new §8.5.1 defining `llama-server` restart behaviour: after a successful `--install-llama` or `--update-llama` (both fast path and fallback), if `llama-server.pid` exists and corresponds to a live `llama-server` process, `LlamaUpdater` stops and restarts it in-process by calling `Runner`'s existing shutdown (§9.5) and launch (§9.3) logic directly, rather than duplicating that logic or shelling out to `--stop-server`; if the post-install sanity check fails, the running instance is stopped but not restarted, with a message displayed via `UIManager`. |
 | 1.1.0 | July 2026 | zero4281 | Added persistence of the Operating System & Architecture (§8.3.2) and Compute Backend (§8.3.3) selections to `config.json` under the new `options.llama-cpp` key (new §3.1.1), written automatically by `LlamaUpdater` after every successful install/update (new §8.3.5). Added §8.7 defining the `--update-llama` fast path: when both saved values are present, all four selection screens (§8.3.1–§8.3.4) are skipped and the newest release is downloaded automatically with the saved OS/Architecture/Backend and no `UIManager` prompts; when either value is missing, `--update-llama` falls back to running the identical interactive workflow as `--install-llama`. Updated the `config.json` example and the `--update-llama` row in §5.2 accordingly. |
