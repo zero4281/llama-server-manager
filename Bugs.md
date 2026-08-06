@@ -20,27 +20,26 @@ This occurs because the `install_release` function in `llama_updater.py` attempt
 **Affected Components:**
 - `llama_updater.py` (`install_release` function)
 
-
-**Title:** `--install-llama` fails with "Platform selection cancelled" when no compatible assets are found for a release
+**Title:** `--install-llama` fails with "No compatible assets found" for release `b10297`
 **Status:** ✅ **COMPLETED**
-**Severity/Priority:** **Medium**
+**Severity/Priority:** **High**
 **Dependencies:** `llama_updater.py`
 **Description:**
-When installing a release that contains no assets matching the expected naming pattern (e.g., a release containing only non-binary artifacts like XCFrameworks), the `available_platforms` list becomes empty. This causes `ui.render_menu` to return `-1` immediately, triggering the "Platform selection cancelled" error message.
+When running `./llama-server-manager --install-llama` and manually entering release tag `b10297`, the application exits with the message: "No compatible assets found for this release."
 
-The current exclusion logic in `llama_updater.py` correctly filters out non-binary assets like `llama-b10297-xcframework.zip` (wrong segment count) and `cudart-llama-bin-win-cuda-12.4-x64.zip` (incorrect project prefix). However, the application fails to handle the case where no valid assets remain for a selected release, providing a confusing cancellation message instead of informing the user that no compatible assets were found.
+The issue stems from how `llama_updater.py` parses assets for a release. It appears that the naming pattern regex or the filtering logic is failing to correctly identify and exclude incompatible assets (like `llama-b10297-xcframework.zip`) while still finding valid assets for the target platform. This results in an empty list of available platforms, triggering the error message.
 
 **Verified Reproduction Workflow:**
 1. Run `./llama-server-manager --install-llama`.
-2. Select a release (e.g., `b10297`) that contains no assets matching the `llama-{tag}-bin-{platform}-{arch}` pattern (e.g., a release containing only XCFrameworks).
-3. Observe that the application exits immediately after the release selection with the message "Platform selection cancelled."
+2. Select option `0` ("Enter a tag manually").
+3. Enter `b10297` when prompted for the release tag.
+4. Observe the error: "No compatible assets found for this release."
 
-**Affected Components:**
-- `llama_updater.py` (`install_release` function)
+**Test Suitability:**
+A new automated test case should be added to `Tests/test_ui_manager_pytest.py` to verify that `llama_updater.py` correctly filters assets and identifies compatible platforms, ensuring that non-binary assets (e.g., XCFrameworks) are excluded from the selection menus.
 
-**Summary of Changes:**
-Updated `llama_updater.py` to check if any valid platform options were generated; if none are available, it now correctly informs the user that no compatible assets were found for that release instead of returning a confusing "Platform selection cancelled" message.
+**Resolution:** Updated the `new_pattern` regex in `llama_updater.py` to include an optional backend segment, ensuring that releases with backends are correctly parsed and included in the platform selection menu.
 
 ### Project Roadmap
 - [x] Fix `--install-llama` fails to restart `llama-server` and throws `NameError` (High)
-- [x] Fix `--install-llama` fails with "Platform selection cancelled" when no compatible assets are found for a release (Medium)
+- [x] Fix `--install-llama` fails with "No compatible assets found" for release `b10297` (High)

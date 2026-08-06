@@ -1,3 +1,4 @@
+known_os = ["linux", "windows", "darwin", "ubuntu", "debian", "centos", "rocky", "alpine", "fedora", "rhel", "amazon", "oracle", "suse", "opensuse", "gentoo", "manjaro", "elementary", "pop", "zorin", "linuxmint", "deepin", "kali", "parrot", "win"]
 """
 llama_updater.py — llama.cpp download and update module.
 
@@ -73,45 +74,50 @@ def _get_api_headers() -> Dict[str, str]:
     """Get headers for GitHub API requests."""
     return _GITHUB_HEADERS.copy()
 
+
 def detect_platform() -> Tuple[str, str]:
     """
     Detect current platform and architecture.
-
+    
     Returns:
         Tuple of (system, machine) standardized names.
     """
     import platform
     system = platform.system()
     machine = platform.machine().lower()
-
+    
     if system == "Linux":
         try:
             distro = platform.freedesktop_os_release().get('NAME', 'Linux')
         except (AttributeError, OSError):
             distro = "Linux"
-
+        
         if "aarch64" in machine or "arm64" in machine:
             return distro, "arm64"
         if "x86_64" in machine or "amd64" in machine:
             return distro, "x64"  # Normalize to x64 for matching
         return distro, "aarch64"  # fallback
-
+    
     elif system == "Windows":
         if "aarch64" in machine or "arm64" in machine:
             return "Windows", "arm64"
         if "x86_64" in machine or "amd64" in machine:
             return "Windows", "x64"  # Normalize to x64 for matching
         return "Windows", "x64"  # fallback
-
+    
     elif system == "Darwin":
         if "aarch64" in machine or "arm64" in machine:
             return "Darwin", "arm64"
         if "x86_64" in machine or "amd64" in machine:
             return "Darwin", "x64"  # Normalize to x64 for matching
         return "Darwin", "x64"  # fallback
-
+    
     else:
         return system, machine
+
+
+
+
 
 def _get_release_info(url: str) -> dict:
     """
@@ -245,7 +251,7 @@ def parse_asset_name(name: str) -> Dict[str, str]:
     # Tag can contain hyphens, so we need a more flexible pattern
     # Backend is optional, and variant is the optional suffix after architecture
     # Platform can contain hyphens (e.g., rocky-linux), arch is always x64 or arm64
-    new_pattern = r"^llama-[a-zA-Z0-9_.-]+-bin-(?P<platform>[a-zA-Z0-9_.-]+(?:-[a-zA-Z0-9_.-]+)*)-(?P<arch>x64|arm64)(?:-(?P<variant>\w+))?$"
+    new_pattern = r"^llama-[a-zA-Z0-9_.-]+-bin-(?P<platform>[a-zA-Z0-9_.-]+(?:-[a-zA-Z0-9_.-]+)*)-(?:-(?P<backend>[a-z]+))?-(?P<arch>x64|arm64)(?:-(?P<variant>\w+))?$"
     match = re.match(new_pattern, base_name)
     if match:
         platform_name = match.group('platform')
@@ -254,7 +260,6 @@ def parse_asset_name(name: str) -> Dict[str, str]:
         
         parts = [p for p in platform_name.split('-') if p != "bin"]
         
-        known_os = ["linux", "windows", "darwin", "ubuntu", "debian", "centos", "rocky", "alpine", "fedora", "rhel", "amazon", "oracle", "suse", "opensuse", "gentoo", "manjaro", "elementary", "pop", "zorin", "linuxmint", "deepin", "kali", "parrot", "win"]
         
         platform_name = ""
         backend = None
