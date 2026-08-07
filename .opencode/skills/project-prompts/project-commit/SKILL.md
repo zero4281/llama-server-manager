@@ -56,7 +56,7 @@ Use `todowrite` to create the staging and commit generation step and assign it t
 > 1. Check `git status` and scan for untracked artifacts using `git ls-files --others --exclude-standard` to ensure all relevant files are captured.
 > 2. Ingest the modifications made to the codebase and auto-generate a git commit message.
 > 
-> **COMMIT MESSAGE CONSTRAINT:** The commit subject (first line) must be concise (maximum 72 characters) suitable for use as a Pull Request title[cite: 1]. Optionally, include a brief body description below a blank line for necessary context[cite: 1]. Avoid long lists or multi-paragraph blocks[cite: 1].
+> **COMMIT MESSAGE CONSTRAINT:** The commit subject (first line) must be concise (maximum 72 characters) suitable for use as a Pull Request title. Optionally, include a brief body description below a blank line for necessary context. Avoid long lists or multi-paragraph blocks.
 > 
 > 3. Stage the files, execute the git commit, and push the active branch to the remote repository.
 > 

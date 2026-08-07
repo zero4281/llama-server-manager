@@ -45,7 +45,7 @@ Based on the verified findings from Phase 1, use `todowrite` to create the updat
 > Write the gap assessment results into the file using the following layout:
 > - A high-level Summary of the required alignment, explicitly calling out any multi-revision jumps processed (e.g., Target `1.1.2` including skipped `1.1.1` deltas).
 > - An explicit section detailing "Implemented but Non-Required: Features to Remove" (specifying file targets, line ranges, and rationale based on Requirements.md).
-> - A structured compliance table mapping out the codebase status against core functional specifications in Requirements.md and non-testing sections of Plan.md[cite: 1].
+> - A structured compliance table mapping out the codebase status against core functional specifications in Requirements.md and non-testing sections of Plan.md.
 > - A clear set of immediate Next Steps for implementation.
 > 
 > CRITICAL: Ensure no test-related work items or test suite gaps are written to this file.
