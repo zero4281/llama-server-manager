@@ -361,10 +361,11 @@ def parse_asset_name(name: str) -> Dict[str, str]:
         return {
             "platform": platform,
             "arch": arch,
-            "variant": None
+            "variant": None,
+            "backend": None
         }
         
-    return {"platform": None, "arch": None, "variant": None}
+    return {"platform": None, "arch": None, "variant": None, "backend": None}
 
 def get_available_platforms(release: dict) -> List[dict]:
     """

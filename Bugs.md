@@ -40,6 +40,26 @@ A new automated test case should be added to `Tests/test_ui_manager_pytest.py` t
 
 **Resolution:** Updated the `new_pattern` regex in `llama_updater.py` to include an optional backend segment, ensuring that releases with backends are correctly parsed and included in the platform selection menu.
 
+
+**Title:** `--install-llama` crashes with `Error: 'backend'` after selecting Operating System & Architecture
+**Status:** ✅ **COMPLETED**
+**Severity/Priority:** **High**
+**Dependencies:** `llama_updater.py`, `ui_manager.py`
+**Description:**
+When running `./llama-server-manager --install-llama`, the application exits after the "Select Operating System & Architecture" (second) menu with the message: "Error: 'backend'". The application should proceed to the "Select Compute Backend" menu but fails to resolve the backend segment for the selected OS/Architecture.
+
+**Verified Reproduction Workflow:**
+1. Run `./llama-server-manager --install-llama`.
+2. Press Enter to select the default release.
+3. Press Enter to select the default Operating System & Architecture (e.g., Ubuntu x64).
+4. Observe the error message `Error: 'backend'` and the application exit.
+
+**Resolution:** Updated `llama_updater.py` to ensure the `backend` key is always included in the parsed asset dictionary, even when the release name uses the old naming format or does not specify a backend. This prevents the `KeyError` that occurred during the selection flow.
+
+**Test Suitability:**
+A new automated test case should be added to `Tests/test_ui_manager_pytest.py` to verify that `llama_updater.py` correctly identifies and parses the backend segment from the release assets, ensuring it doesn't fail when a valid backend is present for the selected OS/Architecture.
+
 ### Project Roadmap
 - [x] Fix `--install-llama` fails to restart `llama-server` and throws `NameError` (High)
 - [x] Fix `--install-llama` fails with "No compatible assets found" for release `b10297` (High)
+- [x] Fix `--install-llama` crashes with `Error: 'backend'` after selecting Operating System & Architecture (High)
