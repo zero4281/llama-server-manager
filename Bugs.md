@@ -59,7 +59,27 @@ When running `./llama-server-manager --install-llama`, the application exits aft
 **Test Suitability:**
 A new automated test case should be added to `Tests/test_ui_manager_pytest.py` to verify that `llama_updater.py` correctly identifies and parses the backend segment from the release assets, ensuring it doesn't fail when a valid backend is present for the selected OS/Architecture.
 
+
+**Title:** `--install-llama` fails to list all backends and selects incorrect archive for CPU
+**Status:** ✅ **COMPLETED**
+**Severity/Priority:** High
+**Dependencies:** `llama_updater.py`
+**Description:**
+When running `./llama-server-manager --install-llama` and selecting the default options, the "Select Compute Backend" menu only displays "cpu (default)" instead of listing all available backends (e.g., Vulkan, ROCm, OpenVINO, SYCL). Furthermore, the "Confirm Installation" menu selects the wrong archive (e.g., the OpenVINO variant) instead of the correct CPU-only archive for the Ubuntu x64 platform. This indicates that `parse_asset_name` is not correctly identifying backend segments from the filenames.
+
+**Verified Reproduction Workflow:**
+1. Run `./llama-server-manager --install-llama`.
+2. Press Enter to select the default release.
+3. Press Enter to select the default Operating System & Architecture (e.g., Ubuntu x64).
+4. Observe that the "Select Compute Backend" menu only contains "cpu (default)".
+5. Press Enter to select "cpu (default)".
+6. Observe that the "Confirm Installation" menu shows an incorrect archive (e.g., an OpenVINO variant) instead of the standard CPU archive for the selected platform.
+
+**Resolution:** Updated `parse_asset_name` regex to correctly identify optional backend segments and improved platform/backend identification logic to ensure correct archive selection.
+
+
 ### Project Roadmap
 - [x] Fix `--install-llama` fails to restart `llama-server` and throws `NameError` (High)
 - [x] Fix `--install-llama` fails with "No compatible assets found" for release `b10297` (High)
 - [x] Fix `--install-llama` crashes with `Error: 'backend'` after selecting Operating System & Architecture (High)
+- [x] --install-llama fails to list all backends and selects incorrect archive for CPU (High)

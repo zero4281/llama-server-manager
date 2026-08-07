@@ -251,45 +251,44 @@ def parse_asset_name(name: str) -> Dict[str, str]:
     # Tag can contain hyphens, so we need a more flexible pattern
     # Backend is optional, and variant is the optional suffix after architecture
     # Platform can contain hyphens (e.g., rocky-linux), arch is always x64 or arm64
-    new_pattern = r"^llama-[a-zA-Z0-9_.-]+-bin-(?P<platform>[a-zA-Z0-9_.-]+(?:-[a-zA-Z0-9_.-]+)*)-(?:-(?P<backend>[a-z]+))?-(?P<arch>x64|arm64)(?:-(?P<variant>\w+))?$"
+    new_pattern = r"^llama-[a-zA-Z0-9_.-]+-bin-(?P<platform>[a-zA-Z0-9_.-]+?)(?:-(?P<backend>[a-z]+))?-(?P<arch>x64|arm64)(?:-(?P<variant>\w+))?$"
     match = re.match(new_pattern, base_name)
     if match:
         platform_name = match.group('platform')
         arch = match.group('arch')
         variant = match.group('variant')
+        backend = match.group('backend')
         
         parts = [p for p in platform_name.split('-') if p != "bin"]
         
-        
-        platform_name = ""
-        backend = None
-        
-        if len(parts) == 1:
-            platform_name = parts[0].capitalize()
-            backend = None
-        elif len(parts) == 2:
-            if parts[0].lower() in known_os and parts[1].lower() in known_os:
-                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
-                backend = None
-            elif parts[0].lower() in known_os:
+        if backend is None:
+            if len(parts) == 1:
                 platform_name = parts[0].capitalize()
-                backend = parts[1]
-            else:
-                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
                 backend = None
-        else:
-            if parts[0].lower() == "rocky" and parts[1].lower() == "linux":
-                platform_name = "Linux"
-                backend = "-".join(parts[2:])
-            elif parts[0].lower() in known_os and parts[1].lower() in known_os:
-                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
-                backend = "-".join(parts[2:])
-            elif parts[0].lower() in known_os:
-                platform_name = parts[0].capitalize()
-                backend = "-".join(parts[1:])
+            elif len(parts) == 2:
+                if parts[0].lower() in known_os and parts[1].lower() in known_os:
+                    platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+                    backend = None
+                elif parts[0].lower() in known_os:
+                    platform_name = parts[0].capitalize()
+                    backend = parts[1]
+                else:
+                    platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+                    backend = None
             else:
-                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
-                backend = "-".join(parts[2:])
+                if parts[0].lower() == "rocky" and parts[1].lower() == "linux":
+                    platform_name = "Linux"
+                    backend = "-".join(parts[2:])
+                elif parts[0].lower() in known_os and parts[1].lower() in known_os:
+                    platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+                    backend = "-".join(parts[2:])
+                elif parts[0].lower() in known_os:
+                    platform_name = parts[0].capitalize()
+                    backend = "-".join(parts[1:])
+                else:
+                    platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+                    backend = "-".join(parts[2:])
+
 
 
         
