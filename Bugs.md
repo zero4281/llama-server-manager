@@ -40,7 +40,6 @@ A new automated test case should be added to `Tests/test_ui_manager_pytest.py` t
 
 **Resolution:** Updated the `new_pattern` regex in `llama_updater.py` to include an optional backend segment, ensuring that releases with backends are correctly parsed and included in the platform selection menu.
 
-
 **Title:** `--install-llama` crashes with `Error: 'backend'` after selecting Operating System & Architecture
 **Status:** ✅ **COMPLETED**
 **Severity/Priority:** **High**
@@ -59,7 +58,6 @@ When running `./llama-server-manager --install-llama`, the application exits aft
 **Test Suitability:**
 A new automated test case should be added to `Tests/test_ui_manager_pytest.py` to verify that `llama_updater.py` correctly identifies and parses the backend segment from the release assets, ensuring it doesn't fail when a valid backend is present for the selected OS/Architecture.
 
-
 **Title:** `--install-llama` fails to list all backends and selects incorrect archive for CPU
 **Status:** ✅ **COMPLETED**
 **Severity/Priority:** High
@@ -77,9 +75,27 @@ When running `./llama-server-manager --install-llama` and selecting the default 
 
 **Resolution:** Updated `parse_asset_name` regex to correctly identify optional backend segments and improved platform/backend identification logic to ensure correct archive selection.
 
+**Title:** `--version` blinks and doesn't display correctly
+**Status:** **OPEN**
+**Severity/Priority:** Medium
+**Dependencies:** `ui_manager.py`, `main.py`
+**Description:**
+- When running `./llama-server-manager --version`, the terminal blinks significantly and the version information may be difficult to read due to the rapid `curses` initialization and refresh cycle used for a single message.
+- The user wants the version information to persist on the screen after the command completes, similar to how the output remains visible after `./llama-server-manager --install-llama` (where the process stays alive).
+- Currently, for `--version`, the information disappears immediately upon process exit. The goal is to have the version information stay visible.
+- For `--install-llama`, the final version information persists correctly because the `llama-server` process is started and the manager's process remains alive.
+
+**Verified Reproduction Workflow:**
+1. Run `./llama-server-manager --version`. Observe the terminal blinking and the escape-code-heavy output.
+2. Run `./llama-server-manager --install-llama`. Observe that the final version information persists on the screen because the process stays alive.
+3. Contrast the two: the version info for `--version` disappears immediately, while for `--install-llama` it stays.
+
+**Test Suitability:**
+No new automated test is strictly required as this is a UI/UX and terminal behavior issue. Verification is performed by observing the real terminal behavior.
 
 ### Project Roadmap
 - [x] Fix `--install-llama` fails to restart `llama-server` and throws `NameError` (High)
 - [x] Fix `--install-llama` fails with "No compatible assets found" for release `b10297` (High)
 - [x] Fix `--install-llama` crashes with `Error: 'backend'` after selecting Operating System & Architecture (High)
 - [x] --install-llama fails to list all backends and selects incorrect archive for CPU (High)
+- [ ] --version blinks and may not display correctly; --install-llama version info persists on screen (Medium)
