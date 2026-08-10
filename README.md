@@ -268,6 +268,7 @@ print(response.choices[0].message.content)
 - All automated tests live in the `Tests/` directory.
 - The test suite uses **mocked curses**, ensuring that tests run cleanly in any environment, including CI/CD pipelines.
 - For manual verification against a real terminal, see `Testing Strategy.md`.
+- `Requirements.md` and `Testing Strategy.md` are written to be compatible with the `sdlc-skills` repository (https://github.com/zero4281/sdlc-skills).
 
 ### Development Notes
 - **Version Source of Truth**: The `__version__` constant in `main.py` is the source of truth for the `--version` flag.
