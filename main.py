@@ -229,8 +229,7 @@ class Main:
         
         # 2. If --version: instantiate UIManager, print version, exit
         if self.args.version:
-            self.ui = UIManager("Llama Server Manager")
-            self.ui.render_success(f"llama-server-manager version {__version__}")
+            print(f"llama-server-manager version {__version__}")
             sys.exit(0)
         
         # 3. Call load_config() to obtain the configuration dict.
