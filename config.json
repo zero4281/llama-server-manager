@@ -1,0 +1,16 @@
+{
+    "options": {
+        "llama-cpp": {
+            "os-architecture": "Ubuntu-x64",
+            "backend": "cpu"
+        }
+    },
+    "llama-server": {
+        "options": {}
+    },
+    "logging": {
+        "enabled": true,
+        "level": "INFO",
+        "file": null
+    }
+}

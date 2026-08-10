@@ -1,2 +1,0 @@
-- name: Generate Checksums
-  run: sha256sum * > checksums.txt
