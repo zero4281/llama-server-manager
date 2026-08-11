@@ -1131,7 +1131,7 @@ class LlamaUpdater:
         # Filter out the current release_tag to avoid duplicates
         unique_recent_releases = []
         for rel in sorted_releases:
-            if rel['tag_name'] != release_tag and rel['tag_name'] not in [r['tag_name'] for r in unique_recent_releases]:
+            if rel['tag_name'] not in [r['tag_name'] for r in unique_recent_releases]:
                 unique_recent_releases.append(rel)
             if len(unique_recent_releases) == 5:
                 break
@@ -1165,7 +1165,7 @@ class LlamaUpdater:
                 return
             release_tag = release["tag_name"]
         else:
-            release = releases[selected_tag_idx - 1]
+            release = unique_recent_releases[selected_tag_idx - 1]
             release_tag = release["tag_name"]
         
         # Call install_release which handles platform detection, zip selection, and installation
