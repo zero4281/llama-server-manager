@@ -1143,7 +1143,7 @@ class LlamaUpdater:
         for i, r in enumerate(unique_recent_releases, 2):
             tag_options.append({
                 'label': r['tag_name'],
-                'description': 'latest' if r['tag_name'] == release_tag else ''
+                'description': ''
             })
         
         # Use UIManager for tag selection

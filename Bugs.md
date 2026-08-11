@@ -60,5 +60,26 @@ Furthermore, the program ignores the user's selection from this menu. Even if th
 **Test Suitability:**
 Update the tests in `Tests/test_ui_manager_pytest.py` (or a relevant integration test) to ensure that the `release` object passed to `install_release` matches the selection made in the `render_menu` call.
 
+
+
+**Title:** "latest" text appears as a separate line in "Select a Release" menu
+**Status:** **COMPLETED**
+**Severity/Priority:** **Low**
+**Dependencies:** `llama_updater.py`, `ui_manager.py`
+**Description:**
+When running `./llama-server-manager --install-llama`, the "Select a Release" menu lists the default release but includes a "latest" line on the second line. This happens because the `description` field for the default release is set to "latest", and `ui_manager.py` renders descriptions on a new line. This is out of spec for the menu.
+
+**Resolution:**
+Modified `llama_updater.py` to ensure the "latest" string is not included in the description of the default release option when rendering the selection menu, preventing it from appearing as a separate line.
+
+**Verified Reproduction Workflow:**
+1. Run `./llama-server-manager --install-llama`.
+2. Observe the "Select a Release" menu.
+3. Notice the "latest" line between the first and second options.
+
+**Test Suitability:**
+Add a test case to `Tests/test_ui_manager_pytest.py` to verify that the default release option in the tag selection menu does not have a description that triggers an extra line in the rendered menu.
+
 ## Project Roadmap
 - [ ] Fix `--install-llama` menu selection and default release bug
+- [x] Fix "latest" text appearing as a separate line in "Select a Release" menu
