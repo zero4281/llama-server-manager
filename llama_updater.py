@@ -251,7 +251,7 @@ def parse_asset_name(name: str) -> Dict[str, str]:
     # Tag can contain hyphens, so we need a more flexible pattern
     # Backend is optional, and variant is the optional suffix after architecture
     # Platform can contain hyphens (e.g., rocky-linux), arch is always x64 or arm64
-    new_pattern = r"^llama-[a-zA-Z0-9_.-]+-bin-(?P<platform>[a-zA-Z0-9_.-]+?)(?:-(?P<backend>[a-z]+))?-(?P<arch>x64|arm64)(?:-(?P<variant>\w+))?$"
+    new_pattern = r"^llama-[a-zA-Z0-9_.-]+-bin-(?P<platform>[a-zA-Z0-9_.-]+?)(?:-(?P<backend>[a-zA-Z0-9_.-]+))?-(?P<arch>x64|arm64)(?:-(?P<variant>\w+))?$"
     match = re.match(new_pattern, base_name)
     if match:
         platform_name = match.group('platform')
