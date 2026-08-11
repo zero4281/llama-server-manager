@@ -261,32 +261,63 @@ def parse_asset_name(name: str) -> Dict[str, str]:
         
         parts = [p for p in platform_name.split('-') if p != "bin"]
         
+        # Normalization logic for platform_name
+        if len(parts) == 1:
+            platform_name = parts[0].capitalize()
+        elif len(parts) == 2:
+            if parts[0].lower() in known_os and parts[1].lower() in known_os:
+                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+            elif parts[0].lower() in known_os:
+                platform_name = parts[0].capitalize()
+            else:
+                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+        elif len(parts) == 3:
+            if parts[0] == "rocky" and parts[1] == "linux":
+                platform_name = "Linux"
+            elif parts[0].lower() in known_os and parts[1].lower() in known_os:
+                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+            elif parts[0].lower() in known_os:
+                platform_name = parts[0].capitalize()
+            else:
+                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+        else:
+            if parts[0] == "rocky" and parts[1] == "linux":
+                platform_name = "Linux"
+            elif parts[0].lower() in known_os and parts[1].lower() in known_os:
+                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+            elif parts[0].lower() in known_os:
+                platform_name = parts[0].capitalize()
+            else:
+                platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+        
+        # Assign backend if not already set
         if backend is None:
             if len(parts) == 1:
-                platform_name = parts[0].capitalize()
                 backend = None
             elif len(parts) == 2:
                 if parts[0].lower() in known_os and parts[1].lower() in known_os:
-                    platform_name = f"{parts[0]}-{parts[1]}".capitalize()
                     backend = None
                 elif parts[0].lower() in known_os:
-                    platform_name = parts[0].capitalize()
                     backend = parts[1]
                 else:
-                    platform_name = f"{parts[0]}-{parts[1]}".capitalize()
                     backend = None
-            else:
-                if parts[0].lower() == "rocky" and parts[1].lower() == "linux":
-                    platform_name = "Linux"
+            elif len(parts) == 3:
+                if parts[0] == "rocky" and parts[1] == "linux":
                     backend = "-".join(parts[2:])
                 elif parts[0].lower() in known_os and parts[1].lower() in known_os:
-                    platform_name = f"{parts[0]}-{parts[1]}".capitalize()
                     backend = "-".join(parts[2:])
                 elif parts[0].lower() in known_os:
-                    platform_name = parts[0].capitalize()
                     backend = "-".join(parts[1:])
                 else:
-                    platform_name = f"{parts[0]}-{parts[1]}".capitalize()
+                    backend = "-".join(parts[2:])
+            else:
+                if parts[0] == "rocky" and parts[1] == "linux":
+                    backend = "-".join(parts[2:])
+                elif parts[0].lower() in known_os and parts[1].lower() in known_os:
+                    backend = "-".join(parts[2:])
+                elif parts[0].lower() in known_os:
+                    backend = "-".join(parts[1:])
+                else:
                     backend = "-".join(parts[2:])
 
 

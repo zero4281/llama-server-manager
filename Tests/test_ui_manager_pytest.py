@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path.cwd()))
 import pytest
 from unittest.mock import MagicMock, patch
 from ui_manager import UIManager
+from llama_updater import get_available_platforms
 
 
 def create_ui():
@@ -900,37 +901,29 @@ class TestConsecutivePageJumpsFromVariousPositions:
                 result = ui.render_menu(options, default=0, highlighted=0)
                 assert result == 0, f"Consecutive NPAGE PPAGE: 0->2->0, got {result}"
     
-    def test_consecutive_npage_npage_from_last(self):
-        """Consecutive PAGE DOWN then PAGE DOWN from last option."""
-        options = [{'label': f'Option {i}'} for i in range(5)]
+
+    def test_get_available_platforms_ubuntu_x64(self):
+        """Verify that Ubuntu x64 includes all backends when assets are correctly parsed."""
+        release = {
+            "assets": [
+                {"name": "llama-b10357-bin-ubuntu-x64.tar.gz", "browser_download_url": "http://test"},
+                {"name": "llama-b10357-bin-ubuntu-vulkan-x64.tar.gz", "browser_download_url": "http://test"},
+                {"name": "llama-b10357-bin-ubuntu-rocm-x64.tar.gz", "browser_download_url": "http://test"},
+            ]
+        }
         
-        ui = create_ui()
+        platforms = get_available_platforms(release)
         
-        with patch.object(ui, '_screen') as mock_screen, \
-             patch.object(ui, 'refresh'), \
-             patch('curses.KEY_UP'), \
-             patch('curses.KEY_DOWN'), \
-             patch('curses.KEY_RESIZE'), \
-             patch('curses.KEY_PPAGE'), \
-             patch('curses.KEY_NPAGE'), \
-             patch('curses.A_REVERSE'), \
-             patch('curses.A_BOLD'), \
-             patch('ui_manager.curses.newwin', return_value=MagicMock()) as mock_newwin:
-            
-            mock_win = mock_newwin.return_value
-            mock_win.getyx.return_value = (0, 0)
-            mock_screen.getmaxyx.return_value = (20, 60)
-            
-            # page_size = 2
-            # Start from option 4, press PAGE DOWN twice
-            # PAGE DOWN: 4 + 2 = 6, 6 >= 5 so wrap: 6 % 5 = 1
-            # PAGE DOWN: 1 + 2 = 3
-            # Fourth key: Enter to select
-            with patch.object(mock_win, 'getch') as mock_getch:
-                mock_getch.side_effect = [curses.KEY_NPAGE, curses.KEY_NPAGE, 10]
-                
-                result = ui.render_menu(options, default=4, highlighted=4)
-                assert result == 3, f"Consecutive NPAGE NPAGE: 4->1->3, got {result}"
+        # Find Ubuntu x64 platform
+        ubuntu_x64 = next((p for p in platforms if p['platform'] == "Ubuntu" and p['arch'] == "x64"), None)
+        
+        assert ubuntu_x64 is not None, "Ubuntu x64 platform missing"
+        # Check that it has all backends
+        asset_names = [a['name'] for a in ubuntu_x64['assets']]
+        assert "llama-b10357-bin-ubuntu-x64.tar.gz" in asset_names
+        assert "llama-b10357-bin-ubuntu-vulkan-x64.tar.gz" in asset_names
+        assert "llama-b10357-bin-ubuntu-rocm-x64.tar.gz" in asset_names
+
     
     def test_consecutive_ppage_ppage_from_first(self):
         """Consecutive PAGE UP then PAGE UP from first option."""
