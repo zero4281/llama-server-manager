@@ -1,101 +1,23 @@
-### Current Bug Reports
+## Current Bug Reports
 
-**Title:** `--install-llama` fails to restart `llama-server` and throws `NameError`
-**Status:** ✅ **COMPLETED**
-**Severity/Priority:** **High**
-**Dependencies:** `llama_updater.py`
-**Description:**
-When running `./llama-server-manager --install-llama`, the application fails to restart `llama-server` if it is already running. It also fails to persist the configuration even if it isn't running, throwing a `NameError: name 'config' is not defined` (or `NameError: name 'args' is not defined`) at the end of the installation process.
-
-This occurs because the `install_release` function in `llama_updater.py` attempts to use `args` and `config` variables which are neither passed as arguments nor loaded within its scope. The `config` variable is only loaded in the `_install_release_core` helper function, and `args` is completely missing from the `install_release` signature.
-
-**Verified Reproduction Workflow:**
-1. Start `llama-server` (e.g. using `runner.py` or manually) so that `llama-server.pid` exists.
-2. Run `./llama-server-manager --install-llama`.
-3. Select default options (Enter 4 times) to proceed with the default release, platform, and backend.
-4. Observe the error `NameError: name 'args' is not defined` (if `llama-server` was running) or `NameError: name 'config' is not defined` (if it was not) at the end of the installation process.
-
-**Resolution:** Fixed `NameError` by passing `args` and `config` to `install_release` in `llama_updater.py`. Improved configuration persistence and handled `llama-server` restart logic.
-
-**Affected Components:**
-- `llama_updater.py` (`install_release` function)
-
-**Title:** `--install-llama` fails with "No compatible assets found" for release `b10297`
-**Status:** ✅ **COMPLETED**
-**Severity/Priority:** **High**
-**Dependencies:** `llama_updater.py`
-**Description:**
-When running `./llama-server-manager --install-llama` and manually entering release tag `b10297`, the application exits with the message: "No compatible assets found for this release."
-
-The issue stems from how `llama_updater.py` parses assets for a release. It appears that the naming pattern regex or the filtering logic is failing to correctly identify and exclude incompatible assets (like `llama-b10297-xcframework.zip`) while still finding valid assets for the target platform. This results in an empty list of available platforms, triggering the error message.
-
-**Verified Reproduction Workflow:**
-1. Run `./llama-server-manager --install-llama`.
-2. Select option `0` ("Enter a tag manually").
-3. Enter `b10297` when prompted for the release tag.
-4. Observe the error: "No compatible assets found for this release."
-
-**Test Suitability:**
-A new automated test case should be added to `Tests/test_ui_manager_pytest.py` to verify that `llama_updater.py` correctly filters assets and identifies compatible platforms, ensuring that non-binary assets (e.g., XCFrameworks) are excluded from the selection menus.
-
-**Resolution:** Updated the `new_pattern` regex in `llama_updater.py` to include an optional backend segment, ensuring that releases with backends are correctly parsed and included in the platform selection menu.
-
-**Title:** `--install-llama` crashes with `Error: 'backend'` after selecting Operating System & Architecture
-**Status:** ✅ **COMPLETED**
-**Severity/Priority:** **High**
+**Title:** Missing Vulkan option in compute backend menu
+**Status:** **COMPLETED**
+**Severity/Priority:** **Medium**
 **Dependencies:** `llama_updater.py`, `ui_manager.py`
 **Description:**
-When running `./llama-server-manager --install-llama`, the application exits after the "Select Operating System & Architecture" (second) menu with the message: "Error: 'backend'". The application should proceed to the "Select Compute Backend" menu but fails to resolve the backend segment for the selected OS/Architecture.
+When running `./llama-server-manager --install-llama`, the "Select Compute Backend" menu is missing the "Vulkan" option. Other menus (Release, OS/Arch, Confirmation) appear correctly. The installation succeeds but the user is unable to select Vulkan as a compute backend.
+
+**Resolution:**
+Updated the regex in `llama_updater.py` to correctly capture the backend segment in asset names (e.g., 'vulkan'), ensuring it appears in the Compute Backend selection menu.
 
 **Verified Reproduction Workflow:**
 1. Run `./llama-server-manager --install-llama`.
 2. Press Enter to select the default release.
-3. Press Enter to select the default Operating System & Architecture (e.g., Ubuntu x64).
-4. Observe the error message `Error: 'backend'` and the application exit.
-
-**Resolution:** Updated `llama_updater.py` to ensure the `backend` key is always included in the parsed asset dictionary, even when the release name uses the old naming format or does not specify a backend. This prevents the `KeyError` that occurred during the selection flow.
+3. Press Enter to select the default Operating System & Architecture (Ubuntu x64).
+4. Observe that the "Select Compute Backend" menu lists `cpu`, `openvino-2026.2.1`, `rocm-7.2`, `sycl-fp16`, and `sycl-fp32`, but lacks `vulkan`.
 
 **Test Suitability:**
-A new automated test case should be added to `Tests/test_ui_manager_pytest.py` to verify that `llama_updater.py` correctly identifies and parses the backend segment from the release assets, ensuring it doesn't fail when a valid backend is present for the selected OS/Architecture.
+A new automated test case should be added to `Tests/test_ui_manager_pytest.py` to verify that `llama_updater.py` correctly parses the backend segment from the release assets and includes "vulkan" in the selection menu when available for the selected OS/Architecture.
 
-**Title:** `--install-llama` fails to list all backends and selects incorrect archive for CPU
-**Status:** ✅ **COMPLETED**
-**Severity/Priority:** High
-**Dependencies:** `llama_updater.py`
-**Description:**
-When running `./llama-server-manager --install-llama` and selecting the default options, the "Select Compute Backend" menu only displays "cpu (default)" instead of listing all available backends (e.g., Vulkan, ROCm, OpenVINO, SYCL). Furthermore, the "Confirm Installation" menu selects the wrong archive (e.g., the OpenVINO variant) instead of the correct CPU-only archive for the Ubuntu x64 platform. This indicates that `parse_asset_name` is not correctly identifying backend segments from the filenames.
-
-**Verified Reproduction Workflow:**
-1. Run `./llama-server-manager --install-llama`.
-2. Press Enter to select the default release.
-3. Press Enter to select the default Operating System & Architecture (e.g., Ubuntu x64).
-4. Observe that the "Select Compute Backend" menu only contains "cpu (default)".
-5. Press Enter to select "cpu (default)".
-6. Observe that the "Confirm Installation" menu shows an incorrect archive (e.g., an OpenVINO variant) instead of the standard CPU archive for the selected platform.
-
-**Resolution:** Updated `parse_asset_name` regex to correctly identify optional backend segments and improved platform/backend identification logic to ensure correct archive selection.
-
-**Title:** `--version` blinks and doesn't display correctly
-**Status:** **OPEN**
-**Severity/Priority:** Medium
-**Dependencies:** `ui_manager.py`, `main.py`
-**Description:**
-- When running `./llama-server-manager --version`, the terminal blinks significantly and the version information may be difficult to read due to the rapid `curses` initialization and refresh cycle used for a single message.
-- The user wants the version information to persist on the screen after the command completes, similar to how the output remains visible after `./llama-server-manager --install-llama` (where the process stays alive).
-- Currently, for `--version`, the information disappears immediately upon process exit. The goal is to have the version information stay visible.
-- For `--install-llama`, the final version information persists correctly because the `llama-server` process is started and the manager's process remains alive.
-
-**Verified Reproduction Workflow:**
-1. Run `./llama-server-manager --version`. Observe the terminal blinking and the escape-code-heavy output.
-2. Run `./llama-server-manager --install-llama`. Observe that the final version information persists on the screen because the process stays alive.
-3. Contrast the two: the version info for `--version` disappears immediately, while for `--install-llama` it stays.
-
-**Test Suitability:**
-No new automated test is strictly required as this is a UI/UX and terminal behavior issue. Verification is performed by observing the real terminal behavior.
-
-### Project Roadmap
-- [x] Fix `--install-llama` fails to restart `llama-server` and throws `NameError` (High)
-- [x] Fix `--install-llama` fails with "No compatible assets found" for release `b10297` (High)
-- [x] Fix `--install-llama` crashes with `Error: 'backend'` after selecting Operating System & Architecture (High)
-- [x] --install-llama fails to list all backends and selects incorrect archive for CPU (High)
-- [ ] --version blinks and may not display correctly; --install-llama version info persists on screen (Medium)
+## Project Roadmap
+- [x] Fix missing Vulkan option in compute backend menu
