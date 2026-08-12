@@ -268,7 +268,7 @@ Menu width is calculated as `max(terminal_width * 0.6, label_length + 15)`, capp
 
 The automated suite above runs entirely against **mocked curses** — it never touches a real TTY. That's correct for CI, but it can't confirm that the UI actually renders and behaves correctly in a live terminal. Use this section to manually verify a change against the real, unmocked TUI before considering it done.
 
-**This is a separate, uncounted verification layer.** It does not add to the ~61 test target in Maintenance Rules, its scripts do not live in `Tests/`, and its artifacts are not committed — they are scratch output for the person/agent running the check, inspected and then discarded.
+**This is a separate, uncounted verification layer.** It does not add to the ~65 test target in Maintenance Rules, its scripts do not live in `Tests/`, and its artifacts are not committed — they are scratch output for the person/agent running the check, inspected and then discarded.
 
 ### When to use this
 
@@ -476,14 +476,14 @@ Before committing a test that calls `render_menu` or `render_confirmation`:
 4. **No source inspection tests.** Do not write tests that call `inspect.getsource()` or inspect the implementation text.
 5. **Integration tests cover cross-method flows only.** A sequence like menu → selection → confirmation → progress bar belongs in the integration section of `test_ui_manager_comprehensive.py`. Unit behavior belongs in the dedicated files.
 6. **Mark known-failing tests.** Use `@pytest.mark.xfail` with a reason string rather than commenting out or deleting tests that are temporarily broken.
-7. **Target test counts.** The suite currently sits at approximately 61 tests. When expanding coverage (see below), aim for these targets per file:
+7. **Target test counts.** The suite currently sits at approximately 65 tests. When expanding coverage (see below), aim for these targets per file:
 
 | File                                | Current | Target |
 | ----------------------------------- | ------- | ------ |
 | `test_ui_manager_api.py`            | 5       | 5      |
 | `test_ui_manager_comprehensive.py`  | 6       | 6      |
-| `test_ui_manager_pytest.py`         | 41      | 30     |
-| `test_ui_manager_terminal_sizes.py` | 9       | 9      |
+| `test_ui_manager_pytest.py`         | 39      | 30     |
+| `test_ui_manager_terminal_sizes.py` | 15      | 9      |
 
 ---
 
