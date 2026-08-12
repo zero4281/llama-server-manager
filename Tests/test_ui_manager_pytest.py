@@ -62,7 +62,6 @@ class TestUIManagerPytest:
             assert not ui._using_curses
             assert ui._screen is None
 
-    
     def test_menu_navigation_arrows(self):
         """Test arrow key navigation in menu."""
         options = [{'label': f'Option {i}'} for i in range(5)]
@@ -91,6 +90,12 @@ class TestUIManagerPytest:
                 # Call render_menu which will use the mocked window
                 result = ui.render_menu(options, default=0, highlighted=0)
                 assert result == 0
+    
+    def test_render_menu_empty_options(self):
+        """Test that render_menu returns -1 immediately when provided with an empty options list."""
+        ui = create_ui()
+        result = ui.render_menu([], default=0, highlighted=0)
+        assert result == -1
     
     def test_menu_typing_selection(self):
         """Test selecting by typing the number."""
@@ -183,23 +188,97 @@ class TestUIManagerPytest:
     def test_confirmation_y_confirms(self):
         """y or Y confirms the action."""
         ui = create_ui()
-            
+        
         with patch.object(ui, '_screen') as mock_screen, \
              patch.object(ui, 'refresh'), \
              patch('ui_manager.curses.newwin', return_value=MagicMock()) as mock_newwin, \
              patch('sys.stdin.isatty', return_value=False):
-
+            
             mock_win = mock_newwin.return_value
             mock_win.getyx.return_value = (0, 0)
             mock_screen.getmaxyx.return_value = (20, 60)
-
+            
             with patch.object(mock_win, 'getch') as mock_getch:
                 mock_getch.return_value = ord('y')
                 # Mock window validation to return True
                 mock_win._validate_window = MagicMock(return_value=True)
-
+                
                 result = ui.render_confirmation("Are you sure?", "Release 1.0")
                 assert result is True
+
+    def test_confirmation_cancel_keys(self):
+        """Test that Escape or KEY_RESIZE cancels the action."""
+        ui = create_ui()
+        
+        with patch.object(ui, '_screen') as mock_screen, \
+             patch.object(ui, 'refresh'), \
+             patch('ui_manager.curses.newwin', return_value=MagicMock()) as mock_newwin:
+            
+            mock_win = mock_newwin.return_value
+            mock_win.getyx.return_value = (0, 0)
+            mock_screen.getmaxyx.return_value = (20, 60)
+            
+            # Test Escape (27)
+            with patch.object(mock_win, 'getch') as mock_getch:
+                mock_getch.side_effect = [27]
+                result = ui.render_confirmation("Are you sure?", "Release 1.0")
+                assert result is False, "Escape should cancel confirmation"
+            
+            # Test KEY_RESIZE
+            with patch.object(mock_win, 'getch') as mock_getch:
+                mock_getch.side_effect = [curses.KEY_RESIZE]
+                result = ui.render_confirmation("Are you sure?", "Release 1.0")
+                assert result is False, "KEY_RESIZE should cancel confirmation"
+
+
+    def test_confirmation_cancel_keys(self):
+        """Test that Escape or KEY_RESIZE cancels the action."""
+        ui = create_ui()
+        
+        with patch.object(ui, '_screen') as mock_screen, \
+             patch.object(ui, 'refresh'), \
+             patch('ui_manager.curses.newwin', return_value=MagicMock()) as mock_newwin:
+            
+            mock_win = mock_newwin.return_value
+            mock_win.getyx.return_value = (0, 0)
+            mock_screen.getmaxyx.return_value = (20, 60)
+            
+            # Test Escape (27)
+            with patch.object(mock_win, 'getch') as mock_getch:
+                mock_getch.side_effect = [27]
+                result = ui.render_confirmation("Are you sure?", "Release 1.0")
+                assert result is False, "Escape should cancel confirmation"
+            
+            # Test KEY_RESIZE
+            with patch.object(mock_win, 'getch') as mock_getch:
+                mock_getch.side_effect = [curses.KEY_RESIZE]
+                result = ui.render_confirmation("Are you sure?", "Release 1.0")
+                assert result is False, "KEY_RESIZE should cancel confirmation"
+
+    def test_confirmation_cancel_keys(self):
+        """Test that Escape or KEY_RESIZE cancels the action."""
+        ui = create_ui()
+        
+        with patch.object(ui, '_screen') as mock_screen, \
+             patch.object(ui, 'refresh'), \
+             patch('ui_manager.curses.newwin', return_value=MagicMock()) as mock_newwin:
+            
+            mock_win = mock_newwin.return_value
+            mock_win.getyx.return_value = (0, 0)
+            mock_screen.getmaxyx.return_value = (20, 60)
+            
+            # Test Escape (27)
+            with patch.object(mock_win, 'getch') as mock_getch:
+                mock_getch.side_effect = [27]
+                result = ui.render_confirmation("Are you sure?", "Release 1.0")
+                assert result is False, "Escape should cancel confirmation"
+            
+            # Test KEY_RESIZE
+            with patch.object(mock_win, 'getch') as mock_getch:
+                mock_getch.side_effect = [curses.KEY_RESIZE]
+                result = ui.render_confirmation("Are you sure?", "Release 1.0")
+                assert result is False, "KEY_RESIZE should cancel confirmation"
+
 class TestMenuPageJump:
     """Tests for KEY_PPAGE and KEY_NPAGE page jump behavior."""
     

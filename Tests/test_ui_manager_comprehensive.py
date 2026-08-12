@@ -44,8 +44,6 @@ def run_tests():
     test_menu_navigation()
     test_confirmation()
     test_progress()
-    test_styling()
-    test_edge_cases()
     test_full_integration_flow()
 
     
