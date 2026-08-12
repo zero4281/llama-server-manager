@@ -1,63 +1,55 @@
 # Plan: Llama Server Manager
 
-**Version:** 1.1.2
+**Version 1.1.3**
 
-## Section 1: Current State Assessment
+Revision Jump Context (If applicable): None (No intermediate revisions were jumped).
 
-### Requirement Verification Status
+# Section 1: Current State Assessment
 
-| Requirement | Status | Notes |
-|---|---|---|
-| Req 3 (Configuration) | Fully Met | |
-| Req 4 (Start Script) | Fully Met | |
-| Req 5 (Main Entry Point) | Partially Met | Missing `__version__` constant and `--version` flag. |
-| Req 6 (Configuration Module) | Fully Met | |
-| Req 7 (Logging Module) | Fully Met | |
-| Req 8 (Update/Download Module) | Partially Met | Restart behavior (§8.5.1) is unmet. |
-| Req 9 (Run Script) | Fully Met | |
-| Req 10 (CLI UI Module) | Fully Met | |
-| Req 11 (Non-Functional) | Fully Met | |
+## Verification Table
 
-### Structural & Functional Drift
-- **Version Mismatch:** `Plan.md` was at v1.1.0 while `Requirements.md` is at v1.1.2.
-- **Incorrect Status:** Requirement 8 was incorrectly marked as "Fully Met" in previous documentation.
-- **Requirement 5 Specifics:** Specific items for Requirement 5 (Main Entry Point) need to be addressed (missing `__version__` constant and `--version` flag).
+| File               | Finding                                                                                                                                         | Status               |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `main.py`          | `__version__` is 1.1.2                                                                                                                          | Outdated             |
+| `main.py`          | `--version` uses stdout instead of `UIManager.print_message`                                                                                    | Incomplete           |
+| `main.py`          | `llama-cpp` error message includes "Error: " prefix                                                                                             | Minor Drift          |
+| `llama_updater.py` | `_install_release_core` saves `config.json` during fast-path                                                                                    | Violation of Req 8.7 |
+| `runner.py`        | `_merge_args` is a no-op — Req 5.2/9.2 define no CLI pass-through mechanism for `llama-server`; launch arguments come solely from `config.json` | Correct as-is        |
 
-## Section 2: Core Engineering Decisions or Filename Consistency
-- **Configuration Ownership:** `config.py` is the single source of truth for reading, writing, and default-generation of `config.json`. No other module may access `config.json` directly.
-- **Logging Isolation:** `logger.py` configures the root logger; all other modules obtain independent loggers via `logging.getLogger(__name__)`.
-- **UI Consistency:** `UIManager` is the sole entry point for all interactive output (menus, prompts, progress bars, and messages) within the curses environment.
+## Structural/Functional Drift Breakdown
 
-## Section 3: Testing & Verification Status
-- **Unit Tests:**
-  - [ ] Test `config.py`'s `load_config()` with missing/malformed files.
-  - [ ] Test `logger.py`'s root logger configuration.
-- **Integration Tests:**
-  - [ ] Verify `main.py`'s startup sequence correctly handles `--version`.
-  - [ ] Verify `LlamaUpdater`'s fast path and fallback logic.
-- **Manual Checklists:**
-  - [ ] Verify `llama-server-manager --version` output.
-  - [ ] Verify `llama-server` restart behavior on install/update.
+- Versioning information is inconsistent across components.
+- UI message routing is partially implemented for new flags.
+- Fast-path update logic violates configuration persistence requirements.
 
-## Section 4: Exit Codes
-- `0`: Success (Normal exit, version display, update completion).
-- `1`: General Error (Config parsing error, network failure, file I/O error).
-- `2`: Dependency Missing (e.g. `llama-cpp` not found).
-- `3`: User Cancellation (Exiting via `n`/`Esc` in menus/confirmation).
+# Section 2: Core Engineering Decisions or Filename Consistency
 
-## Section 5: Security
-- No sensitive credentials (passwords, API keys) are stored in `config.json`.
-- Local file permissions are respected; `config.json` is created in the project directory.
-- The program does not execute arbitrary shell commands except for the managed `llama-server` process.
+- Align all versioning to 1.1.3.
+- Ensure all UI outputs route through `UIManager`.
+- Refactor `llama_updater.py` to prevent config writes during fast-path updates.
+- No action needed on `runner.py`'s argument handling — `_merge_args` being a no-op with respect to CLI pass-through is correct; `llama-server` launch arguments are derived solely from `config.json` (Req 5.2, 9.2).
 
-## Section 6: Dependencies
-- Python 3.12+
-- `requests` (for GitHub API calls)
-- Standard `curses` library (for CLI UI)
-- Standard `logging` library (for program logs)
+# Section 3: Testing & Verification Status
 
-## Section 7: Non-Functional Requirements
-- **Cross-platform:** Linux, macOS, Windows (WSL).
-- **Reliability:** Proper cleanup of PID files and temporary download archives.
-- **User Experience:** Interactive workflow must remain consistent within the `curses` environment.
-- **Transparency:** Progress bars and status messages must be clear and real-time.
+- Unit: Test `--version` flag output and `LlamaUpdater` matching logic.
+- Integration: Verify startup sequence and config persistence.
+- Manual: Verify UI styling and error messages.
+
+# Section 4: Exit Codes
+
+- Define standard exit codes for: checksum/download verification failure (Req 8.5), GitHub API unreachable or rate-limited (Req 8.6), and forced (`SIGKILL`) termination during shutdown (Req 9.5).
+
+# Section 5: Security
+
+- Ensure `llama-cpp` paths are sanitized.
+- Validate asset matching logic.
+
+# Section 6: Dependencies
+
+- `llama-cpp`: resolved dynamically at runtime via GitHub release tags (e.g. `b8800`); not pinned to a fixed version in this document (Req 8.2, 8.3.1, 8.7).
+- `requirements.txt` updates.
+
+# Section 7: Non-Functional Requirements
+
+- Startup time < 2s.
+- Clear error messaging.
