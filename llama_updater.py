@@ -1065,14 +1065,16 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
         options = config.get("options", {})
 
         llama_cpp = options.get("llama-cpp", {})
+        is_fast_path = llama_cpp.get("os-architecture") is not None and llama_cpp.get("backend") is not None
         llama_cpp["os-architecture"] = f"{platform}-{arch}"
         llama_cpp["backend"] = backend
         options["llama-cpp"] = llama_cpp
         config["options"] = options
-        try:
-            save_config(config)
-        except Exception as e:
-            ui.render_error(f"Warning: Could not save configuration: {e}")
+        if not is_fast_path:
+            try:
+                save_config(config)
+            except Exception as e:
+                ui.render_error(f"Warning: Could not save configuration: {e}")
         
     except Exception as e:
         archive_path.unlink(missing_ok=True)

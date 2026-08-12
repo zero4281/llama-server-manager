@@ -8,7 +8,7 @@ This is the central CLI tool that orchestrates all operations:
 - Running llama-server with configured options
 """
 
-__version__ = "1.1.2"
+__version__ = "1.1.3"
 
 import logging
 import argparse
@@ -227,16 +227,18 @@ class Main:
         # 1. Parse arguments
         self.args = self.parse_args()
         
-        # 2. If --version: instantiate UIManager, print version, exit
-        if self.args.version:
-            print(f"llama-server-manager version {__version__}")
-            sys.exit(0)
-        
         # 3. Call load_config() to obtain the configuration dict.
         self.config = self.load_config()
         
         # 4. Instantiate LoggerSetup using the loaded configuration.
         LoggerSetup(self.config).setup()
+        
+        # 2. If --version: instantiate UIManager, print version, exit
+        if self.args.version:
+            if self.ui is None:
+                self.ui = UIManager("Llama Server Manager")
+            self.ui.print_message(__version__, level="info")
+            sys.exit(0)
         
         # Instantiate UI for the rest of the paths (after LoggerSetup)
         if not self.ui:
@@ -247,6 +249,7 @@ class Main:
             self.ui.print_message("\n[Self-Update Mode]\n")
             self.perform_self_update(self.args)
             return
+
         
         # 6. If --install-llama or --update-llama: instantiate LlamaUpdater and call the appropriate method; exit on completion.
         if self.args.install_llama:
@@ -295,8 +298,7 @@ class Main:
         self.ui.print_message("\n[Run llama-server]\n")
         llama_cpp_dir = Path.cwd() / "llama-cpp"
         if not llama_cpp_dir.exists():
-            self.ui.print_message("Error: llama-cpp not found. Please install it first:\n"
-                                   "   ./llama-server-manager --install-llama")
+            self.ui.print_message("llama-cpp not found. Please install it first:\n   ./llama-server-manager --install-llama")
             sys.exit(1)
             
         # Instantiate Runner and call runner.run()
