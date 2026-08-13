@@ -371,7 +371,10 @@ class UIManager:
         logger.log(log_level, text)
 
         if not self._using_curses:
-            print(text)
+            if level.lower() in ("warning", "error", "critical"):
+                sys.stderr.write(text + "\n")
+            else:
+                sys.stdout.write(text + "\n")
             return
             
         if not self._screen:

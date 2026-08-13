@@ -8,7 +8,7 @@ This is the central CLI tool that orchestrates all operations:
 - Running llama-server with configured options
 """
 
-__version__ = "1.1.3"
+__version__ = "1.1.4"
 
 import logging
 import argparse
@@ -227,28 +227,30 @@ class Main:
         # 1. Parse arguments
         self.args = self.parse_args()
         
+        # 2. If --version: instantiate UIManager, print version, exit
+        if self.args.version:
+            if self.ui is None:
+                self.ui = UIManager("Llama Server Manager")
+            self.ui.print_message(f"llama-server-manager version {__version__}", level="info")
+            sys.exit(0)
+        
         # 3. Call load_config() to obtain the configuration dict.
         self.config = self.load_config()
         
         # 4. Instantiate LoggerSetup using the loaded configuration.
         LoggerSetup(self.config).setup()
         
-        # 2. If --version: instantiate UIManager, print version, exit
-        if self.args.version:
-            if self.ui is None:
-                self.ui = UIManager("Llama Server Manager")
-            self.ui.print_message(__version__, level="info")
-            sys.exit(0)
-        
-        # Instantiate UI for the rest of the paths (after LoggerSetup)
-        if not self.ui:
-            self.ui = UIManager("Llama Server Manager")
-            
         # 5. If --self-update: perform the self-update and exit.
         if self.args.self_update:
+            if self.ui is None:
+                self.ui = UIManager("Llama Server Manager")
             self.ui.print_message("\n[Self-Update Mode]\n")
             self.perform_self_update(self.args)
             return
+        
+        # Instantiate UI for the rest of the paths
+        if not self.ui:
+            self.ui = UIManager("Llama Server Manager")
 
         
         # 6. If --install-llama or --update-llama: instantiate LlamaUpdater and call the appropriate method; exit on completion.
