@@ -960,7 +960,7 @@ def delete_existing_installation() -> None:
     if LLAMA_CPP_DIR.exists():
         shutil.rmtree(LLAMA_CPP_DIR, ignore_errors=True)
 
-def _install_release_core(release: dict, release_tag: str, platform: str, arch: str, backend: str, ui_manager: Optional["UIManager"] = None, skip_confirmation: bool = False, is_verified: bool = True) -> None:
+def _install_release_core(release: dict, release_tag: str, platform: str, arch: str, backend: str, ui_manager: Optional["UIManager"] = None, skip_confirmation: bool = False, is_verified: bool = True, is_fast_path: bool = False) -> None:
     """
     Core installation logic for llama.cpp.
     
@@ -973,6 +973,7 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
         ui_manager: UI manager instance
         skip_confirmation: If True, skip the confirmation prompt
         is_verified: Whether the installation was verified by a sanity check
+        is_fast_path: Whether this is a fast path update (no config save needed)
     """
     from ui_manager import UIManager
     ui = ui_manager if ui_manager is not None else UIManager("Install llama.cpp")
@@ -1065,7 +1066,7 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
         options = config.get("options", {})
 
         llama_cpp = options.get("llama-cpp", {})
-        is_fast_path = llama_cpp.get("os-architecture") is not None and llama_cpp.get("backend") is not None
+        # is_fast_path is passed from the caller, not recomputed
         llama_cpp["os-architecture"] = f"{platform}-{arch}"
         llama_cpp["backend"] = backend
         options["llama-cpp"] = llama_cpp
@@ -1204,6 +1205,7 @@ class LlamaUpdater:
                 ui.render_error("Invalid os-architecture in configuration. Expected 'platform-arch'.")
                 return
             platform, arch = parts[0].capitalize(), parts[1]
+            is_fast_path = True
             
             try:
                 release = get_latest_release()
@@ -1227,8 +1229,7 @@ class LlamaUpdater:
                 
                 # Perform installation
                 # We can reuse the logic in _install_release_core
-                is_verified = verify_installation(ui)
-                _install_release_core(release, release_tag, platform, arch, backend, ui, skip_confirmation=True, is_verified=is_verified)
+                _install_release_core(release, release_tag, platform, arch, backend, ui, skip_confirmation=True, is_fast_path=is_fast_path)
             except PlatformNotFoundError as e:
 
                 ui.render_error(str(e))
