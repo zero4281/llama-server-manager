@@ -80,6 +80,26 @@ Modified `llama_updater.py` to ensure the "latest" string is not included in the
 **Test Suitability:**
 Add a test case to `Tests/test_ui_manager_pytest.py` to verify that the default release option in the tag selection menu does not have a description that triggers an extra line in the rendered menu.
 
+**Title:** `stop_server` incorrectly returns success when process is still alive
+**Status:** **COMPLETED**
+**Dependencies:** `runner.py`
+**Description:**
+The `stop_server` method in `runner.py` has a logic error in its process exit verification loop. It calls `os.kill(pid, 0)` to check if the process is alive. If the call succeeds (meaning the process is still running), the code proceeds to `return 0` (line 166), incorrectly signaling a successful shutdown. This causes the method to exit early without removing the PID file or proceeding to the force-kill logic.
+ 
+**Resolution:**
+Modified the stop_server method in runner.py to correctly wait for the process to exit before returning success, and ensured the PID_FILE is unlinked upon clean shutdown. Also added a unit test to verify the fix.
+ 
+**Verified Reproduction Workflow:**
+1. Start `llama-server` and ensure a PID file is created.
+2. Run `./llama-server-manager --stop-server`.
+3. Observe that the command returns 0 almost immediately, but the `llama-server` process is still running and the PID file remains in the directory.
+ 
+**Test Suitability:**
+Add a unit test for `Runner.stop_server` in `Tests/test_runner_pytest.py` that mocks `os.kill` and the PID file to verify that it correctly waits for the process to exit and unlinks the file.
+
 ## Project Roadmap
 - [ ] Fix `--install-llama` menu selection and default release bug
 - [x] Fix "latest" text appearing as a separate line in "Select a Release" menu
+- [ ] Fix `--install-llama` menu selection and default release bug
+
+
