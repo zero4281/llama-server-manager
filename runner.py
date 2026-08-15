@@ -162,11 +162,12 @@ class Runner:
                 try:
                     # Check if process exists (raises OSError if not)
                     os.kill(pid, 0)
-                    # Process has exited
-                    return 0
+                    # Process is still alive, wait
+                    continue
                 except OSError:
-                    # Process has exited
-                    return 0
+                     if PID_FILE.exists():
+                        PID_FILE.unlink()
+                     return 0
                 
                 if i % 2 == 0:
                     self.ui.print_message(f"Stopping llama-server (waiting {60 - i}s)...")
