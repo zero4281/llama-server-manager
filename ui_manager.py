@@ -372,9 +372,9 @@ class UIManager:
 
         if not self._using_curses:
             if level.lower() in ("warning", "error", "critical"):
-                sys.stderr.write(text + "\n")
+                print(text, file=sys.stderr)
             else:
-                sys.stdout.write(text + "\n")
+                print(text)
             return
             
         if not self._screen:
@@ -385,9 +385,6 @@ class UIManager:
             self._screen.addstr(y, x, text)
             self._screen.attroff(self._color_pair)
             self._screen.refresh()
-        except OSError as e:
-            logger.error(f"Message rendering error at ({y},{x}): {e}")
-            print(text)
         except (OSError, EOFError, TypeError) as e:
             logger.error(f"Unexpected error during message rendering: {e}")
             print(text)
