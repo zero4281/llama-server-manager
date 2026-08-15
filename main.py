@@ -8,7 +8,7 @@ This is the central CLI tool that orchestrates all operations:
 - Running llama-server with configured options
 """
 
-__version__ = "1.1.4"
+__version__ = "1.1.5"
 
 import logging
 import argparse
@@ -257,38 +257,41 @@ class Main:
         if self.args.install_llama:
             self.ui.print_message("\n[Install llama.cpp]\n")
             try:
-                LlamaUpdater(ui_manager=self.ui).install()
+                LlamaUpdater(ui_manager=self.ui, config=self.config).install(config=self.config)
             except SystemExit:
                 raise
             except Exception as e:
                 from llama_updater import (RateLimitError, GitHubAPIError,
-                                          DownloadError, ExtractionError,
-                                          PlatformNotFoundError, LlamaUpdaterError)
+                                           DownloadError, ExtractionError,
+                                           PlatformNotFoundError, LlamaUpdaterError)
                 if isinstance(e, (RateLimitError, GitHubAPIError,
-                                    DownloadError, ExtractionError,
-                                    PlatformNotFoundError, LlamaUpdaterError)):
+                                     DownloadError, ExtractionError,
+                                     PlatformNotFoundError, LlamaUpdaterError)):
                     raise
                 self.ui.render_error(f"Error: {e}")
                 sys.exit(1)
             return
-            
+
         if self.args.update_llama:
             self.ui.print_message("\n[Update llama.cpp]\n")
             try:
-                LlamaUpdater(ui_manager=self.ui).update()
+                LlamaUpdater(ui_manager=self.ui, config=self.config).update(config=self.config)
             except SystemExit:
                 raise
             except Exception as e:
                 from llama_updater import (RateLimitError, GitHubAPIError,
-                                          DownloadError, ExtractionError,
-                                          PlatformNotFoundError, LlamaUpdaterError)
+                                           DownloadError, ExtractionError,
+                                           PlatformNotFoundError, LlamaUpdaterError)
                 if isinstance(e, (RateLimitError, GitHubAPIError,
-                                    DownloadError, ExtractionError,
-                                    PlatformNotFoundError, LlamaUpdaterError)):
+                                     DownloadError, ExtractionError,
+                                     PlatformNotFoundError, LlamaUpdaterError)):
                     raise
                 self.ui.render_error(f"Error: {e}")
                 sys.exit(1)
             return
+        
+        
+        
             
         # 7. Otherwise:
         if self.args.stop_server:

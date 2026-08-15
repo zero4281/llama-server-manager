@@ -761,7 +761,7 @@ def _restart_llama_server(ui_manager, args, config, is_verified=True):
     runner.stop_server()
     
     if is_verified:
-        runner = Runner(argparse.Namespace(), load_config(), ui_manager)
+        runner = Runner(argparse.Namespace(), {}, ui_manager)
         runner.run()
     else:
         ui_manager.print_message("The previously running llama-server instance was stopped because the new binary failed its sanity check.")
@@ -778,10 +778,9 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         release_tag: Release tag for reference
         ui_manager: UIManager instance for UI operations
     """
-    config = config if config is not None else load_config()
+    config = config if config is not None else {}
     from ui_manager import UIManager
     ui = ui_manager if ui_manager is not None else UIManager("Install llama.cpp")
-    config = load_config()
     
     
     ui.print_message(f"Installing llama.cpp release {release_tag}...")
@@ -927,11 +926,12 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
             ensure_executable(llama_server)
             ui.print_message(f"Made {llama_server} executable")
         
-        # Clean up
-        archive_path.unlink(missing_ok=True)
-        
         # Post-install sanity check
         is_verified = verify_installation(ui)
+        
+        # Clean up
+        archive_path.unlink(missing_ok=True)
+
         
         pid_file = Path.cwd() / "llama-server.pid"
         if pid_file.exists():
@@ -960,7 +960,7 @@ def delete_existing_installation() -> None:
     if LLAMA_CPP_DIR.exists():
         shutil.rmtree(LLAMA_CPP_DIR, ignore_errors=True)
 
-def _install_release_core(release: dict, release_tag: str, platform: str, arch: str, backend: str, ui_manager: Optional["UIManager"] = None, skip_confirmation: bool = False, is_verified: bool = True, is_fast_path: bool = False) -> None:
+def _install_release_core(release: dict, release_tag: str, platform: str, arch: str, backend: str, ui_manager: Optional["UIManager"] = None, skip_confirmation: bool = False, is_verified: bool = True, is_fast_path: bool = False, config: Optional[dict] = None) -> None:
     """
     Core installation logic for llama.cpp.
     
@@ -977,7 +977,7 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
     """
     from ui_manager import UIManager
     ui = ui_manager if ui_manager is not None else UIManager("Install llama.cpp")
-    config = load_config()
+    config = config if config is not None else {}
     
     # Delete existing installation first
     delete_existing_installation()
@@ -1047,11 +1047,12 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
             ensure_executable(llama_server)
             ui.print_message(f"Made {llama_server} executable")
         
-        # Clean up
-        archive_path.unlink(missing_ok=True)
-        
         # Post-install sanity check
         is_verified_check = verify_installation(ui)
+        
+        # Clean up
+        archive_path.unlink(missing_ok=True)
+
         
         ui.print_message("Installation complete!")
         
@@ -1085,13 +1086,14 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
 class LlamaUpdater:
     """Main class for llama.cpp download and update operations."""
     
-    def __init__(self, ui_manager: Optional["UIManager"] = None):
+    def __init__(self, ui_manager: Optional["UIManager"] = None, config: Optional[dict] = None):
         self.ui = ui_manager
         self.owner = GITHUB_OWNER
         self.repo = GITHUB_REPO
         self.ui_manager = ui_manager
+        self.config = config
     
-    def install(self, interactive: bool = False, ui_manager: Optional["UIManager"] = None, args: Optional[argparse.Namespace] = None) -> None:
+    def install(self, interactive: bool = False, ui_manager: Optional["UIManager"] = None, args: Optional[argparse.Namespace] = None, config: Optional[dict] = None) -> None:
         """
         Install the latest llama.cpp release.
         
@@ -1173,11 +1175,11 @@ class LlamaUpdater:
         
         # Call install_release which handles platform detection, zip selection, and installation
         if release is not None and release_tag:
-            install_release(release, release_tag, ui, args=args)
+            install_release(release, release_tag, ui, args=args, config=config if config is not None else self.config)
         else:
             ui.render_error("Installation cancelled or failed to select a valid release.")
         
-    def update(self, ui_manager: Optional["UIManager"] = None) -> None:
+    def update(self, ui_manager: Optional["UIManager"] = None, config: Optional[dict] = None) -> None:
         """
         Update to the latest release.
         
@@ -1188,7 +1190,7 @@ class LlamaUpdater:
         ui = ui_manager if ui_manager is not None else UIManager("Update llama.cpp")
         ui.print_message("Updating llama.cpp to latest release...")
         
-        config = load_config()
+        config = config if config is not None else self.config
         options = config.get("options", {})
         llama_cpp = options.get("llama-cpp", {})
         
@@ -1229,7 +1231,7 @@ class LlamaUpdater:
                 
                 # Perform installation
                 # We can reuse the logic in _install_release_core
-                _install_release_core(release, release_tag, platform, arch, backend, ui, skip_confirmation=True, is_fast_path=is_fast_path)
+                _install_release_core(release, release_tag, platform, arch, backend, ui, skip_confirmation=True, is_fast_path=is_fast_path, config=config)
             except PlatformNotFoundError as e:
 
                 ui.render_error(str(e))
