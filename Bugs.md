@@ -59,27 +59,25 @@ Furthermore, the program ignores the user's selection from this menu. Even if th
  
 **Test Suitability:**
 Update the tests in `Tests/test_ui_manager_pytest.py` (or a relevant integration test) to ensure that the `release` object passed to `install_release` matches the selection made in the `render_menu` call.
-
-
-
+ 
 **Title:** "latest" text appears as a separate line in "Select a Release" menu
 **Status:** **COMPLETED**
 **Severity/Priority:** **Low**
 **Dependencies:** `llama_updater.py`, `ui_manager.py`
 **Description:**
 When running `./llama-server-manager --install-llama`, the "Select a Release" menu lists the default release but includes a "latest" line on the second line. This happens because the `description` field for the default release is set to "latest", and `ui_manager.py` renders descriptions on a new line. This is out of spec for the menu.
-
+ 
 **Resolution:**
 Modified `llama_updater.py` to ensure the "latest" string is not included in the description of the default release option when rendering the selection menu, preventing it from appearing as a separate line.
-
+ 
 **Verified Reproduction Workflow:**
 1. Run `./llama-server-manager --install-llama`.
 2. Observe the "Select a Release" menu.
 3. Notice the "latest" line between the first and second options.
-
+ 
 **Test Suitability:**
 Add a test case to `Tests/test_ui_manager_pytest.py` to verify that the default release option in the tag selection menu does not have a description that triggers an extra line in the rendered menu.
-
+ 
 **Title:** `stop_server` incorrectly returns success when process is still alive
 **Status:** **COMPLETED**
 **Dependencies:** `runner.py`
@@ -96,10 +94,27 @@ Modified the stop_server method in runner.py to correctly wait for the process t
  
 **Test Suitability:**
 Add a unit test for `Runner.stop_server` in `Tests/test_runner_pytest.py` that mocks `os.kill` and the PID file to verify that it correctly waits for the process to exit and unlinks the file.
+ 
+**Title:** `--version` causes terminal blinking and no output
+**Status:** **COMPLETED**
+**Severity/Priority:** **Low**
+**Dependencies:** `main.py`, `ui_manager.py`
+**Description:**
+When running `./llama-server-manager --version`, the terminal blinks and the version information is not displayed. This is caused by `UIManager` being instantiated (which calls `curses.initscr()`) but failing to correctly handle the output for a simple version message or exit the curses mode before termination.
 
+**Resolution:**
+Updated `main.py` to call `_cleanup_terminal()` when the `--version` flag is used, ensuring the terminal state is restored. Modified `UIManager` to use `print_message`, which correctly falls back to standard output when a curses session is unavailable or fails.
+
+**Verified Reproduction Workflow:**
+1. Run `./llama-server-manager --version`.
+2. Observe the terminal blinking and the absence of version information.
+3. Note: The syntax error at `main.py:235` has been corrected, allowing the blinking behavior to be observed.
+
+**Test Suitability:**
+A new automated test case should be added to `Tests/test_ui_manager_pytest.py` to verify that `print_message` correctly handles the `--version` flag in both curses-active and headless modes, ensuring that the version output is rendered as a plain message and that the terminal state is correctly restored.
+ 
 ## Project Roadmap
 - [ ] Fix `--install-llama` menu selection and default release bug
 - [x] Fix "latest" text appearing as a separate line in "Select a Release" menu
 - [ ] Fix `--install-llama` menu selection and default release bug
-
-
+- [x] Fix --version terminal blinking issue

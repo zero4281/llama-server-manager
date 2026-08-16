@@ -231,6 +231,7 @@ class Main:
         if self.args.version:
             if self.ui is None:
                 self.ui = UIManager("Llama Server Manager")
+            self.ui._cleanup_terminal()
             self.ui.print_message(f"llama-server-manager version {__version__}", level="info")
             sys.exit(0)
         
