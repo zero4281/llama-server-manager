@@ -64,10 +64,10 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Install the Hugging Face CLI for model management:
+Model management (search, download, list, and delete) is built into the wrapper itself and uses the `huggingface_hub` library, which is already included in `requirements.txt` — no separate install is required. If you'd also like to use the standalone `hf` CLI tool alongside the wrapper (e.g. for other Hugging Face workflows), it reads from the same local cache, so the two stay in sync:
 
 ```bash
-pip install hf-cli
+pip install -U "huggingface_hub[cli]"
 ```
 
 ---
@@ -98,12 +98,17 @@ On first run, the wrapper generates a `config.json` with safe defaults. You can 
     "llama-cpp": {
       "os-architecture": "ubuntu/x64",
       "backend": "vulkan"
+    },
+    "huggingface": {
+      "token": null,
+      "cache-dir": null
     }
   },
   "llama-server": {
     "options": {
       "host": "0.0.0.0",
       "port": "11235",
+      "models-dir": "/home/user/.cache/huggingface/hub",
       "models-max": "1",
       "sleep-idle-seconds": 600
     }
@@ -116,14 +121,19 @@ On first run, the wrapper generates a `config.json` with safe defaults. You can 
 }
 ```
 
+> `llama-server.options` keys always use `llama-server`'s **long-form** flag names (e.g. `models-dir`, not `-m`) so it's unambiguous which CLI argument each key maps to.
+
 ### Key options:
 
 | Option | Default | Description |
 |---|---|---|
 | `host` | `127.0.0.1` | Set to `0.0.0.0` to expose the server on your local network |
 | `port` | *(llama.cpp default)* | Set to override the port llama-server listens on |
+| `models-dir` | *(unset)* | Directory `llama-server` scans for GGUF models. Point this at your Hugging Face cache (default `~/.cache/huggingface/hub`, or your `options.huggingface.cache-dir` if you've overridden it) to pick up models downloaded via [Model Management](#model-management). |
 | `models-max` | `1` | Maximum number of models loaded simultaneously — keep at `1` if VRAM is limited |
 | `sleep-idle-seconds` | `600` | Unloads the model after this many seconds of inactivity (similar to Ollama's behavior) |
+
+The `options.huggingface` block controls model management specifically — see [Model Management](#model-management) for details on `token` and `cache-dir`.
 
 ---
 
@@ -140,6 +150,13 @@ On first run, the wrapper generates a `config.json` with safe defaults. You can 
 | `./llama-server-manager --self-update` | Pull the latest manager code from GitHub |
 | `./llama-server-manager --stop-server` | Gracefully stop a running llama-server |
 | `./llama-server-manager --log-file <path>` | Override the llama-server output log path for this run |
+| `./llama-server-manager --models` | Open the Model Manager menu (search, download, list, delete) |
+| `./llama-server-manager --search-models [query]` | Search the Hugging Face Hub for models |
+| `./llama-server-manager --download-model [repo-id]` | Download a specific GGUF file from a model repo |
+| `./llama-server-manager --list-models` | List models currently downloaded to the local cache |
+| `./llama-server-manager --delete-model [repo-id]` | Delete a downloaded model from the local cache |
+| `./llama-server-manager --hf-token <token>` | Set a Hugging Face access token, for gated/private repos |
+| `./llama-server-manager --hf-cache-dir <path>` | Override the local Hugging Face cache directory |
 
 ### Command Details
 
@@ -175,27 +192,89 @@ On first run, the wrapper generates a `config.json` with safe defaults. You can 
 ./llama-server-manager --log-file /path/to/llama-server.log
 ```
 
+**`--models`, `--search-models`, `--download-model`, `--list-models`, `--delete-model`, `--hf-token`, `--hf-cache-dir`** — Model management. See [Model Management](#model-management) below for details.
+
 ---
 
 ## Model Management
 
-> **Note:** Built-in model management commands are coming soon to the wrapper.
+The wrapper can search, download, list, and delete GGUF models from the Hugging Face Hub directly — no separate tool required. All five commands take an optional argument; if you omit it, you'll get an interactive prompt or menu instead.
 
-In the meantime, there are two ways to download models:
+Downloaded files are stored in the **standard Hugging Face Hub cache** (`~/.cache/huggingface/hub` by default), not a project-local folder. This means model management here supplements the `hf` CLI tool rather than replacing it — files downloaded one way are visible to the other, and vice versa.
 
-### Option 1 — Hugging Face CLI:
+### Open the Model Manager menu
+
+```bash
+./llama-server-manager --models
+```
+
+This opens an interactive menu with access to Search, Download, List, and Delete.
+
+### Search
+
+```bash
+./llama-server-manager --search-models "qwen coder"
+```
+
+Omit the query to be prompted for one interactively.
+
+### Download
+
+```bash
+./llama-server-manager --download-model TheBloke/example-model-GGUF
+```
+
+You'll be shown a list of the repo's `.gguf` files (with sizes) to choose from, then asked to confirm before downloading — only the single file you pick is downloaded, never the whole repo. Omit the repo ID to search first.
+
+### List downloaded models
+
+```bash
+./llama-server-manager --list-models
+```
+
+Always reflects what's actually in the cache right now, including anything you or the `hf` CLI downloaded outside this program.
+
+### Delete a downloaded model
+
+```bash
+./llama-server-manager --delete-model TheBloke/example-model-GGUF
+```
+
+Asks for confirmation, then removes the file from the local cache. Omit the repo ID to pick from a list of everything currently downloaded.
+
+### Gated or private repos
+
+If a model requires a Hugging Face access token, provide one with `--hf-token`. It's saved to `config.json` automatically the first time you use it, so you only need to pass it once:
+
+```bash
+./llama-server-manager --hf-token hf_xxxxxxxxxxxx --download-model some-org/gated-model
+```
+
+### Using a custom cache location
+
+By default, models go into the standard Hugging Face cache. To use a different directory (e.g. a larger disk), pass `--hf-cache-dir` once — it's saved to `config.json`, and `llama-server.options.models-dir` is updated to match automatically so `llama-server` keeps scanning the right place:
+
+```bash
+./llama-server-manager --hf-cache-dir /mnt/big-disk/hf-cache
+```
+
+### Pointing `llama-server` at your models
+
+`llama-server` loads models from whatever directory is set in `llama-server.options.models-dir` in `config.json` (see [Configuration](#configuration)). If you're using the default Hugging Face cache location and haven't set `--hf-cache-dir`, set `models-dir` to that path yourself once so `llama-server` can find your downloads:
+
+```json
+"models-dir": "/home/user/.cache/huggingface/hub"
+```
+
+### Alternative: `hf` CLI or `llama-cli`
+
+Since everything lives in the standard cache, you can still use the Hugging Face CLI or `llama-cli` directly if you prefer:
 
 ```bash
 hf download {model-name}
-```
-
-### Option 2 — llama-cli (downloads directly into llama.cpp's format):
-
-```bash
+# or
 llama-cli -hf {model-name}
 ```
-
-Both methods work well. Use `llama-cli` if you want the model pulled and placed directly in a format ready for `llama-server`.
 
 ---
 
@@ -276,3 +355,4 @@ print(response.choices[0].message.content)
 - **Version Source of Truth**: The `__version__` constant in `main.py` is the source of truth for the `--version` flag.
 - **Restart Logic**: The manager uses `llama-server.pid` to track and manage the lifecycle of the `llama-server` process, allowing for graceful shutdowns and automatic restarts after updates.
 - **Path Handling**: Uses `pathlib` throughout for cross-platform compatibility.
+- **Model Storage**: Model management is built on the `huggingface_hub` library and reads/writes only the standard Hugging Face Hub cache — never a project-local models directory — so it stays interoperable with the `hf` CLI and other `huggingface_hub`-based tooling.
