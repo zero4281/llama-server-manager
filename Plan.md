@@ -26,17 +26,17 @@
 
 ### Section 3: Testing & Verification Status
 **Unit Tests**
-- [ ] `model_manager.py` - Verify HF Hub connectivity and model metadata retrieval.
-- [ ] `config.py` - Test persistence of HF options to/from `config.json`.
-- [ ] `llama_updater.py` - Verify `is_fast_path` correctly reads from config.
+- [x] `model_manager.py` - Verify HF Hub connectivity and model metadata retrieval.
+- [x] `config.py` - Test persistence of HF options to/from `config.json`.
+- [x] `llama_updater.py` - Verify `is_fast_path` correctly reads from config.
 
 **Integration Tests**
-- [ ] Verify `main.py` correctly initializes with `1.2.0` versioning.
-- [ ] End-to-end check of model download/update flow using `model_manager.py`.
+- [x] Verify `main.py` correctly initializes with `1.2.0` versioning.
+- [x] End-to-end check of model download/update flow using `model_manager.py`.
 
 **Manual Checklists**
 - [ ] Verify `print_message` and headless fallbacks meet 1.1.5 specifications in a headless environment.
-- [ ] Confirm `requirements.txt` includes `huggingface_hub`.
+- [x] Confirm `requirements.txt` includes `huggingface_hub`.
 
 ### Section 4: Exit Codes
 - 0: Success

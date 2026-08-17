@@ -8,7 +8,7 @@ This is the central CLI tool that orchestrates all operations:
 - Running llama-server with configured options
 """
 
-__version__ = "1.1.5"
+__version__ = "1.2.0"
 
 import logging
 import argparse
@@ -25,8 +25,12 @@ from pathlib import Path
 from logger import LoggerSetup
 from ui_manager import UIManager
 from runner import Runner
-from llama_updater import LlamaUpdater, ensure_executable
 from config import load_config
+from model_manager import ModelManager
+from llama_updater import (LlamaUpdater, RateLimitError, GitHubAPIError,
+                            DownloadError, ExtractionError,
+                            PlatformNotFoundError, LlamaUpdaterError,
+                            ensure_executable)
 
 # Add current directory to path for imports
 sys.path.insert(0, str(Path.cwd()))
@@ -57,13 +61,23 @@ class Main:
 
         # Special operations
         parser.add_argument("--self-update", action="store_true",
-                              help="Pull latest code from GitHub and restart")
+                           help="Pull latest code from GitHub and restart")
         parser.add_argument("--install-llama", action="store_true",
-                              help="Download and install latest llama.cpp release")
+                           help="Download and install latest llama.cpp release")
         parser.add_argument("--update-llama", action="store_true",
-                              help="Update existing llama.cpp to latest release")
+                           help="Update existing llama.cpp to latest release")
         parser.add_argument("--stop-server", action="store_true",
-                              help="Gracefully stop a running llama-server")
+                           help="Gracefully stop a running llama-server")
+
+        # Model Management
+        parser.add_argument("--models", action="store_true",
+                            help="Show a curses menu for selecting models")
+        parser.add_argument("--search-models", help="Search for models on HF Hub")
+        parser.add_argument("--download-model", help="Download a model from HF Hub")
+        parser.add_argument("--list-models", help="List models from the cache")
+        parser.add_argument("--delete-model", help="Delete a model from the cache")
+        parser.add_argument("--hf-cache-dir", help="Override HF Hub cache directory")
+        parser.add_argument("--hf-token", help="HuggingFace Hub token")
 
         # Version flag
         parser.add_argument("--version", action="store_true",
@@ -202,7 +216,6 @@ class Main:
 
                                 self.ui.print_message(f"Updated: {rel_path}")
 
-
                         if backup_dir.exists():
                             shutil.rmtree(backup_dir)
                         self.ui.render_success("Self-update complete!")
@@ -216,7 +229,6 @@ class Main:
             finally:
                 if zip_file_path and zip_file_path.exists():
                     zip_file_path.unlink()
-
 
         except Exception as e:
             self.ui.render_error(f"Self-update failed: {e}")
@@ -240,6 +252,23 @@ class Main:
         
         # 4. Instantiate LoggerSetup using the loaded configuration.
         LoggerSetup(self.config).setup()
+
+        # HF Cache Sync & Token Handling
+        if self.args.hf_cache_dir:
+            if self.args.hf_cache_dir != self.config.get("options", {}).get("huggingface", {}).get("cache-dir"):
+                self.config.setdefault("options", {}).setdefault("huggingface", {})["cache-dir"] = self.args.hf_cache_dir
+                self.config.setdefault("llama-server", {}).setdefault("options", {})["models-dir"] = self.args.hf_cache_dir
+                import config
+                config.save_config(self.config)
+                self.ui.print_message(f"Synced models_dir to {self.args.hf_cache_dir}")
+
+        if self.args.hf_token:
+            self.config.setdefault("options", {}).setdefault("huggingface", {})["token"] = self.args.hf_token
+            import config
+            config.save_config(self.config)
+
+        # Initialize ModelManager
+        mm = ModelManager(self.config)
         
         # 5. If --self-update: perform the self-update and exit.
         if self.args.self_update:
@@ -252,8 +281,41 @@ class Main:
         # Instantiate UI for the rest of the paths
         if not self.ui:
             self.ui = UIManager("Llama Server Manager")
-
         
+        # Handle Model Management Flags
+        if self.args.models:
+            self.ui.print_message("\n[Model Management]\n")
+            # This is a placeholder for the actual curses menu requested in §9.3
+            # For now, we'll just print a message.
+            self.ui.print_message("Curses menu for model selection coming soon.")
+            return
+
+        if self.args.search_models:
+            self.ui.print_message(f"\n[Searching Models]\n")
+            models = mm.search_models(self.args.search_models)
+            for m in models:
+                self.ui.print_message(m)
+            return
+
+        if self.args.download_model:
+            self.ui.print_message(f"\n[Downloading Model]\n")
+            path = mm.download_model(self.args.download_model)
+            self.ui.print_message(f"Downloaded to: {path}")
+            return
+
+        if self.args.list_models:
+            self.ui.print_message(f"\n[Listing Models]\n")
+            models = mm.list_models()
+            for m in models:
+                self.ui.print_message(m)
+            return
+
+        if self.args.delete_model:
+            self.ui.print_message(f"\n[Deleting Model]\n")
+            mm.delete_model(self.args.delete_model)
+            self.ui.print_message("Delete operation completed.")
+            return
+
         # 6. If --install-llama or --update-llama: instantiate LlamaUpdater and call the appropriate method; exit on completion.
         if self.args.install_llama:
             self.ui.print_message("\n[Install llama.cpp]\n")
@@ -262,17 +324,14 @@ class Main:
             except SystemExit:
                 raise
             except Exception as e:
-                from llama_updater import (RateLimitError, GitHubAPIError,
-                                           DownloadError, ExtractionError,
-                                           PlatformNotFoundError, LlamaUpdaterError)
                 if isinstance(e, (RateLimitError, GitHubAPIError,
-                                     DownloadError, ExtractionError,
-                                     PlatformNotFoundError, LlamaUpdaterError)):
+                                   DownloadError, ExtractionError,
+                                   PlatformNotFoundError, LlamaUpdaterError)):
                     raise
                 self.ui.render_error(f"Error: {e}")
                 sys.exit(1)
             return
-
+        
         if self.args.update_llama:
             self.ui.print_message("\n[Update llama.cpp]\n")
             try:
@@ -280,20 +339,14 @@ class Main:
             except SystemExit:
                 raise
             except Exception as e:
-                from llama_updater import (RateLimitError, GitHubAPIError,
-                                           DownloadError, ExtractionError,
-                                           PlatformNotFoundError, LlamaUpdaterError)
                 if isinstance(e, (RateLimitError, GitHubAPIError,
-                                     DownloadError, ExtractionError,
-                                     PlatformNotFoundError, LlamaUpdaterError)):
+                                   DownloadError, ExtractionError,
+                                   PlatformNotFoundError, LlamaUpdaterError)):
                     raise
                 self.ui.render_error(f"Error: {e}")
                 sys.exit(1)
             return
         
-        
-        
-            
         # 7. Otherwise:
         if self.args.stop_server:
             self.ui.print_message("\n[Stop Server Mode]\n")
@@ -311,7 +364,6 @@ class Main:
         # Instantiate Runner and call runner.run()
         runner = Runner(self.args, self.config, self.ui)
         runner.run()
-
 
 if __name__ == "__main__":
     app = Main()

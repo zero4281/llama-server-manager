@@ -42,7 +42,7 @@ def check_fast_path(config: dict) -> bool:
     """
     options = config.get("options", {})
     llama_cpp = options.get("llama-cpp", {})
-    return bool(llama_cpp.get("os-architecture") and llama_cpp.get("backend"))
+    return llama_cpp.get("is_fast_path", False)
 
 
 
@@ -1221,24 +1221,16 @@ class LlamaUpdater:
         ui = ui_manager if ui_manager is not None else UIManager("Update llama.cpp")
         ui.print_message("Updating llama.cpp to latest release...")
         
-        config = config if config is not None else self.config
-        options = config.get("options", {})
-        llama_cpp = options.get("llama-cpp", {})
+        config = config or self.config
+        llama_cpp_options = config.get("llama-server", {}).get("options", {})
+        platform = llama_cpp_options.get("os")
+        arch = llama_cpp_options.get("arch")
+        backend = llama_cpp_options.get("backend")
         
-        os_arch = llama_cpp.get("os-architecture")
-        backend = llama_cpp.get("backend")
-        
-        if os_arch and backend:
-            logger.debug(f"Fast path detected: os-architecture={os_arch}, backend={backend}")
+        if platform and arch and backend:
+            logger.debug(f"Fast path detected: platform={platform}, arch={arch}, backend={backend}")
             
-            # Resolve platform and arch from os_arch
-            # Assuming os_arch is in format 'platform-arch' (e.g. 'linux-x64')
-            parts = os_arch.split('-')
-            if len(parts) != 2:
-                ui.render_error("Invalid os-architecture in configuration. Expected 'platform-arch'.")
-                return
-            platform, arch = parts[0].capitalize(), parts[1]
-            is_fast_path = check_fast_path(config)
+            is_fast_path = llama_cpp_options.get("is_fast_path", False)
             
             try:
                 release = get_latest_release()
@@ -1284,23 +1276,25 @@ def main():
     parser.add_argument("--tag", type=str, help="Specific release tag to install")
     
     args = parser.parse_args()
+    config = load_config()
     
     if args.tag:
         # Install specific tag
         release = get_release_by_tag(args.tag)
         install_release(release, args.tag)
     elif args.install or args.update:
-        updater = LlamaUpdater()
+        updater = LlamaUpdater(config=config)
         if args.update:
             updater.update()
         else:
-            updater.install(args=args)
+            updater.install(args=args, config=config)
     else:
         # Default: show available releases
         releases = list_releases()
         ui.print_message(f"Found {len(releases)} releases:")
         for i, r in enumerate(releases[:10], 1):  # Show first 10
             ui.print_message(f"  {i}. {r['tag_name']} - {r['name']}")
+
     
     
 if __name__ == "__main__":

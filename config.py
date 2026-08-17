@@ -3,8 +3,19 @@ import json
 from pathlib import Path
 
 DEFAULT_CONFIG = {
-    "options": {},
-    "llama-server": {"options": {}},
+    "options": {
+        "huggingface": {
+            "token": None,
+            "cache-dir": None
+        },
+    },
+    "llama-server": {"options": {
+        "models-dir": None,
+        "os": None,
+        "arch": None,
+        "backend": None,
+        "is_fast_path": False
+    }},
     "logging": {
         "enabled": True,
         "level": "INFO",
