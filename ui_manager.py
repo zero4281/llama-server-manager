@@ -80,7 +80,6 @@ def _configure_logging():
             datefmt='%H:%M:%S'
         )
         logger.setLevel(UI_MANAGER_LOG_LEVEL)
-        pass
 
 
 # Configure logging at module load time
