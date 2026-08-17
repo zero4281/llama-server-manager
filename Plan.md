@@ -1,53 +1,58 @@
-**Version 1.1.5**
+**Version 1.2.0**
 
-**Revision Jump Context**
+### Revision Jump Context
+- 1.1.4 -> 1.1.5 (complete): Resolved `verify_installation` deferral and `__version__` update to 1.1.5.
+- 1.1.5 -> 1.2.0 (active): Current planning cycle.
 
-- Baseline: 1.1.4
-- Target: 1.1.5
-- Intermediate/Skipped Revisions: None.
+### Section 1: Current State Assessment
+| Component | Status | Drift / Note |
+|------------|--------|--------------|
+| Versioning | Partial | `main.py` still at 1.1.5 |
+| Update Logic | Drift | `is_fast_path` uses hardcoded logic |
+| HF Management | Missing | No dedicated manager for HF Hub |
+| Configuration | Drift | `config.json` missing HF options |
+| Persistence | Missing | HF options not persisted in `config.py` |
+| UI / Headless | Pending | Verification of 1.1.5 specs required |
 
-**Section 1: Current State Assessment**
-| Component | Status | Drift / Violation |
-| --- | --- | --- |
-| `main.py` | Compliant | `__version__` is 1.1.5
-| `main.py` | Compliant | Startup sequence: `--version` occurs immediately after argument parsing |
-| `llama_updater.py` | Completed | `verify_installation` deferred to post-extraction |
-| `llama_updater.py` | Violation | `is_fast_path` computed via redundant `load_config()` |
+**Drift Breakdown:**
+- `llama_updater.py`: Logic for `is_fast_path` is not aligned with configuration-driven architecture.
+- `model_manager.py`: Lack of abstraction for HuggingFace Hub interactions.
+- `config.py`: Missing persistence layer for new HF-specific configuration parameters.
 
-**Section 2: Core Engineering Decisions or Filename Consistency**
+### Section 2: Core Engineering Decisions or Filename Consistency
+- **HF Hub Management:** Implement `model_manager.py` to centralize interaction with `huggingface_hub`.
+- **Config-Driven Logic:** Refactor `llama_updater.py` to retrieve `is_fast_path` from the configuration dictionary rather than local state.
+- **Persistence:** Ensure all new HF options in `config.json` are persisted via `config.py`.
 
-- **Startup Logic**: Prioritize early exit checks (`--version`) to minimize resource initialization (logger, config).
-- **UI Routing**: Ensure `UIManager` provides consistent output methods across headless and GUI modes, specifically using `print()` for headless fallbacks in 1.1.5.
-- **Updater Efficiency**: Optimize `llama_updater` by passing configuration state rather than re-loading files, and ensuring verification happens at the correct lifecycle stage.
+### Section 3: Testing & Verification Status
+**Unit Tests**
+- [ ] `model_manager.py` - Verify HF Hub connectivity and model metadata retrieval.
+- [ ] `config.py` - Test persistence of HF options to/from `config.json`.
+- [ ] `llama_updater.py` - Verify `is_fast_path` correctly reads from config.
 
-**Section 3: Testing & Verification Status**
+**Integration Tests**
+- [ ] Verify `main.py` correctly initializes with `1.2.0` versioning.
+- [ ] End-to-end check of model download/update flow using `model_manager.py`.
 
-- **Version Alignment**
-  - [x] Update `__version__` to 1.1.4/1.1.5
-- **Startup Sequence**
-  - [x] Move `--version` check to immediately after argument parsing
-- **Headless Fallback**
-  - [x] Update `ui_manager.py`: Update `print_message` fallback to use `print()` (New for 1.1.5)
-- **Fast Path Logic**
-   - [x] Defer `verify_installation` to post-extraction
-   - [x] Update `is_verified` to reflect post-extraction check
-   - [x] Pass config dict to `llama_updater` for `is_fast_path`
+**Manual Checklists**
+- [ ] Verify `print_message` and headless fallbacks meet 1.1.5 specifications in a headless environment.
+- [ ] Confirm `requirements.txt` includes `huggingface_hub`.
 
-**Section 4: Exit Codes**
+### Section 4: Exit Codes
+- 0: Success
+- 1: Configuration Error
+- 2: Network/HF Hub Connectivity Error
+- 3: Model Download Failure
+- 4: Permission Denied
 
-- `--version`: 0
-- `--self-update`: 0 (on success)
+### Section 5: Security
+- Validate HF Hub token handling (ensure no secrets in `config.json`).
+- Sanitize paths passed to `model_manager.py`.
 
-**Section 5: Security**
+### Section 6: Dependencies
+- `huggingface_hub`
 
-- Ensure `sys.stderr` writes do not expose internal paths or secrets.
-- Validate downloaded content before extraction (post-extraction sanity check).
-
-**Section 6: Dependencies**
-
-- No new external dependencies (Verified).
-
-**Section 7: Non-Functional Requirements**
-
-- Minimize startup latency.
-- Consistent CLI feedback in headless mode.
+### Section 7: Non-Functional Requirements
+- **Performance:** Fast-path detection should be O(1) via config lookup.
+- **Portability:** Headless fallbacks must work across different terminal environments.
+- **Maintainability:** `model_manager.py` should be the sole entry point for HF interactions.

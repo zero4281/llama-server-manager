@@ -1,6 +1,6 @@
 # Llama Server Manager — Software Requirements Document
 
-**Version:** 1.1.5
+**Version:** 1.2.0
 **Date:** August 2026
 **Repository:** https://github.com/zero4281/llama-server-manager
 
@@ -16,28 +16,30 @@
 6. [Configuration Module](#6-configuration-module-configpy)
 7. [Logging Module](#7-logging-module-loggerpy)
 8. [llama.cpp Update/Download Module](#8-llamacpp-updatedownload-module-llama_updaterpy)
-9. [Run Script](#9-run-script-runnerpy)
-10. [CLI User Interface Module](#10-cli-user-interface-module-ui_managerpy)
-11. [Non-Functional Requirements](#11-non-functional-requirements)
-12. [Out of Scope](#12-out-of-scope)
-13. [Revision History](#revision-history)
+9. [Model Manager Module](#9-model-manager-module-model_managerpy)
+10. [Run Script](#10-run-script-runnerpy)
+11. [CLI User Interface Module](#11-cli-user-interface-module-ui_managerpy)
+12. [Non-Functional Requirements](#12-non-functional-requirements)
+13. [Out of Scope](#13-out-of-scope)
+14. [Revision History](#revision-history)
 
 ---
 
 ## 1. Overview
 
-This document defines the requirements for the Llama Server Manager project — a set of Python and Bash scripts that automate the download, installation, updating, and execution of `llama-server` from the llama.cpp project. It covers eight components: the Bash start script, the Python entry point (`main.py`), the configuration module (`config.py`), the logging module (`logger.py`), the llama.cpp update/download module, the run script, the shared configuration file, and the CLI user interface module (`ui_manager.py`).
+This document defines the requirements for the Llama Server Manager project — a set of Python and Bash scripts that automate the download, installation, updating, and execution of `llama-server` from the llama.cpp project, along with management of the GGUF model files it runs. It covers nine components: the Bash start script, the Python entry point (`main.py`), the configuration module (`config.py`), the logging module (`logger.py`), the llama.cpp update/download module, the model manager module (`model_manager.py`), the run script, the shared configuration file, and the CLI user interface module (`ui_manager.py`).
 
 All interactive menus, prompts, progress bars, and confirmation dialogs are rendered using the `curses` module (Python standard library) with a black background and green text.
 
 | Property | Value |
 |---|---|
 | Repository | https://github.com/zero4281/llama-server-manager |
-| Primary Language | Python 3.12+ |
+| Primary Language | Python 3.12.3+ |
 | Secondary Language | Bash (start script only) |
-| Minimum Python Version | 3.12 |
+| Minimum Python Version | 3.12.3 |
 | Target Platforms | Linux, macOS, Windows (via WSL only) |
 | llama.cpp Source | https://github.com/ggml-org/llama.cpp/releases |
+| Model Source | https://huggingface.co (via the `huggingface_hub` library, Section 9.2) |
 
 ---
 
@@ -50,6 +52,7 @@ llama-server-manager/
 ├── config.py              # Configuration loading module (Section 6)
 ├── logger.py               # Program logging configuration module (Section 7)
 ├── llama_updater.py       # llama.cpp download/update module
+├── model_manager.py       # Model search/download/list/delete module (Section 9)
 ├── runner.py              # Run script
 ├── ui_manager.py          # ncurses CLI user interface module
 ├── requirements.txt       # Python dependencies
@@ -62,17 +65,19 @@ llama-server-manager/
 └── llama-server-manager.log  # Program's own log file (default path; Section 7.3)
 ```
 
+Downloaded GGUF model files are **not** stored under the project directory. They live in the standard Hugging Face Hub cache (typically `~/.cache/huggingface/hub`, or `options.huggingface.cache-dir` if configured — Section 9.2.2), so that they remain accessible to the `hf` CLI tool and other `huggingface_hub`-based tooling outside this project.
+
 ---
 
 ## 3. Configuration File (config.json)
 
 `config.json` lives in the same directory as `main.py`. If the file does not exist when `main.py` is launched, a default `config.json` must be auto-generated before any other operations proceed. Reading, writing, and default-generation for this file are implemented exclusively by the configuration module described in Section 6 (`config.py`); no other module accesses `config.json` directly.
 
-The file has three top-level keys: `options`, `llama-server`, and `logging`. `llama-server.options` is a pass-through — its key-value pairs are forwarded directly as CLI arguments to `llama-server` and are not interpreted by the wrapper (see Section 9.2). `options` and `logging` are described below; program-logging settings live under the dedicated top-level `logging` key, never nested under `options`.
+The file has three top-level keys: `options`, `llama-server`, and `logging`. `llama-server.options` is a pass-through — its key-value pairs are forwarded directly as CLI arguments to `llama-server` and are not interpreted by the wrapper (see Section 10.2). `options` and `logging` are described below; program-logging settings live under the dedicated top-level `logging` key, never nested under `options`.
 
 ### 3.1 `options` — program settings
 
-Top-level `options` keys control the program itself. The `llama-server.options` key-value pairs are passed as command-line arguments to `llama-server`. Example:
+Top-level `options` keys control the program itself. The `llama-server.options` key-value pairs are passed as command-line arguments to `llama-server`. **`llama-server.options` keys must always use `llama-server`'s long-form flag names** (e.g. `model`, `models-dir`, `host`, `port`, `log-file`) rather than short-form aliases (e.g. `-m`), so that the mapping from a config key to the resulting CLI argument is unambiguous. Example, showing a configuration where multiple models have been downloaded via `model_manager.py` (Section 9) and `llama-server` is configured to scan the Hugging Face cache directory for them:
 
 ```json
 {
@@ -80,12 +85,17 @@ Top-level `options` keys control the program itself. The `llama-server.options` 
     "llama-cpp": {
       "os-architecture": "ubuntu/x64",
       "backend": "vulkan"
+    },
+    "huggingface": {
+      "token": null,
+      "cache-dir": null
     }
   },
   "llama-server": {
     "options": {
       "host": "0.0.0.0",
       "port": "11235",
+      "models-dir": "/home/user/.cache/huggingface/hub",
       "models-max": "1",
       "log-file": "llama-server.log"
     }
@@ -107,6 +117,15 @@ Top-level `options` keys control the program itself. The `llama-server.options` 
 
 These two keys are written automatically by `LlamaUpdater` — never by the user or by `config.py` — after every successful install or update (Section 8.3.5). They are **not** part of `DEFAULT_CONFIG` (Section 6.1) and are simply absent from `config.json` until the first successful install. Their presence or absence together determines whether `--update-llama` takes the fast path or falls back to the full interactive `--install-llama` workflow (Section 8.7).
 
+### 3.1.2 `options.huggingface` — Hugging Face Hub token & cache directory
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `token` | string\|null | `null` | A Hugging Face access token used for search, info, and download requests against gated or private repos (Section 9.2.1). If `null`, requests are made anonymously. Written automatically when `--hf-token` is passed on the command line and this value is currently `null` (Section 9.2.1); the CLI flag never overwrites an already-set value. |
+| `cache-dir` | string\|null | `null` | Overrides the directory `model_manager.py` downloads models into and reads them from (Section 9.2.2). If `null`, `huggingface_hub`'s built-in default cache location is used. Written and updated only when `--hf-cache-dir` is passed on the command line (Section 9.2.2) — never as a side effect of search, download, list, or delete operations. |
+
+Both keys are part of `DEFAULT_CONFIG` (Section 6.1), present as `null` from the first auto-generated `config.json`. Unlike `options.llama-cpp` (Section 3.1.1), `ModelManager` does not persist a list of downloaded models here — Section 9.6 (List) always re-derives the list live from the Hugging Face cache itself, since the cache may be modified externally to this program.
+
 ### 3.2 `logging` — program logging settings
 
 Controls verbosity and destination of the program's own log output (separate from llama-server output).
@@ -119,7 +138,7 @@ Controls verbosity and destination of the program's own log output (separate fro
 
 This section's schema is implemented by the dedicated logging module described in Section 7 (`logger.py`); no other module configures logging directly.
 
-> **Note:** The llama-server output log is controlled separately via the `log-file` key in `config.json`'s `llama-server.options` section, or overridden at runtime via the `--log-file` CLI flag (see Section 9). It is distinct from the program's own log described above.
+> **Note:** The llama-server output log is controlled separately via the `log-file` key in `config.json`'s `llama-server.options` section, or overridden at runtime via the `--log-file` CLI flag (see Section 10). It is distinct from the program's own log described above.
 
 ---
 
@@ -156,11 +175,11 @@ This section's schema is implemented by the dedicated logging module described i
 
 ### 5.1 Language & structure
 
-- Written in Python 3.12+.
+- Written in Python 3.12.3+.
 - All logic must be encapsulated in a class within an appropriate namespace (e.g. `llama_server_manager.Main`).
 - The `if __name__ == '__main__'` block must only instantiate the class and call its `run` method.
 - All interactive output (menus, prompts, progress, confirmations) must be delegated to `UIManager` from `ui_manager.py`.
-- **The entire interactive workflow must remain within the curses environment.** Once `UIManager` initialises the curses session, no output may be written to stdout or stderr directly. Every menu, prompt, confirmation dialog, progress update, and message must be rendered through `UIManager` without exception: menus, confirmation prompts, and the progress bar use their respective bordered windows (Sections 10.3–10.5), while standalone success, warning, and error messages use `UIManager`'s `print_message` method (Section 10.8) rather than a bordered window. Plain-text output to the terminal is only permitted for messages emitted *before* `UIManager` is constructed (e.g. the WSL detection warning in Section 5.1.1, which is explicitly printed to stderr before curses initialisation, and the Bash-level venv check in Section 4.2, which never enters the Python process at all). Diagnostic output written via the standard library `logging` module (Section 7) is exempt from this restriction: it is always directed to a log file, never to stdout or stderr, so it cannot interfere with the curses display no matter when it is emitted.
+- **The entire interactive workflow must remain within the curses environment.** Once `UIManager` initialises the curses session, no output may be written to stdout or stderr directly. Every menu, prompt, confirmation dialog, progress update, and message must be rendered through `UIManager` without exception: menus, confirmation prompts, and the progress bar use their respective bordered windows (Sections 11.3–11.5), while standalone success, warning, and error messages use `UIManager`'s `print_message` method (Section 11.8) rather than a bordered window. Plain-text output to the terminal is only permitted for messages emitted *before* `UIManager` is constructed (e.g. the WSL detection warning in Section 5.1.1, which is explicitly printed to stderr before curses initialisation, and the Bash-level venv check in Section 4.2, which never enters the Python process at all). Diagnostic output written via the standard library `logging` module (Section 7) is exempt from this restriction: it is always directed to a log file, never to stdout or stderr, so it cannot interfere with the curses display no matter when it is emitted.
 - `main.py` must define a single module-level `__version__` string constant. This is the sole source of truth for `--version` (Section 5.2.1) and must be manually kept in sync with this document's own version number (title page and Revision History) on every release — the two values are always identical.
 
 ### 5.1.1 WSL detection
@@ -183,11 +202,18 @@ This section's schema is implemented by the dedicated logging module described i
 | `--update-llama` | Flag | Update to the latest llama.cpp release. If `options.llama-cpp.os-architecture` and `options.llama-cpp.backend` (Section 3.1.1) are both present in `config.json`, downloads automatically with no menu interaction (fast path, Section 8.7). If either is missing, falls back to running the full interactive `--install-llama` workflow instead (Section 8.7). Delegates to `LlamaUpdater`. If `llama-server` was already running, it is restarted after a successful update (Section 8.5.1). |
 | `--stop-server` | Flag | Signal `runner.py` to gracefully stop a running `llama-server` process. |
 | `--log-file` | String | Path for llama-server output log. Overrides the `log-file` value in `config.json`. Defaults to `llama-server.log` in the project folder if not set in either place. |
+| `--models` | Flag | Open the top-level Model Manager menu (Section 9.3), giving access to Search, Download, List, and Delete. Delegates to `ModelManager` in `model_manager.py`. |
+| `--search-models` | Optional string | Search the Hugging Face Hub for models (Section 9.4). If a query string is supplied, search runs immediately; if omitted, an interactive prompt asks for one. Delegates to `ModelManager`. |
+| `--download-model` | Optional string | Download a single GGUF file from a Hugging Face model repo (Section 9.5). If a repo ID is supplied, jumps directly to file selection for that repo; if omitted, opens the search workflow first. Delegates to `ModelManager`. |
+| `--list-models` | Flag | List all models currently present in the resolved Hugging Face cache (Section 9.6). Delegates to `ModelManager`. |
+| `--delete-model` | Optional string | Delete a downloaded GGUF file from the local Hugging Face cache (Section 9.7). If a repo ID is supplied, jumps to file selection scoped to that repo (or directly to confirmation if only one file is cached for it); if omitted, opens a selection menu of all cached models. Delegates to `ModelManager`. |
+| `--hf-token` | String | Hugging Face access token for model search/info/download (Section 9.2.1). Overrides `options.huggingface.token` in `config.json` for the current run; persisted to `config.json` only if that value is currently `null`. |
+| `--hf-cache-dir` | String | Overrides the Hugging Face Hub cache directory (Section 9.2.2). Persisted to `config.json` under `options.huggingface.cache-dir` whenever passed and different from the stored value; also syncs `llama-server.options.models-dir` to match in that case (Section 9.2.2). |
 
 ### 5.2.1 Version display (`--version`)
 
 - If `--version` is present anywhere among the parsed arguments, it takes priority over every other flag; all other arguments are ignored, including `--self-update`.
-- `main.py` must not call the `print()` builtin or write to stdout/stderr itself to display the version. Instead, it instantiates `UIManager` and calls `print_message` (Section 10.8, `level="info"`) with the `__version__` constant (Section 5.1) — this is a standalone message, not a menu or confirmation, so it is **not** rendered in a bordered window. Because a controlling TTY is not guaranteed at this point in startup, `UIManager` may construct in the headless state (Section 10.6.1); `print_message` handles this automatically, falling back to the `print()` builtin (with level-based stream routing, Section 10.8) if curses could not initialise. Example output:
+- `main.py` must not call the `print()` builtin or write to stdout/stderr itself to display the version. Instead, it instantiates `UIManager` and calls `print_message` (Section 11.8, `level="info"`) with the `__version__` constant (Section 5.1) — this is a standalone message, not a menu or confirmation, so it is **not** rendered in a bordered window. Because a controlling TTY is not guaranteed at this point in startup, `UIManager` may construct in the headless state (Section 11.6.1); `print_message` handles this automatically, falling back to the `print()` builtin (with level-based stream routing, Section 11.8) if curses could not initialise. Example output:
   ```
   llama-server-manager version 1.1.2
   ```
@@ -217,7 +243,7 @@ Choice [1]:
 
 #### 5.3.2 Confirmation prompt
 
-After the user selects a source, `UIManager` must render a bordered curses window displaying the resolved version or commit reference and prompt for confirmation before modifying any local files. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with Section 10.4. Example layout:
+After the user selects a source, `UIManager` must render a bordered curses window displaying the resolved version or commit reference and prompt for confirmation before modifying any local files. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with Section 11.4. Example layout:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -253,12 +279,16 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 1. Parse CLI arguments.
 2. If `--version`: instantiate `UIManager`, print the version message (Section 5.2.1), and exit with status code `0`. All other arguments are ignored.
 3. Call `load_config()` from `config.py` (Section 6) to obtain the configuration dict; a default `config.json` is auto-generated first if the file is missing (Section 6.3).
-4. Instantiate `LoggerSetup` and configure the root logger from the `logging` section of the loaded configuration (Section 7). This must complete before `LlamaUpdater`, `Runner`, or `UIManager` are instantiated.
+4. Instantiate `LoggerSetup` and configure the root logger from the `logging` section of the loaded configuration (Section 7). This must complete before `LlamaUpdater`, `ModelManager`, `Runner`, or `UIManager` are instantiated.
 5. If `--self-update`: perform update; exit on completion. All other arguments are ignored.
 6. If `--install-llama` or `--update-llama`: instantiate `LlamaUpdater` and call the appropriate method; exit on completion.
 7. If `--stop-server`: signal `runner.py` to stop `llama-server`; exit on completion.
-8. Otherwise: check whether the `./llama-cpp` directory exists.
-   - If it **does not exist**, display the following error via `UIManager`'s `print_message` (Section 10.8, `level="error"`) — plain text, not a bordered window — and exit with a non-zero status code:
+8. If `--models`, `--search-models`, `--download-model`, `--list-models`, or `--delete-model` is present: instantiate `ModelManager` (Section 9).
+   - If `--hf-cache-dir` was also passed, resolve and (if changed) persist `options.huggingface.cache-dir` and sync `llama-server.options.models-dir` before performing any Hugging Face Hub operation (Section 9.2.2).
+   - If `--hf-token` was also passed, resolve and (if `options.huggingface.token` was `null`) persist it before performing any Hugging Face Hub operation (Section 9.2.1).
+   - Call the method corresponding to whichever of the five flags was passed (Sections 9.3–9.7); exit on completion (or, for `--models`, when the user exits the top-level menu, Section 9.3).
+9. Otherwise: check whether the `./llama-cpp` directory exists.
+   - If it **does not exist**, display the following error via `UIManager`'s `print_message` (Section 11.8, `level="error"`) — plain text, not a bordered window — and exit with a non-zero status code:
 ```
 llama-cpp not found. Please install it first:
   llama-server-manager --install-llama
@@ -271,13 +301,13 @@ llama-cpp not found. Please install it first:
 
 ### 6.1 Language & structure
 
-- Written in Python 3.12+.
+- Written in Python 3.12.3+.
 - Configuration retrieval is exposed as a single function, `load_config() -> dict`, alongside a module-level `DEFAULT_CONFIG` dictionary constant matching the three-key schema (`options`, `llama-server`, `logging`) described in Section 3.
 - `load_config()` is called exactly once by `main.py` during startup (Section 5.4, step 2), before `LoggerSetup`, `LlamaUpdater`, `Runner`, or `UIManager` are instantiated. The returned dict is passed to whichever modules need configuration values.
 
 ### 6.2 Responsibility
 
-- `config.py` is the single place in the codebase responsible for locating, creating, reading, and falling back to defaults for `config.json`. No other module reads or writes `config.json` directly — modules that need configuration values (e.g. `Runner`, Section 9.2) receive the already-loaded dict rather than opening the file themselves.
+- `config.py` is the single place in the codebase responsible for locating, creating, reading, and falling back to defaults for `config.json`. No other module reads or writes `config.json` directly — modules that need configuration values (e.g. `Runner`, Section 10.2) receive the already-loaded dict rather than opening the file themselves.
 
 ### 6.3 Load behaviour
 
@@ -301,9 +331,9 @@ This stderr warning is permitted under the exception in Section 5.1: `load_confi
 
 ### 7.1 Language & structure
 
-- Written in Python 3.12+.
+- Written in Python 3.12.3+.
 - All logic must be encapsulated in a class (e.g. `llama_server_manager.logger.LoggerSetup`).
-- Never executed directly; instantiated exactly once by `main.py`, immediately after the configuration has been loaded via `config.py`'s `load_config()` (Section 6, Section 5.4 step 2) and before `LlamaUpdater`, `Runner`, or `UIManager` are instantiated.
+- Never executed directly; instantiated exactly once by `main.py`, immediately after the configuration has been loaded via `config.py`'s `load_config()` (Section 6, Section 5.4 step 2) and before `LlamaUpdater`, `ModelManager`, `Runner`, or `UIManager` are instantiated.
 - Uses Python's standard library `logging` module exclusively; no third-party logging libraries are permitted.
 
 ### 7.2 Responsibility
@@ -334,7 +364,7 @@ This stderr warning is permitted under the exception in Section 5.1: `load_confi
 
 ### 7.5 Relationship to llama-server's own log
 
-- This module is unrelated to `llama-server`'s own output log, which is a separate file controlled via `llama-server.options.log-file` in `config.json` or the `--log-file` CLI flag (Section 3.2, Section 9.4). `logger.py` governs only the manager program's own diagnostic logging.
+- This module is unrelated to `llama-server`'s own output log, which is a separate file controlled via `llama-server.options.log-file` in `config.json` or the `--log-file` CLI flag (Section 3.2, Section 10.4). `logger.py` governs only the manager program's own diagnostic logging.
 
 ---
 
@@ -342,7 +372,7 @@ This stderr warning is permitted under the exception in Section 5.1: `load_confi
 
 ### 8.1 Language & structure
 
-- Written in Python 3.12+.
+- Written in Python 3.12.3+.
 - All logic must be encapsulated in a class (e.g. `llama_server_manager.updater.LlamaUpdater`).
 - Never executed directly; always instantiated by `main.py`.
 - All interactive output (menus, prompts, progress bars, confirmations) must be delegated to `UIManager` from `ui_manager.py`.
@@ -380,9 +410,9 @@ The `assets` array in each release response contains the downloadable files. Eac
 
 ### 8.3 Release selection
 
-Selecting a release to install is a four-screen workflow, in this order: **(1)** Release/tag selection, **(2)** Operating System & Architecture selection, **(3)** Compute Backend selection, **(4)** Confirmation of the resolved zip/archive file. Each screen is a distinct `UIManager` menu with its own title reflecting the items being displayed on that screen (see Section 10.3); the title bar must never be reused verbatim from a different screen.
+Selecting a release to install is a four-screen workflow, in this order: **(1)** Release/tag selection, **(2)** Operating System & Architecture selection, **(3)** Compute Backend selection, **(4)** Confirmation of the resolved zip/archive file. Each screen is a distinct `UIManager` menu with its own title reflecting the items being displayed on that screen (see Section 11.3); the title bar must never be reused verbatim from a different screen.
 
-#### 7.3.0 Naming pattern
+#### 8.3.0 Naming pattern
 
 Release archive filenames follow this exact template:
 
@@ -408,7 +438,7 @@ For example, `llama-b10107-bin-ubuntu-vulkan-x64.tar.gz` decomposes as:
 
 Non-bin assets such as `llama-b10297-xcframework.zip` (wrong segment count) and redistributable archives like `cudart-llama-bin-win-cuda-12.4-x64.zip` (extra leading segment, `Project` segment does not equal `llama`) are both excluded by these rules — the first by segment-shape mismatch, the second by segment-shape mismatch on the `Project` position. Superficial presence or absence of the substring `bin` anywhere in the filename is not itself the criterion; exclusion is always determined by full positional template matching.
 
-#### 7.3.1 Tag selection prompt
+#### 8.3.1 Tag selection prompt
 
 **Title:** `Select a Release`
 
@@ -431,7 +461,7 @@ If the user selects option `0`, prompt for the tag string:
 Enter release tag: 
 ```
 
-#### 7.3.2 Operating System & Architecture selection prompt
+#### 8.3.2 Operating System & Architecture selection prompt
 
 **Title:** `Select Operating System & Architecture`
 
@@ -448,7 +478,7 @@ Choice [1]:
 
 If auto-detection fails (platform or architecture cannot be determined, or no asset matches the detected pair), no option is highlighted and no default is pre-selected; the user must choose explicitly.
 
-#### 7.3.3 Compute Backend selection prompt
+#### 8.3.3 Compute Backend selection prompt
 
 **Title:** `Select Compute Backend`
 
@@ -472,9 +502,9 @@ Choice [1]:
 
 Pressing Enter accepts option `1` in either case.
 
-#### 7.3.4 Confirmation prompt
+#### 8.3.4 Confirmation prompt
 
-After Release, OS/Architecture, and Compute Backend are all resolved, reconstruct the final archive filename per the template in Section 8.3.0 and use it to locate the matching asset. `UIManager` must render a bordered curses window titled `Confirm Installation` displaying the resolved filename and prompt for confirmation before downloading anything. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with Section 10.4. Example layout:
+After Release, OS/Architecture, and Compute Backend are all resolved, reconstruct the final archive filename per the template in Section 8.3.0 and use it to locate the matching asset. `UIManager` must render a bordered curses window titled `Confirm Installation` displaying the resolved filename and prompt for confirmation before downloading anything. This prompt must **not** drop out of the curses environment; it must be rendered entirely through `UIManager` consistent with Section 11.4. Example layout:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -488,7 +518,7 @@ After Release, OS/Architecture, and Compute Backend are all resolved, reconstruc
 
 Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits with status code `0` without modifying any files.
 
-#### 7.3.5 Saving selections
+#### 8.3.5 Saving selections
 
 - Once the confirmation in Section 8.3.4 is accepted, and before the download begins, `LlamaUpdater` must write the resolved OS/Architecture pair and Compute Backend to `config.json` under `options.llama-cpp` (Section 3.1.1). This applies whether the four-screen workflow was reached via `--install-llama` directly or via the `--update-llama` fallback described in Section 8.7.
 - Saving happens automatically; the user is never prompted separately to opt in or out.
@@ -521,12 +551,12 @@ Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and exits w
 
 This applies after every successful download/extraction reached via `--install-llama` or `--update-llama` — including both the `--update-llama` fast path (Section 8.7, item 1) and its interactive fallback (Section 8.7, item 2), since both reach this point via Section 8.5.
 
-- Check whether `llama-server.pid` (Section 9.3) exists in the project directory.
+- Check whether `llama-server.pid` (Section 10.3) exists in the project directory.
   - If it does not exist, no instance was running before the install/update; do nothing further.
   - If it exists, read the recorded PID and verify that it currently corresponds to a running `llama-server` process (not just that the file is present — the file may be stale, e.g. left over from a crash). If the PID does not correspond to a live `llama-server` process, delete the stale PID file and do nothing further.
 - If the PID corresponds to a live `llama-server` process:
-  - Stop it using `Runner`'s existing graceful shutdown logic (Section 9.5), called in-process — do not duplicate that logic here and do not shell out to `--stop-server`.
-  - If the sanity check (Section 8.5) passed, start a new `llama-server` instance using `Runner`'s existing process execution logic (Section 9.3), called in-process. The new instance's launch arguments must be re-derived from `config.json` by calling `load_config()` (Section 6) fresh; no CLI pass-through arguments are used (Section 5.2 defines no such mechanism).
+  - Stop it using `Runner`'s existing graceful shutdown logic (Section 10.5), called in-process — do not duplicate that logic here and do not shell out to `--stop-server`.
+  - If the sanity check (Section 8.5) passed, start a new `llama-server` instance using `Runner`'s existing process execution logic (Section 10.3), called in-process. The new instance's launch arguments must be re-derived from `config.json` by calling `load_config()` (Section 6) fresh; no CLI pass-through arguments are used (Section 5.2 defines no such mechanism).
   - If the sanity check failed, do not start a new instance; instead display a message via `UIManager` explaining that the previously running `llama-server` instance was stopped because the newly installed binary failed its sanity check.
 
 ### 8.6 Error handling
@@ -544,36 +574,178 @@ When `main.py` dispatches `--update-llama` (Section 5.2, Section 5.4 step 5), `L
    - Skip Section 8.3.2 (OS/Architecture selection) — use the saved `os-architecture` value directly.
    - Skip Section 8.3.3 (Compute Backend selection) — use the saved `backend` value directly.
    - Skip Section 8.3.4 (Confirmation screen) — once the archive filename is reconstructed (Section 8.3.0) and the matching asset located, proceed directly to download.
-   - No `UIManager` menu or confirmation prompt is shown at any point during selection. `UIManager` is still used for the download progress bar (Section 8.5, Section 10.5) and for the final success/warning/error message (Section 8.5, Section 10.7).
+   - No `UIManager` menu or confirmation prompt is shown at any point during selection. `UIManager` is still used for the download progress bar (Section 8.5, Section 11.5) and for the final success/warning/error message (Section 8.5, Section 11.7).
    - If no asset in the latest release matches the reconstructed filename (e.g. the saved OS/Architecture/Backend combination is no longer published for the newest release), display an error via `UIManager` stating that the saved selection could not be matched, and exit with a non-zero status code. Do **not** silently fall back to the interactive workflow in this case — the missing-options fallback in item 2 below applies only when the keys are absent from `config.json`, not when they fail to match.
    - The fast path never writes to `config.json`: `options.llama-cpp.os-architecture` and `options.llama-cpp.backend` are read but not re-saved, since they are already correct and unchanged. Only the four-screen workflow (Section 8.3.5) writes these keys — that is, `--install-llama` run directly, or the `--update-llama` fallback in item 2 below.
 2. **Fallback — saved options absent or incomplete.** If either `options.llama-cpp.os-architecture` or `options.llama-cpp.backend` is missing from `config.json` (e.g. `config.json` was auto-generated from `DEFAULT_CONFIG` and llama.cpp has never been installed via this program), `LlamaUpdater` must run the identical interactive workflow used by `--install-llama` (Sections 8.3.1–8.3.5) instead — all four menu screens, including the Confirmation screen. In effect, `--update-llama` behaves exactly like `--install-llama` for the remainder of the run in this case.
 
 ---
 
-## 9. Run Script (runner.py)
+## 9. Model Manager Module (model_manager.py)
 
 ### 9.1 Language & structure
 
-- Written in Python 3.12+.
+- Written in Python 3.12.3+.
+- All logic must be encapsulated in a class (e.g. `llama_server_manager.model_manager.ModelManager`).
+- Never executed directly; always instantiated by `main.py`.
+- All interactive output (menus, prompts, progress bars, confirmations) must be delegated to `UIManager` from `ui_manager.py`, reusing the same bordered constructs (numbered menus, confirmation prompts, progress bar — Sections 11.3–11.5) and `print_message` (Section 11.8) used by `LlamaUpdater`; no new UI constructs are introduced for this module.
+- Obtains a module-level logger via `logging.getLogger(__name__)` (Section 7) and logs significant events — search performed, download started/completed, deletion, errors — at the appropriate level.
+- This module supplements, rather than replaces, the Hugging Face `hf` CLI tool and its cache: all downloaded model files are stored in and read from the standard Hugging Face Hub cache so that the two tools remain interoperable (Section 9.2.2).
+
+### 9.2 Hugging Face Hub API usage
+
+`ModelManager` uses the `huggingface_hub` Python library (the official Hugging Face Hub client) rather than calling the Hub's REST API directly. This is a required third-party dependency, added to `requirements.txt`. It is scoped to this module only — the exception to Section 12.2's dependency policy applies solely to model-management functionality and does not extend to the core start/stop/run path (`runner.py`, `llama_updater.py`), which remains dependent only on the standard library and `requests`/`urllib`.
+
+The following `huggingface_hub` entry points are used:
+
+| Purpose | `huggingface_hub` API |
+|---|---|
+| Search models by query/filter (Section 9.4) | `HfApi.list_models(search=..., filter=..., sort=..., limit=...)` |
+| Retrieve a repo's file listing (Section 9.5) | `HfApi.model_info(repo_id, files_metadata=True)` |
+| Download a single file from a repo (Section 9.5) | `hf_hub_download(repo_id, filename, cache_dir=..., token=...)` |
+| Enumerate locally cached models (Section 9.6) | `scan_cache_dir(cache_dir=...)` |
+| Delete a cached file/revision (Section 9.7) | Filesystem deletion within the scanned cache entry's path (Section 9.7) |
+
+`ModelManager` never uses `snapshot_download` or any whole-repo download method — only single-file downloads via `hf_hub_download`, consistent with the requirement that an entire model repository is never downloaded (Section 9.5).
+
+#### 9.2.1 Authentication
+
+- An optional Hugging Face access token may be supplied for search, info, and download operations against gated or private repos. Token resolution order:
+  1. `--hf-token` CLI argument (Section 5.2), if present.
+  2. `options.huggingface.token` in `config.json` (Section 3.1.2).
+  3. No token (anonymous access) if neither is set.
+- If `--hf-token` is passed and `options.huggingface.token` in `config.json` is currently empty (`null`), the CLI-supplied value is persisted to `config.json` under `options.huggingface.token` before use, following the same persistence pattern as `--hf-cache-dir` (Section 9.2.2). If `options.huggingface.token` is already set, the CLI value is used for the current run only and does **not** overwrite the existing config value.
+- The resolved token is passed as the `token` argument to every `huggingface_hub` call this module makes.
+
+#### 9.2.2 Cache directory
+
+- Model files are stored in the standard Hugging Face Hub cache location (`huggingface_hub`'s default, typically `~/.cache/huggingface/hub`) unless overridden, so that files remain visible to and manageable by the `hf` CLI tool and other `huggingface_hub`-based tooling. `ModelManager` never introduces its own project-local model storage directory.
+- Cache directory resolution order:
+  1. `--hf-cache-dir` CLI argument (Section 5.2), if present.
+  2. `options.huggingface.cache-dir` in `config.json` (Section 3.1.2).
+  3. `huggingface_hub`'s built-in default cache location if neither is set.
+- **Persistence and sync are CLI-flag-triggered only.** If `--hf-cache-dir` is passed on the command line:
+  - If `options.huggingface.cache-dir` in `config.json` is currently `null`, the CLI-supplied path is persisted to `config.json` under `options.huggingface.cache-dir`.
+  - If the CLI-supplied path differs from the value already stored in `options.huggingface.cache-dir`, `config.json` is updated to the new path.
+  - In either case, whenever `--hf-cache-dir` results in a change to `options.huggingface.cache-dir`, `ModelManager` also updates `llama-server.options.models-dir` (Section 3.1) to the same path, so that `llama-server` continues scanning the directory that models are actually being downloaded into.
+  - This sync happens **only** when `--hf-cache-dir` is explicitly passed and results in a config change. It never happens as a side effect of search, download, list, or delete operations — a plain `--download-model` run (with no `--hf-cache-dir` flag) never touches `llama-server.options.models-dir`, even on first-ever download.
+- `ModelManager` does not maintain its own record of which models are downloaded; Section 9.6 (List) always re-derives the list live from `scan_cache_dir()` against the resolved cache directory, since the cache may be modified externally to this program (e.g. via the `hf` CLI).
+
+### 9.3 Top-level hub menu (`--models`)
+
+- **Title:** `Model Manager`
+- Invoked via `--models` with no argument. Presents a numbered menu (rendered via `UIManager`, Section 11.3) offering access to each of the workflows below:
+
+```
+Model Manager
+  1) Search models
+  2) Download a model
+  3) List downloaded models
+  4) Delete a downloaded model
+Choice [1]:
+```
+
+- Selecting an option enters the corresponding workflow (Sections 9.4–9.7) as if the equivalent dedicated flag had been passed with no argument (i.e. always starting from the interactive entry point of that workflow, never a direct/non-interactive shortcut).
+- After a workflow completes (success, cancellation, or error), control returns to this top-level menu rather than exiting the program, so the user can perform another model-management action without relaunching. Selecting `q` or `Esc` from this menu exits the program with status code `0`.
+
+### 9.4 Search workflow (`--search-models [QUERY]`)
+
+- If `QUERY` is supplied on the command line, search is performed immediately using it. If omitted, `UIManager` first prompts for a query string:
+
+```
+Search Hugging Face Hub
+Query: 
+```
+
+- Search is performed via `HfApi.list_models(search=QUERY, ...)` (Section 9.2). Results are presented as a numbered menu (Section 11.3), titled `Search Results: "<QUERY>"`, showing each result's repo ID and, where available, its author and a truncated tag list — mirroring the fields shown by the reference `hf_search.py` script (repo `id`, `author`, `tags`).
+- If no results are returned, display a message via `print_message` (Section 11.8, `level="info"`) stating no results were found, and return to the calling context (the `--models` hub menu if reached via Section 9.3, or exit with status code `0` if reached directly via `--search-models`).
+- Selecting a result from the list transitions directly into the Download workflow (Section 9.5) for that repo, skipping the repo-selection step described there since the repo is already resolved.
+
+### 9.5 Download workflow (`--download-model [REPO_ID]`)
+
+Downloading a model is a screen-based workflow mirroring the llama.cpp installer's approach (Section 8.3): the user is guided through progressively narrower selections rather than being asked to identify a file up front. An entire repository is never downloaded — only a single selected `.gguf` file (Section 9.2).
+
+1. **Repo resolution.** If `REPO_ID` is supplied on the command line, skip directly to step 2 using that repo. If omitted, run the Search workflow (Section 9.4) first to let the user locate and select a repo.
+2. **File selection screen.** **Title:** `Select a File`. Fetch the repo's file listing via `HfApi.model_info(repo_id, files_metadata=True)` and filter it to files ending in `.gguf`. Present the filtered list as a numbered menu (Section 11.3), showing each file's name and human-readable size. If a repo has no `.gguf` files at all, display an error via `print_message` (Section 11.8, `level="error"`) stating the repo contains no GGUF files, and return to the calling context without downloading anything.
+   ```
+   Select a File
+     1) model-Q4_K_M.gguf  (4.1 GB)
+     2) model-Q5_K_M.gguf  (4.8 GB)
+     3) model-Q8_0.gguf    (7.2 GB)
+   Choice:
+   ```
+   There is no auto-detected/recommended default on this screen (unlike Section 8.3.2's OS/Architecture auto-detection), since quantisation choice depends on the user's hardware and quality/size tradeoffs that this program cannot infer.
+3. **Confirmation screen.** After a file is selected, `UIManager` must render a bordered curses window (Section 11.4) displaying the resolved repo ID, filename, and size, and prompt for confirmation before downloading:
+   ```
+   ┌──────────────────────────────────────────────────────────┐
+   │ Confirm Download                                          │
+   │ Repo: TheBloke/example-model-GGUF                          │
+   │ File: model-Q4_K_M.gguf (4.1 GB)                            │
+   │ Proceed with download?                                     │
+   │                                                              │
+   │             ▶ [ Yes ]          [ No  ]                     │
+   └──────────────────────────────────────────────────────────┘
+   ```
+   Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and returns to the calling context without downloading anything.
+4. **Download.** Download the selected file via `hf_hub_download(repo_id, filename, cache_dir=..., token=...)` (Section 9.2), into the resolved cache directory (Section 9.2.2). Display the existing ncurses progress bar (Section 11.5) during the download, reusing the same construct used for llama.cpp downloads (Section 8.5) rather than a new variant.
+5. **Completion.** After a successful download, display a success message via `print_message` (Section 11.8, `level="info"`) showing the resolved local cache path. No entry is written to `config.json` recording the download (Section 9.2.2) — `hf_hub_download`'s own cache bookkeeping, and this program's live `scan_cache_dir()` lookups (Section 9.6), are the sole source of truth for what is downloaded. `llama-server.options.models-dir` is **not** updated as part of a normal download; it is only ever updated via the `--hf-cache-dir` sync path described in Section 9.2.2.
+6. If the download fails (network error, disk space, invalid repo/file), clean up any partial file and report the error via `print_message` (Section 11.8, `level="error"`).
+
+### 9.6 List workflow (`--list-models`)
+
+- Enumerate all models currently present in the resolved Hugging Face cache directory (Section 9.2.2) via `scan_cache_dir()`. This is always a live read of the filesystem — `ModelManager` keeps no separate persisted list, since the cache may have been modified externally (e.g. by the `hf` CLI) since this program last ran.
+- Present the results via `print_message` (Section 11.8, `level="info"`) as a plain list — this is informational output, not a selection menu, so it is not rendered as a bordered numbered menu (Section 11.3) unless reached through the Delete workflow's selection step (Section 9.7). Each entry shows the repo ID, the downloaded filename(s) for that repo, and total size on disk.
+- If the cache is empty or the resolved cache directory does not exist, display a message via `print_message` (Section 11.8, `level="info"`) stating that no models are currently downloaded.
+
+### 9.7 Delete workflow (`--delete-model [REPO_ID]`)
+
+- If `REPO_ID` is supplied and the cache (Section 9.6) contains exactly one downloaded file for that repo, skip directly to the confirmation prompt below for that file. If the repo has multiple downloaded files (e.g. several quantisations), present a numbered menu (Section 11.3) titled `Select a File to Delete` scoped to that repo's cached files. If `REPO_ID` is omitted, present a numbered menu of all cached models across all repos (Section 9.6), titled `Select a Model to Delete`.
+- After a file is selected, `UIManager` must render a bordered confirmation window (Section 11.4) showing the repo ID, filename, and size, prompting the user before deleting:
+  ```
+  ┌──────────────────────────────────────────────────────────┐
+  │ Confirm Deletion                                            │
+  │ Repo: TheBloke/example-model-GGUF                            │
+  │ File: model-Q4_K_M.gguf (4.1 GB)                              │
+  │ This will permanently delete the file from disk.              │
+  │ Proceed with deletion?                                       │
+  │                                                              │
+  │             ▶ [ Yes ]          [ No  ]                     │
+  └──────────────────────────────────────────────────────────┘
+  ```
+  Pressing Enter confirms (default yes). Entering `n` or `Esc` cancels and returns to the calling context without deleting anything.
+- On confirmation, delete the file from the Hugging Face Hub cache on the local filesystem (i.e. actually remove the cached file/blob, not merely forget about it). `config.json` is never modified by this workflow, since no model list is persisted there (Section 9.2.2).
+- After a successful deletion, display a success message via `print_message` (Section 11.8, `level="info"`). If deletion fails (e.g. a permissions error), display an error via `print_message` (Section 11.8, `level="error"`).
+
+### 9.8 Error handling
+
+- All `huggingface_hub` calls must be wrapped in `try/except`. Network errors, rate limiting, repository-not-found, and gated/authentication errors must each be reported via a clear message through `print_message` (Section 11.8, `level="error"`), consistent with Section 12.3.
+- A `huggingface_hub` operation failing must never leave a partially-downloaded file in the cache; partial downloads are cleaned up before the error is reported (Section 9.5, item 6).
+
+---
+
+## 10. Run Script (runner.py)
+
+### 10.1 Language & structure
+
+- Written in Python 3.12.3+.
 - All logic must be encapsulated in a class (e.g. `llama_server_manager.runner.Runner`).
 - Never executed directly; always instantiated by `main.py`.
 - Any user-facing status output must be delegated to `UIManager` from `ui_manager.py`.
 - Obtains a module-level logger via `logging.getLogger(__name__)` (Section 7) and logs process launch, PID, and shutdown events.
 
-### 9.2 Configuration loading
+### 10.2 Configuration loading
 
 - Receive the already-loaded configuration dict from `main.py` (obtained via `config.py`'s `load_config()`, Section 6); `Runner` must not read `config.json` directly.
 - Extract key-value pairs from the `llama-server.options` section and convert them to CLI arguments for `llama-server`. The program accepts no CLI pass-through arguments for `llama-server` (Section 5.2); `config.json` is the sole source of these launch arguments.
 
-### 9.3 Process execution
+### 10.3 Process execution
 
 - Launch `./llama-cpp/llama-server` (`./llama-cpp/llama-server.exe` on Windows) with the assembled argument list.
 - Record the PID of the launched `llama-server` process.
 - Write the PID to `llama-server.pid` in the project directory.
 - `main.py` returns control to the shell immediately after launch.
 
-### 9.4 Logging (llama-server output)
+### 10.4 Logging (llama-server output)
 
 This is the log produced by the `llama-server` process itself and is distinct from the manager program's own log described in Section 7.
 
@@ -585,7 +757,7 @@ The log file path is resolved in the following order of precedence:
 
 The resolved path is passed to `llama-server` via its `--log-file` flag.
 
-### 9.5 Graceful shutdown
+### 10.5 Graceful shutdown
 
 Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the `--stop-server` argument passed to `main.py`.
 
@@ -597,24 +769,24 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 ---
 
-## 10. CLI User Interface Module (ui_manager.py)
+## 11. CLI User Interface Module (ui_manager.py)
 
-### 10.1 Language & structure
+### 11.1 Language & structure
 
-- Written in Python 3.12+.
+- Written in Python 3.12.3+.
 - All logic must be encapsulated in a class (e.g. `llama_server_manager.ui.UIManager`).
 - Uses Python's standard library `curses` module exclusively; no third-party terminal UI libraries are permitted.
 - Never executed directly; always instantiated by `main.py` and passed to other modules that require user interaction.
 - Obtains a module-level logger via `logging.getLogger(__name__)` (Section 7), like every other module.
 
-### 10.2 Visual style
+### 11.2 Visual style
 
 - Background: black (`curses.COLOR_BLACK`).
 - Foreground text: green (`curses.COLOR_GREEN`).
 - All windows and panels must use this colour pair consistently.
 - Highlighted / selected items (e.g. the currently focused menu option) must be rendered in reverse video (`curses.A_REVERSE`) using the same green-on-black pair.
 
-### 10.3 Numbered menus
+### 11.3 Numbered menus
 
 - Render each menu inside a bordered `curses` window.
 - The title line is supplied by the caller on each invocation and must describe the specific items being displayed on that screen (e.g. `Select a Release`, `Select Operating System & Architecture`). `UIManager` must not reuse or hard-code a single generic title across different menus — each call renders its own title text.
@@ -623,73 +795,74 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 - Pressing Enter confirms the selection; pressing `q` or `Esc` cancels (equivalent to the user entering `n` at a confirmation prompt).
 - A default option, where applicable, is indicated by appending `(default)` to the option label.
 
-### 10.4 Confirmation prompts
+### 11.4 Confirmation prompts
 
 - Render as a bordered curses window containing a status line (the resolved selection being confirmed) followed by a prompt line: `Proceed? [Y/n]:`.
 - `Y` / Enter confirms; `n` / `Esc` cancels.
 - Must never drop out of the curses environment; all rendering goes through `UIManager`.
 
-### 10.5 Progress bar
+### 11.5 Progress bar
 
 - Render inside a bordered `curses` window with a title line (e.g. the filename being downloaded).
 - Display a filled bar that updates in real time as download bytes are received.
 - Show current progress as both a percentage and a `downloaded / total` byte count (human-readable, e.g. `12.4 MB / 98.0 MB`).
 - If the total size is unknown (no `Content-Length` header), display a spinner animation instead of a filled bar.
 
-### 10.6 Lifecycle
+### 11.6 Lifecycle
 
 - `UIManager` must initialise the `curses` environment (`curses.initscr`, colour setup, `cbreak`, `noecho`, hidden cursor) on construction and restore the terminal to its original state on destruction or on any unhandled exception, ensuring the terminal is never left in a broken state.
 - The `UIManager` instance must remain active and the curses session must remain open for the **entire duration** of the program's interactive workflow — from first menu to final success/error message. The curses session must not be torn down and re-entered mid-workflow; `UIManager` is constructed once and destroyed once.
 
-### 10.6.1 Curses initialisation fallback
+### 11.6.1 Curses initialisation fallback
 
-- On construction, `UIManager` must attempt to initialise `curses` as described in Section 10.6, wrapped in a `try/except`. If initialisation fails (e.g. no controlling TTY, missing/unsupported `TERM`, or any other environment where `curses.initscr()` raises), `UIManager` must catch the exception, set an internal "headless" flag, and continue constructing successfully rather than propagating the exception.
-- While in this headless state, `print_message` (Section 10.8) falls back to the `print()` builtin instead of rendering through curses, routed by `level` per Section 10.8 (`stdout` for `info`, `stderr` for `warning`/`error`). This fallback is internal to `UIManager`; callers always call `print_message` the same way regardless of whether curses is active.
-- The bordered constructs — numbered menus (10.3), confirmation prompts (10.4), and the progress bar (10.5) — require an active curses session. Invoking any of them while `UIManager` is in the headless state is a programming error outside the scope of this fallback; callers that may run without a controlling TTY (currently only `--version`, Section 5.2.1) must restrict themselves to `print_message`.
+- On construction, `UIManager` must attempt to initialise `curses` as described in Section 11.6, wrapped in a `try/except`. If initialisation fails (e.g. no controlling TTY, missing/unsupported `TERM`, or any other environment where `curses.initscr()` raises), `UIManager` must catch the exception, set an internal "headless" flag, and continue constructing successfully rather than propagating the exception.
+- While in this headless state, `print_message` (Section 11.8) falls back to the `print()` builtin instead of rendering through curses, routed by `level` per Section 11.8 (`stdout` for `info`, `stderr` for `warning`/`error`). This fallback is internal to `UIManager`; callers always call `print_message` the same way regardless of whether curses is active.
+- The bordered constructs — numbered menus (11.3), confirmation prompts (11.4), and the progress bar (11.5) — require an active curses session. Invoking any of them while `UIManager` is in the headless state is a programming error outside the scope of this fallback; callers that may run without a controlling TTY (currently only `--version`, Section 5.2.1) must restrict themselves to `print_message`.
 
-### 10.7 Logging integration
+### 11.7 Logging integration
 
 - Whenever `UIManager` renders an error, warning, or success/informational message to the user, it must also emit a corresponding record to its module logger at a matching level:
   - Error messages → `logger.error(...)`
   - Warning messages → `logger.warning(...)`
   - Success / informational messages → `logger.info(...)`
 - Whether a given message is actually persisted depends on the `enabled` and `level` settings configured for the process (Section 3.2, Section 7.3). For example, an informational success message logged at `INFO` will not appear in the log file if `level` is set to `WARNING` or `ERROR`.
-- This dual output (curses display + log record) is independent of, and does not replace, the separate `llama-server` output log described in Section 9.4.
+- This dual output (curses display + log record) is independent of, and does not replace, the separate `llama-server` output log described in Section 10.4.
 
-### 10.8 Plain messages (`print_message`)
+### 11.8 Plain messages (`print_message`)
 
-- For any output that is purely informational and does not require a menu (Section 10.3), confirmation prompt (Section 10.4), or progress bar (Section 10.5) — success messages, warnings, and errors — `UIManager` exposes a `print_message(text, level)` method. It is the single entry point all other modules use for this kind of output; no module other than `UIManager` itself may write to stdout/stderr or call the `print()` builtin. `UIManager` itself is exempt from this restriction and may call `print()` anywhere within its own class body — including `print_message`'s headless fallback (Section 10.6.1) and the curses-render-failure fallback described below, as well as its other methods (e.g. the bordered constructs in Sections 10.3–10.5).
-- Under normal operation (curses active), `print_message` writes the text as plain, unbordered lines within the active curses session; it is **not** a bordered window. If `UIManager` was constructed in the headless state described in Section 10.6.1 (curses failed to initialise), `print_message` instead falls back to the `print()` builtin, routed by `level`: `stdout` for `info`, `stderr` for `warning`/`error`. This fallback is transparent to the caller — the call signature and behaviour from the caller's perspective are identical either way.
-- If `UIManager` is in the active curses state but rendering the message through curses fails (e.g. the underlying `addstr`/`refresh` call raises), `print_message` falls back to the same `print()`-based, level-routed output described above for the headless state, rather than leaving the message undisplayed. This is the only circumstance in which `print_message` writes to stdout/stderr while curses is otherwise active; it does not apply to the bordered constructs in Sections 10.3–10.5, and it does not relax Section 5.1's prohibition on any other module writing to the terminal during the interactive workflow.
-- `level` is one of `info`, `warning`, `error`, matching Section 10.7's logging integration — the same call also emits the corresponding log record at a matching level.
+- For any output that is purely informational and does not require a menu (Section 11.3), confirmation prompt (Section 11.4), or progress bar (Section 11.5) — success messages, warnings, and errors — `UIManager` exposes a `print_message(text, level)` method. It is the single entry point all other modules use for this kind of output; no module other than `UIManager` itself may write to stdout/stderr or call the `print()` builtin. `UIManager` itself is exempt from this restriction and may call `print()` anywhere within its own class body — including `print_message`'s headless fallback (Section 11.6.1) and the curses-render-failure fallback described below, as well as its other methods (e.g. the bordered constructs in Sections 11.3–11.5).
+- Under normal operation (curses active), `print_message` writes the text as plain, unbordered lines within the active curses session; it is **not** a bordered window. If `UIManager` was constructed in the headless state described in Section 11.6.1 (curses failed to initialise), `print_message` instead falls back to the `print()` builtin, routed by `level`: `stdout` for `info`, `stderr` for `warning`/`error`. This fallback is transparent to the caller — the call signature and behaviour from the caller's perspective are identical either way.
+- If `UIManager` is in the active curses state but rendering the message through curses fails (e.g. the underlying `addstr`/`refresh` call raises), `print_message` falls back to the same `print()`-based, level-routed output described above for the headless state, rather than leaving the message undisplayed. This is the only circumstance in which `print_message` writes to stdout/stderr while curses is otherwise active; it does not apply to the bordered constructs in Sections 11.3–11.5, and it does not relax Section 5.1's prohibition on any other module writing to the terminal during the interactive workflow.
+- `level` is one of `info`, `warning`, `error`, matching Section 11.7's logging integration — the same call also emits the corresponding log record at a matching level.
 - `print_message` is the correct rendering path for standalone messages such as: the `--version` output (Section 5.2.1), the `./llama-cpp` not-found error (Section 5.4), self-update success/failure messages (Section 5.3.3), and install/update success/warning/error messages (Sections 8.5, 8.5.1, 8.6, 8.7). Anywhere this document says a message is "displayed via `UIManager`" without describing a menu, confirmation prompt, or progress bar, `print_message` is the method used.
-- `print_message` is distinct from the bordered constructs in Sections 10.3–10.5, which remain bordered `curses` windows because they require structured layout or direct user interaction (selection, confirmation, or a live-updating bar). A message rendered via `print_message` is never bordered, even when it is emitted immediately after a bordered menu or confirmation window closes.
+- `print_message` is distinct from the bordered constructs in Sections 11.3–11.5, which remain bordered `curses` windows because they require structured layout or direct user interaction (selection, confirmation, or a live-updating bar). A message rendered via `print_message` is never bordered, even when it is emitted immediately after a bordered menu or confirmation window closes.
 
 ---
 
-## 11. Non-Functional Requirements
+## 12. Non-Functional Requirements
 
-### 11.1 Cross-platform compatibility
+### 12.1 Cross-platform compatibility
 
 - All Python code must run on Linux and macOS without modification. Windows is supported via WSL only (see Section 5.1.1).
 - Path handling must use `pathlib.Path` throughout to avoid OS-specific separator issues.
 - Signal handling must use platform-appropriate mechanisms (`SIGTERM`/`SIGKILL` on POSIX; `TerminateProcess` on Windows/WSL).
 
-### 11.2 Dependencies
+### 12.2 Dependencies
 
 - Standard library only where possible.
 - The `requests` library (or `urllib`) may be used for GitHub API calls and file downloads.
+- The `huggingface_hub` library is used for all Hugging Face Hub interaction (search, repo info, file download, cache inspection) within `model_manager.py`, per Section 9.2. This is the one exception to "standard library only" beyond `requests`/`urllib`, and it is scoped entirely to model-management functionality.
 - The `curses` module (standard library) is used for all CLI UI rendering; no third-party terminal UI libraries are permitted.
 - The `logging` module (standard library) is used for all program log output; see Section 7. No third-party logging libraries are permitted.
-- No third-party dependency should be required for core start/stop/run operations.
+- No third-party dependency should be required for core start/stop/run operations. `huggingface_hub` is exempt from this rule, since it is required only for the optional model-management commands (`--models`, `--search-models`, `--download-model`, `--list-models`, `--delete-model`) and is not on the path of starting, stopping, or running `llama-server` itself.
 
-### 11.3 Error handling & exit codes
+### 12.3 Error handling & exit codes
 
 - All external calls (GitHub API, subprocess launches, file I/O) must be wrapped in `try/except` blocks.
 - Errors must be logged (according to the logging config) and result in a non-zero exit code.
 - The program must never silently swallow exceptions.
 
-### 11.4 Code style
+### 12.4 Code style
 
 - Follow PEP 8 conventions.
 - Each module must include a module-level docstring describing its purpose.
@@ -697,9 +870,10 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 ---
 
-## 12. Out of Scope
+## 13. Out of Scope
 
-- Model file management (downloading, converting, or organising GGUF model files).
+- Converting or organising GGUF model files (e.g. quantisation conversion, merging, or reformatting). Downloading and deleting GGUF files is in scope via `model_manager.py` (Section 9); transforming them is not.
+- Model sources other than the Hugging Face Hub (e.g. direct URLs, other model registries).
 - A graphical user interface.
 - Authentication or access control for `llama-server`.
 - Automatic selection of quantisation level or GPU layers.
@@ -710,6 +884,7 @@ Shutdown is triggered by either a `SIGINT` / `KeyboardInterrupt` (Ctrl+C) or the
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
+| 1.2.0 | August 2026 | zero4281 | Added model management: a new Model Manager Module (`model_manager.py`, new §9), covering search, download, list, and delete of GGUF model files from the Hugging Face Hub via the `huggingface_hub` library (new §9.2), a required third-party dependency scoped to this feature (§12.2). Renumbered former §9–§12 to §10–§13 accordingly, and updated every cross-reference into the former Run Script and CLI User Interface Module sections throughout the document. Added five new CLI flags (§5.2): `--models` (top-level curses hub menu, §9.3), `--search-models`, `--download-model`, `--list-models`, and `--delete-model` (§9.4–§9.7), each taking an optional parameter and falling back to an interactive menu when omitted. Download and delete never operate on a whole repository — only a single selected `.gguf` file at a time (§9.5, §9.7), via a screen-based selection flow modelled on the llama.cpp installer (§8.3) and reusing its existing bordered menu, confirmation, and progress-bar constructs (§11.3–§11.5) rather than introducing new ones. Model files are stored in and read from the standard Hugging Face Hub cache rather than a project-local directory, so that `model_manager.py` supplements rather than replaces the `hf` CLI tool and its cache; List (§9.6) always re-derives its results live via `scan_cache_dir()` rather than persisting a model list to `config.json`, since the cache may be modified externally. Added new `options.huggingface` config key (new §3.1.2) with `token` and `cache-dir` sub-keys, plus corresponding `--hf-token` and `--hf-cache-dir` CLI flags (§5.2, §9.2.1–§9.2.2); a CLI-supplied value is persisted to `config.json` only when the corresponding config value is currently unset. `--hf-cache-dir` additionally syncs `llama-server.options.models-dir` to match, but only when the flag is explicitly passed and changes the stored cache directory — never as a side effect of search, download, list, or delete. Updated the `config.json` example (§3.1) to include `options.huggingface` and `llama-server.options.models-dir`, and clarified that `llama-server.options` keys must use `llama-server`'s long-form flag names. Updated §5.4 (Startup sequence) with a new step dispatching to `ModelManager`. Removed the "Model file management" bullet from §13 (formerly §12) Out of Scope, replacing it with narrower bullets excluding only GGUF conversion/organisation and non-Hugging-Face model sources. Bumped Minimum Python Version to 3.12.3 throughout. |
 | 1.1.5 | August 2026 | zero4281 | Reversed 1.1.4's blanket ban on the `print()` builtin within `UIManager`. `UIManager` is now exempt from the `print()` restriction and may call it anywhere within its own class body; the restriction remains in force for every other module, which must continue to use `print_message` (§10.8) rather than calling `print()` directly. Updated §10.6.1 and §10.8 so the headless-state fallback (curses failed to initialise) uses `print()` instead of direct `sys.stdout`/`sys.stderr` writes, routed by `level`: `stdout` for `info`, `stderr` for `warning`/`error`. Added a new fallback path to §10.8: if `UIManager` is in the active curses state but rendering a message through curses fails, `print_message` now falls back to the same `print()`-based, level-routed output as the headless case, rather than the behaviour being unspecified. Updated §5.2.1's description of the `--version` headless fallback to match (`print()` instead of a direct, non-`print()` stdout write). No change to §5.1's prohibition on other modules writing to the terminal, or to §5.4's startup ordering. |\n| 1.1.4 | August 2026 | zero4281 | Fixed a startup bug where `--version` crashed in environments without a controlling TTY (no `TERM`, piped output, non-interactive runners) because `UIManager` unconditionally required a working `curses` session. Added new §10.6.1 defining automatic curses-init fallback: `UIManager` now catches `curses.initscr()` failures at construction and enters a "headless" state instead of raising. Updated §10.8 (`print_message`) so that in the headless state it writes directly to `sys.stdout`/`sys.stderr` (still never via the `print()` builtin) rather than rendering through curses; this fallback is transparent to callers. Reworded §5.2.1, which previously read as banning all direct stdout/stderr output including this fallback — it now clarifies that `main.py` itself must not call `print()` or write to stdout/stderr directly, while `print_message`'s internal fallback is the sanctioned path for environments where curses cannot init. No change to §5.4's startup ordering; `--version` continues to be handled immediately after argument parsing and before `config.json`/logger initialisation. |
 | 1.1.3 | August 2026 | zero4281 | Clarified §7.3.0's asset-filename matching rule: exclusion from selection menus now explicitly requires both correct segment shape *and* a literal `bin` value in the Type position, not segment shape alone. Closes a gap where a non-bin asset with an incidentally correct segment count (e.g. a hypothetical source/auxiliary archive) would have parsed successfully under the old wording. Added worked examples (`llama-b10297-xcframework.zip`, `cudart-llama-bin-win-cuda-12.4-x64.zip`) showing both are excluded via positional template matching, not via a filename substring check. |
 | 1.1.2 | August 2026 | zero4281 | Added `--version` flag (new §5.2.1): prints the program's version via `UIManager`'s `print_message` (new §10.8) and exits, taking priority over all other arguments. Added a `main.py`-level `__version__` constant (§5.1) as the single source of truth, required to be kept manually in sync with this document's own version number on every release. Updated §5.4 startup sequence to check `--version` immediately after argument parsing, before `config.json` is loaded or the logger is configured. Added new §10.8 defining `print_message` as the correct rendering path for standalone success/warning/error messages, as distinct from the bordered windows used for menus, confirmation prompts, and the progress bar (§10.3–§10.5); clarified §5.1 accordingly. Fixed the §5.4 `llama-cpp` not-found error, which had incorrectly specified a bordered curses window (an artifact of the pre-`print_message` version of this spec) — it now uses `print_message` with plain, unbordered text. |
