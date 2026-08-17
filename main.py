@@ -231,7 +231,7 @@ class Main:
         if self.args.version:
             if self.ui is None:
                 self.ui = UIManager("Llama Server Manager")
-            self.ui._cleanup_terminal()
+            self.ui.__del__()
             self.ui.print_message(f"llama-server-manager version {__version__}", level="info")
             sys.exit(0)
         
@@ -304,6 +304,7 @@ class Main:
         self.ui.print_message("\n[Run llama-server]\n")
         llama_cpp_dir = Path.cwd() / "llama-cpp"
         if not llama_cpp_dir.exists():
+            self.ui.__del__()
             self.ui.print_message("llama-cpp not found. Please install it first:\n   ./llama-server-manager --install-llama")
             sys.exit(1)
             
