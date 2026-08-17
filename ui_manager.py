@@ -79,9 +79,6 @@ def _configure_logging():
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             datefmt='%H:%M:%S'
         )
-        handler = logging.StreamHandler()
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
         logger.setLevel(UI_MANAGER_LOG_LEVEL)
 
 
