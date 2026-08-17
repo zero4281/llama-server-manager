@@ -30,8 +30,24 @@ from config import load_config, save_config
 import logging
 logger = logging.getLogger(__name__)
 
-# Constants
-GITHUB_OWNER = "ggml-org"
+def check_fast_path(config: dict) -> bool:
+    """
+    Check if the provided configuration indicates a fast path update.
+    
+    Args:
+        config: The configuration dictionary.
+    
+    Returns:
+        True if fast path, False otherwise.
+    """
+    options = config.get("options", {})
+    llama_cpp = options.get("llama-cpp", {})
+    return bool(llama_cpp.get("os-architecture") and llama_cpp.get("backend"))
+
+
+
+
+GITHUB_OWNER = "ggerganov"
 GITHUB_REPO = "llama.cpp"
 GITHUB_API_BASE = "https://api.github.com"
 LLAMA_CPP_DIR = Path.cwd() / "llama-cpp"
@@ -920,14 +936,26 @@ def install_release(release: dict, release_tag: str, ui_manager: Optional["UIMan
         ui.print_message(f"\nExtracting to {LLAMA_CPP_DIR}")
         extract_archive(archive_path, LLAMA_CPP_DIR)
         
+        # Post-install sanity check
+        is_verified = verify_installation(ui)
+        
+        # Post-install sanity check
+        is_verified = verify_installation(ui)
+        
         # Ensure llama-server is executable
         llama_server = LLAMA_CPP_DIR / "llama-server"
         if llama_server.exists():
             ensure_executable(llama_server)
             ui.print_message(f"Made {llama_server} executable")
         
-        # Post-install sanity check
-        is_verified = verify_installation(ui)
+        # Clean up
+        archive_path.unlink(missing_ok=True)
+        
+        # Ensure llama-server is executable
+        llama_server = LLAMA_CPP_DIR / "llama-server"
+        if llama_server.exists():
+            ensure_executable(llama_server)
+            ui.print_message(f"Made {llama_server} executable")
         
         # Clean up
         archive_path.unlink(missing_ok=True)
@@ -1041,17 +1069,20 @@ def _install_release_core(release: dict, release_tag: str, platform: str, arch: 
         ui.print_message(f"\nExtracting to {LLAMA_CPP_DIR}")
         extract_archive(archive_path, LLAMA_CPP_DIR)
         
+        # Post-install sanity check
+        is_verified = verify_installation(ui)
+        
         # Ensure llama-server is executable
         llama_server = LLAMA_CPP_DIR / "llama-server"
         if llama_server.exists():
             ensure_executable(llama_server)
             ui.print_message(f"Made {llama_server} executable")
         
-        # Post-install sanity check
-        is_verified_check = verify_installation(ui)
-        
         # Clean up
         archive_path.unlink(missing_ok=True)
+        
+        # Post-install sanity check
+        is_verified_check = verify_installation(ui)
 
         
         ui.print_message("Installation complete!")
@@ -1207,7 +1238,7 @@ class LlamaUpdater:
                 ui.render_error("Invalid os-architecture in configuration. Expected 'platform-arch'.")
                 return
             platform, arch = parts[0].capitalize(), parts[1]
-            is_fast_path = True
+            is_fast_path = check_fast_path(config)
             
             try:
                 release = get_latest_release()

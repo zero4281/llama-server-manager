@@ -170,7 +170,9 @@ class UIManager:
             try:
                 logger.error(f"Curses initialization failed: {e}")
                 self._restore_terminal_state()
-                print(f"Curses initialization failed: {e}", file=sys.stderr)
+                self.print_message(f"Curses initialization failed: {e}", level="error")
+
+
                 self._using_curses = False
                 self._screen = None
                 self._color_pair = None
@@ -185,7 +187,8 @@ class UIManager:
             try:
                 logger.error(f"AttributeError during curses initialization: {e}")
                 self._restore_terminal_state()
-                print(f"AttributeError during initialization: {e}", file=sys.stderr)
+                self.print_message(f"AttributeError during initialization: {e}", level="error")
+
                 self._using_curses = False
                 self._screen = None
                 self._color_pair = None
@@ -200,14 +203,15 @@ class UIManager:
         """Restore terminal to original state."""
         try:
             # Validate window if available before attempting operations
-            if self._screen:
-                if not self._validate_window(self._screen):
-                    logger.warning("Screen window invalid, falling back to console")
-                    self._using_curses = False
-                    self._screen = None
-                    self._color_pair = None
-                    self._initialized = False
-                    return
+            if self._screen is None:
+                return
+            if not self._validate_window(self._screen):
+                logger.warning("Screen window invalid, falling back to console")
+                self._using_curses = False
+                self._screen = None
+                self._color_pair = None
+                self._initialized = False
+                return
             
             # Reset terminal mode
             try:
@@ -387,7 +391,10 @@ class UIManager:
             self._screen.refresh()
         except (OSError, EOFError, TypeError) as e:
             logger.error(f"Unexpected error during message rendering: {e}")
-            print(text)
+            if level.lower() in ("warning", "error", "critical"):
+                print(text, file=sys.stderr)
+            else:
+                print(text)
 
     def create_window(self, height: int, width: int, y: int, x: int, title: Optional[str] = None) -> Optional[curses.window]:
         """
@@ -1023,32 +1030,35 @@ class UIManager:
                 pass
             return -1
 
-    def _render_console_fallback(self, message: str, prompt: str = "", prompt_suffix: str = "") -> Optional[str]:
+    def _render_console_fallback(self, message: str, level: str = "info", prompt: str = "", prompt_suffix: str = "") -> Optional[str]:
         """
         Unified console fallback renderer.
         
         Args:
             message: The main message to display
+            level: The logging level for the fallback (e.g., "info", "warning", "error")
             prompt: Optional prompt text
             prompt_suffix: Optional suffix after prompt
             
         Returns:
             Depending on method context: bool for confirmation, str for input
         """
+        out = sys.stderr if level.lower() in ("warning", "error", "critical") else sys.stdout
+        
         try:
             self._cleanup_terminal()
             import subprocess
             subprocess.run(["stty", "sane"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             subprocess.run(["stty", "-icanon", "echo", "cr"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             
-            print("\033[2J\033[1;1H\n", end="")
-            sys.stdout.flush()
+            print("\033[2J\033[1;1H\n", end="", file=out)
+            out.flush()
             
             if prompt:
-                print(f"{message}")
-                print(prompt + prompt_suffix, end="", flush=True)
+                print(f"{message}", file=out)
+                print(prompt + prompt_suffix, end="", flush=True, file=out)
             else:
-                print(f"{message}")
+                print(f"{message}", file=out)
             
             if sys.stdin.isatty():
                 import select
@@ -1062,7 +1072,7 @@ class UIManager:
             
             return response
         except Exception:
-            print(f"{message}")
+            print(f"{message}", file=out)
             if prompt:
                 response = input(prompt).strip().lower()
             else:
@@ -1073,7 +1083,7 @@ class UIManager:
         """
         Fallback for confirmation prompts.
         """
-        response = self._render_console_fallback(message, "Proceed? [Y/n]: ")
+        response = self._render_console_fallback(message, "info", "Proceed? [Y/n]: ")
         return response in ('y', 'yes') or (response == '' and default)
     
     def render_confirmation(self, message: str, release_info: str, title: str = "Confirm Installation", default: bool = True) -> bool:
@@ -1593,10 +1603,12 @@ class UIManager:
         """
         logger.debug(f"render_error called: {message[:60]}...")
         if not self._using_curses:
-            self._render_console_fallback(
-                f"\n{'='*60}\nError: {message.center(60)}\n{'='*60}"
-            )
-            return
+                self._render_console_fallback(
+                    f"\n{'='*60}\nError: {message.center(60)}\n{'='*60}",
+                    level="error"
+                )
+                return
+
 
         if not self._screen:
             print(f"Error: {message}")
