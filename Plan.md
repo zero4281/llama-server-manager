@@ -9,7 +9,7 @@
 **Section 1: Current State Assessment**
 | Component | Status | Drift / Violation |
 | --- | --- | --- |
-| `main.py` | Violation | `__version__` is 1.1.3 (should be 1.1.4/1.1.5) |
+| `main.py` | Compliant | `__version__` is 1.1.5
 | `main.py` | Compliant | Startup sequence: `--version` occurs immediately after argument parsing |
 | `llama_updater.py` | Completed | `verify_installation` deferred to post-extraction |
 | `llama_updater.py` | Violation | `is_fast_path` computed via redundant `load_config()` |
@@ -29,8 +29,8 @@
 - **Headless Fallback**
   - [x] Update `ui_manager.py`: Update `print_message` fallback to use `print()` (New for 1.1.5)
 - **Fast Path Logic**
-  - [ ] Defer `verify_installation` to post-extraction
-  - [ ] Update `is_verified` to reflect post-extraction check
+   - [x] Defer `verify_installation` to post-extraction
+   - [x] Update `is_verified` to reflect post-extraction check
    - [x] Pass config dict to `llama_updater` for `is_fast_path`
 
 **Section 4: Exit Codes**

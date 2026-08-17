@@ -25,7 +25,7 @@ A lightweight wrapper around [llama.cpp](https://github.com/ggerganov/llama.cpp)
 
 ## Requirements
 
-- Python 3.12+ with `pip` — [Download Python](https://www.python.org/downloads/) (pip is included with Python 3.4+)
+- Python 3.12.3 with `pip` — [Download Python](https://www.python.org/downloads/) (pip is included with Python 3.4+)
 - Linux, MacOS, or Windows (WSL)
 
 ---
@@ -121,7 +121,7 @@ On first run, the wrapper generates a `config.json` with safe defaults. You can 
 | Option | Default | Description |
 |---|---|---|
 | `host` | `127.0.0.1` | Set to `0.0.0.0` to expose the server on your local network |
-| `port` | `8080` | Change if another process is already using port 8080 |
+| `port` | *(llama.cpp default)* | Set to override the port llama-server listens on |
 | `models-max` | `1` | Maximum number of models loaded simultaneously — keep at `1` if VRAM is limited |
 | `sleep-idle-seconds` | `600` | Unloads the model after this many seconds of inactivity (similar to Ollama's behavior) |
 
@@ -134,20 +134,16 @@ On first run, the wrapper generates a `config.json` with safe defaults. You can 
 | Command | Description |
 |---|---|
 | `./llama-server-manager` | Start the server |
-| `./llama-server-manager [llama-server args]` | Start the server and pass arguments directly to llama-server |
 | `./llama-server-manager --install-llama` | Download and install the latest llama.cpp release |
 | `./llama-server-manager --update-llama` | Update an existing llama.cpp installation to the latest release |
 | `./llama-server-manager --version` | Display the program's version and exit |
-| `./llama-server-manager --self-update` | Pull the latest manager code from GitHub and restart |
+| `./llama-server-manager --self-update` | Pull the latest manager code from GitHub |
 | `./llama-server-manager --stop-server` | Gracefully stop a running llama-server |
+| `./llama-server-manager --log-file <path>` | Override the llama-server output log path for this run |
 
 ### Command Details
 
-**`[llama-server args]`** — Any additional arguments are passed through directly to `llama-server`, one at a time. Refer to the [llama.cpp server documentation](https://github.com/ggerganov/llama.cpp/blob/master/tools/server/README.md) for the full list of supported arguments.
-
-```bash
-./llama-server-manager --some-llama-arg value
-```
+`llama-server` launch arguments are configured entirely through `config.json` (see [Configuration](#configuration)) — the wrapper does not accept arbitrary pass-through arguments on the command line.
 
 **`--install-llama`** — Run this once after cloning the repo to download and install llama.cpp. The installer will attempt to detect your OS and hardware, but review each prompt carefully to confirm the correct build for your system. If `llama-server` was already running, it will be restarted after a successful installation.
 
@@ -161,7 +157,7 @@ On first run, the wrapper generates a `config.json` with safe defaults. You can 
 ./llama-server-manager --update-llama
 ```
 
-**`--self-update`** — Pulls the latest manager code from the project's GitHub repository and restarts. No prerequisites required.
+**`--self-update`** — Pulls the latest manager code from the project's GitHub repository. After a successful update the program exits — it does **not** restart itself — so run `./llama-server-manager` again to use the updated version. No prerequisites required.
 
 ```bash
 ./llama-server-manager --self-update
@@ -171,6 +167,12 @@ On first run, the wrapper generates a `config.json` with safe defaults. You can 
 
 ```bash
 ./llama-server-manager --stop-server
+```
+
+**`--log-file`** — Overrides the path used for `llama-server`'s own output log for this run, taking precedence over the `log-file` value in `config.json`. If neither is set, it defaults to `llama-server.log` in the project folder.
+
+```bash
+./llama-server-manager --log-file /path/to/llama-server.log
 ```
 
 ---
@@ -274,4 +276,3 @@ print(response.choices[0].message.content)
 - **Version Source of Truth**: The `__version__` constant in `main.py` is the source of truth for the `--version` flag.
 - **Restart Logic**: The manager uses `llama-server.pid` to track and manage the lifecycle of the `llama-server` process, allowing for graceful shutdowns and automatic restarts after updates.
 - **Path Handling**: Uses `pathlib` throughout for cross-platform compatibility.
-
